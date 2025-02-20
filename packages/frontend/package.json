@@ -1,0 +1,24 @@
+{
+  "name": "frontend",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "bunx --bun vite",
+    "build": "bunx --bun vite build",
+    "serve": "bunx --bun vite preview",
+    "extract": "bunx --bun gettext-extract"
+  },
+  "dependencies": {
+    "bootstrap": "^5.3.3",
+    "gettext.js": "^2.0.3",
+    "mithril": "^2.2.14",
+    "shared": "workspace:*",
+    "vite": "^6.1.1"
+  },
+  "devDependencies": {
+    "@popperjs/core": "^2.11.8",
+    "@types/bootstrap": "^5.2.10",
+    "@types/gettext.js": "^1.0.3",
+    "@types/mithril": "^2.2.7",
+    "gettext-extract": "^2.0.1"
+  }
+}

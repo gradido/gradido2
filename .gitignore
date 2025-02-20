@@ -1,0 +1,15 @@
+.dbeaver
+.project
+*.log
+*.bak
+/node_modules/*
+messages.pot
+.metadata
+.env
+.env.bak
+.env.development.local
+.env.production.local
+bun.lockb
+
+# Apple macOS folder attribute file
+.DS_Store
