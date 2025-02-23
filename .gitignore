@@ -3,6 +3,7 @@
 *.log
 *.bak
 /node_modules/*
+dist
 messages.pot
 .metadata
 .env

@@ -32,7 +32,7 @@
       }
     ],
     "glob": {
-      "pattern": "{admin/src/**,inspector/src/**,wallet/src/**}/*.ts",
+      "pattern": "src/**/*.ts",
       "options": {
       "ignore": "**/*.spec.ts"
       }
@@ -41,5 +41,5 @@
   "headers": {
     "Language": ""
   },
-  "output": "shared/locales/messages.pot"
+  "output": "src/locales/messages.pot"
 }
