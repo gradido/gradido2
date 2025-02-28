@@ -6,8 +6,6 @@ declare global {
   var t: i18n.Gettext
   var n: (text: string, amount: number) => string
   var toaster: Toaster
-  var nodeServerUrl: string
-  var groupAlias: string
   var client: any
 }
 
