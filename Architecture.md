@@ -1,5 +1,15 @@
 # Gradido2 Architecture
 
+## Scope
+
+Gradido2 is a **rebuild of gradido legacy on a new stack**. No legacy code is carried over,
+but the complete feature set of gradido legacy is the target — this is a replacement, not a
+subset and not a second product.
+
+`https://github.com/gradido/gradido` remains the behavioral reference for every feature being rebuilt. Where the
+intended behavior of a rebuilt feature is unclear, the legacy implementation decides, and
+the answer is then written down in `contracts/test-vectors` so it is decided only once.
+
 ## Core principle
 
 Gradido2 uses a **reconstructible, session-local working context**.
@@ -12,26 +22,182 @@ A server restart, session loss, or request being routed to another instance must
 
 The primary optimization is therefore not making database access slightly faster, but **avoiding repeated database work altogether**.
 
-Gradido2 uses a TypeScript Implementation (bun, elysiaJs, valibot) as reference as workspaces in package, and a fast implementation in C++ in fast-servers,
-which lazy mirror the whole TypeScript Implementation. It didn't need to be up to date all the time. It is prefered to have automatic tests which show which features currently missing in C++-Implementation.
-Contracts contains json files describing consts, schemas, test-vectors and api-interfaces which can be tested against both implementations, to make sure they behave the same. 
+## Why two implementations
+
+Gradido2 exists twice:
+
+- **TypeScript** (bun, ElysiaJS, valibot), as workspaces in `packages/` — the reference implementation. It defines the business behavior.
+- **C** (with C++ in leaf modules), in `fast-servers/` — a fast implementation that lazily mirrors the TypeScript side. It is allowed to lag behind.
+
+There are two reasons, and they are different in kind.
+
+### Continuity
+
+The TypeScript path is the answer to "who maintains this if the author is unavailable".
+TypeScript developers are easy to find; developers who will maintain an arena allocator and
+a sharded session map are not. If that situation ever occurs, the TypeScript path is fixed
+and developed further, and the fast path either follows through AI-assisted translation or
+freezes without taking the product with it.
+
+Two rules follow, and they are not optional:
+
+- **No feature originates in the fast path.** Behavior that exists only in C silently
+  removes itself from the fallback.
+- **The fast path must be droppable, not merely removable.** Running without it must
+  require no code change: no shared state, no route that exists only there, no role only it
+  fills.
+
+The consequence is that the TypeScript path must stay *independently shippable*, including
+its own single-binary release. A fallback that cannot produce a release is a specification,
+not an insurance policy.
+
+### Density
+
+Measured in a test project, same pipeline (JWT → PostgreSQL → JSON) on both stacks:
+
+| | CPU per request | RSS |
+|---|---|---|
+| C on h2o, cached | 11,6 µs | 15 MB |
+| Bun + Elysia, tuned, cached | 23,2 µs | 102–125 MB |
+
+The RAM figure matters more than the CPU figure. A Gradido community server should be
+hostable by people who are not server administrators, on the smallest hardware that will do
+— and there the difference decides whether it runs beside its database at all.
+
+There is a second, structural reason: Bun scales across cores by `SO_REUSEPORT` processes,
+each with its own SessionContext map. Eight workers mean eight working sets for the same
+users, or sticky sessions — which this architecture rejects. A multithreaded fast server has
+one session map across all cores. The session model of this document therefore works fully
+only on the fast path.
+
+## Three kinds of code
+
+Not everything is mirrored. Before writing anything, decide which of these it is.
+
+| Kind | Lives | Mirrored |
+|---|---|---|
+| **Determinism-critical** | once, in C, in `shared-native` | **never** |
+| **Domain / business** | TypeScript reference | yes, C follows |
+| **Infrastructure** | each implementation its own | no |
+
+`shared-native` is not a performance device. Its purpose is that a computation produces the
+same result everywhere. `../gradido/shared-native/src/data/unit.c` carries the evidence: the
+decay factor derived from Decimal.js and the fixed-point one differ in the last unit, and
+the TypeScript value is commented out. Two implementations of money arithmetic do not
+produce different speeds, they produce different amounts.
+
+TypeScript calls into it through N-API with `bigint` at the boundary; the fast server links
+the same C directly and pays nothing.
+
+Every piece of logic moved into `shared-native` is a piece that needs no mirror and cannot
+diverge. 
+
+`contracts/` covers what remains: constants, schemas, test vectors and API interfaces, in
+JSON, tested against both implementations. Automated tests make the gap visible — a failing
+or skipped test on the fast path documents a feature that is not implemented there yet.
+
+## Amounts
+
+Amounts are `bigint` in gdd units, never `number`, on both sides.
+
+```text
+add, subtract, multiply   exact in both languages, may be written inline
+divide, round, decay,     always through shared-native, in TypeScript and in C alike
+parse, format             never reimplemented in either
+```
+
+The functions exist: `calculateDecay`, `toDecimalPlaces`, `gradidoUnitFromString`,
+`gradidoUnitToString`, `getDecayStartTime`, `getDecayRespiteCent`.
+
+## Portability of the reference implementation
+
+The TypeScript side is written so that translating it stays tractable. These cost nothing
+and make the difference between a mechanical port and a rewrite:
+
+- domain data as flat, serializable structures — no class hierarchies, no state captured in
+  closures
+- IDs instead of object references inside the SessionContext; pointer graphs do not port
+- no business outcome that depends on JavaScript semantics: Map iteration order,
+  `undefined` versus `null`, implicit coercion
+- amounts as above
+
+## Repository layout
+
+```text
+packages/          TypeScript — reference implementation
+  backend          runnable HTTP server (routes, wiring, startup)
+  backend-core     backend domain code: data, logic, interactions, repositories
+  federation       federation server
+  admin            admin frontend
+  frontend         user frontend
+  frontend-core    UI code shared by admin and frontend
+  shared           code shared by frontend and backend, e.g. route definitions
+                   (so Eden Treaty can derive types) and shared valibot schemas
+  shared-native    determinism-critical C, called from TypeScript via N-API
+                   and linked directly by the fast servers
+
+fast-servers/      C — fast implementation, mirrors the domain structure
+  backend
+  backend-core
+  federation
+  dht-node
+
+contracts/         language-independent JSON contracts, see below
+```
+
+The `-core` packages contain the domain implementation; the packages next to them
+are the deployable applications that wire it up. Business code belongs in `-core`.
+
+Empty directories are intentional. They describe where code belongs once it exists.
+
+## Contracts
+
+`contracts/` is the shared, language-independent description of behavior that both
+implementations must satisfy.
+
+```text
+contracts/const.json      constants valid for both implementations
+contracts/types           shared type/schema definitions
+contracts/db              table and column definitions
+contracts/server          route definitions: path, method, request, response
+contracts/errors          error codes and their meaning
+contracts/test-vectors    input/expected-output pairs for both implementations
+```
+
+When behavior that both implementations share changes, the contract changes with it.
+The contract is a documentation of the TypeScript code, but more important, it is the agreement the
+fast path is tested against.
+
+## Testing
+
+- TypeScript: `bun test`
+- C: google test
+- Contract tests read `contracts/` and run the same vectors against both implementations
+- Database tests run against both PostgreSQL and SQLite
+
+A missing feature on the fast path should surface as a failing or explicitly skipped contract
+test, not as silence.
 
 ## Session as working context
 
-A SessionContext is after the AppContext the main object used as parameter in many functions
+After the AppContext, the SessionContext is the main object passed as a parameter
+into business functions.
 
-It contains the user's currently useful working set, for example:
-- jwt keys for fast verification (measure)
-- authenticated user with contact data, role(s) and permissions
-- transactions, contributions, transaction_links, contribution_links, contribution_messages already loaded 
-- last known id of this tables on last select, so it can be compared with id in appContext and refreshed if data from this tables are requested
-- other data repeatedly needed by the current interaction/session
+It holds the working set currently useful to one user, for example:
+
+- jwt keys for fast verification (worth measuring)
+- the authenticated user with contact data, role(s) and permissions
+- transactions, contributions, transaction_links, contribution_links, contribution_messages that have already been loaded
+- the last known id of those tables at the time they were selected, so it can be compared against the id in the AppContext and refreshed when that data is requested again
+- other data the current interaction/session needs repeatedly
 
 Data is loaded **lazily**, when needed.
 
 The session should have a bounded working set so that one unusual request cannot turn it into an accidental copy of a large part of the database.
 
-The Whole Session store it's creation date and will be auto-deleted after (const) 10 Minutes. This is for fix possible cache-invalidate errors
+The session stores its creation time and is dropped after 10 minutes (const). This is a
+backstop against cache-invalidation bugs: even a session that missed an update cannot
+stay wrong for long.
 
 ## AppContext
 
@@ -43,9 +209,8 @@ The Whole Session store it's creation date and will be auto-deleted after (const
   - last 500 (const) contributions (public data set) (for display contribution infos from other)
 - last known id of transaction and similar tables
 - Map with sessionContexts by user id
-- Apis (Server Connection to extern services)
-- basiclly everything what was singleton in gradido legacy
-- 
+- APIs (server connections to external services)
+- basically everything that was a singleton in gradido legacy
 
 ### Multiple instances
 
@@ -66,43 +231,79 @@ Sticky sessions, shared session state, Redis, or distributed cache infrastructur
 
 ## Logging
 
-- Pino in TypeScript, spdlog in c++
-- structured, ki-friendly logging with message for human readablity
-- format: json output, both use same json output
-- as long as it make sense, both path log the same events with the same structure and data, TypeScript is reference implementation
+- Pino in TypeScript, spdlog on the fast path
+- structured, machine-readable logging with a message field for human readability
+- format: JSON, both implementations emit the same JSON output
+- as far as it makes sense, both implementations log the same events with the same structure and data; TypeScript is the reference
 
 ## DB
 
-Table and column name in db are using_undercores, plural for table name, singular for column names
-- postgresql/sqlite with DrizzleORM and native bun sql driver on TS side
-- postgresql/sqlite with native C/C++ postgresql/sqlite driver on C++-Side (fast-Servers)
-- prepared statement for standard queries, if possible even for more complex, not much used queries
-- Decide on runtime start via config which db is to use
-- use full features of postgresql, mirror not existing features on sqlite side with combined simple queries and if not enough even process data in ts/c++ directly
-- Postgresql is reference implementation, for default server mode, sqlite is for easy deployment of small setups.
-- Server-Admin must decide on first run which to use, currently no migration between sqlite and postgresl db data sets.
-- Test both DB-Modes in tests
+Table and column names use snake_case, plural for table names, singular for column names.
 
-## HTTP-Server
+- PostgreSQL/SQLite with DrizzleORM and the native bun sql driver on the TypeScript side
+- PostgreSQL/SQLite with native C drivers on the fast path (fast-servers)
+- prepared statements for standard queries, and where possible also for more complex, rarely used queries
+- which database is used is decided at startup via config
+- use the full feature set of PostgreSQL; mirror features SQLite lacks with combinations of simpler queries, and if that is not enough, process the data in TypeScript or C directly
+- PostgreSQL is the reference and the default for server mode, SQLite is for easy deployment of small setups
+- the server admin decides on first run which one to use; there is currently no migration between SQLite and PostgreSQL data sets
+- tests run against both database modes
 
-- ElysiaJs + Eden Treaty on TypeScript-Side, the route definitions belong into packages/shared, so frontend-core, frontend and admin cann import the types
-- h2o on C++ Side, configured to not allocate/free memory at all, it should start with enough memory which will be frequently reused.
-- Routes are additional described in contracts/server as json for easy test/compare of both implementations
+## HTTP server
+
+- ElysiaJS + Eden Treaty on the TypeScript side. Route definitions belong in `packages/shared` so that frontend-core, frontend and admin can import the types.
+- h2o on the fast path, configured to not allocate/free memory during operation: it starts with enough memory and reuses it.
+- Routes are additionally described in `contracts/server` as JSON, so both implementations can be tested and compared.
 
 ## Config
 
-- env for variables which are needed on startup (db, ports, etc.)
-- secrets for production using os native Secret stores (like systemd credential on linux)
-- secrets on dev via env
-- const settings into const, dynamic settings into settings table, editable from admin frontend, but only from admin, no separat rights created for this
+- env for variables needed at startup (db, ports, etc.)
+- secrets in production via OS-native secret stores (e.g. systemd credentials on Linux)
+- secrets in dev via env
+- fixed settings as constants in code, dynamic settings in a settings table, editable from the admin frontend; admin only, no separate rights are created for this
 
 ## Setup
 
-- bun + turborepo + tsgo + biome for ts side
-- zig as C/C++ Compiler and package manager for compatible third party libs
-- zig as compiler for shared-native module for ts
+- bun + turborepo + tsgo + biome on the TypeScript side
+- zig as C/C++ compiler and as package manager for compatible third-party libs
+- zig as compiler for the shared-native module used from TypeScript
 - clang-format for linting C/C++ code
-- google test for testing the C/C++ code
+- google test for testing C/C++ code
+
+### Language roles
+
+```text
+C      the fast server: h2o, request path, session, repositories.
+       Also shared-native. This is where most native code lives.
+C++    leaf modules only, behind an extern "C" header:
+       Justified by a library without a C equivalent
+zig    build system and cross compilation. No application code —
+       its API still moves between versions.
+```
+
+### The self-provisioning build
+
+`shared-native/build.ts` downloads a pinned Zig version for the current platform and builds
+the native module. A TypeScript developer runs `bun install` followed by
+`turbo backend#start` and needs to know nothing about the toolchain.
+
+This is part of the continuity plan, not a convenience: the TypeScript fallback path is not
+C-free, so it stays viable exactly as long as it keeps building itself. Two properties
+therefore matter beyond ordinary tooling hygiene — the downloaded archive should be verified
+against a pinned checksum, and the documentation should state how to build if the download
+URL is ever unavailable (place any Zig of the pinned version in the expected directory).
+
+The pinned version belongs in AGENTS.md as well, so that agents stop guessing it.
+
+### Safety net for native code
+
+Non-negotiable wherever C runs, and more so where it was AI-generated:
+
+- ASan, UBSan and TSan in CI, not only locally. TSan matters most — the shared session map
+  is the one defect class expert review does not catch.
+- Fuzzing for every parser that touches attacker-supplied bytes: JWT and JSON. The signature
+  is verified before anything else is read; everything after it is hostile input.
+- Contract vectors as a merge gate, green on both implementations.
 
 ## Business logic around the session
 
@@ -121,22 +322,24 @@ Cache invalidation is part of the business semantics of an operation and should 
 
 ### Auth - Roles and Rights
 
-- Rights defined in Code as Enums string -> number mapping, optimized for bit-operator check, enum per domain
-- default roleRights in code, admin is allowed everything, user has a explicit default set of allowed things, the same as moderator and ai-moderator
-- roleRights entries in db can inherit from default roles to extend or even restrict default roles, default roles cannot be overwritten
-- which Roles have which rights default in code, extra roles (with inheritance from default roles) in db, stored as string, ignore unknown string from db, log as warning
-- Global Cache for roleRights, max ttl 10 Minutes, invalidate if admin edit a role
-- Compact Rights, defined by domain layer, max 64 rights per domain for using bits in bigint (uint64)
-- bitset enum in runtime, string in db
-- group permission free routes in on file (like login or view community infos)
-- Every non-public request with jwt token create a new one, so as long the user is active, his session timeout will constantly moving,
-but the session-context will be deleted after 10 minutes nevertheless (hard timeout)
+- Rights are defined in code as enums with a string -> number mapping, one enum per domain, optimized for bit operations
+- Default role rights live in code: admin is allowed everything; user, moderator and ai-moderator each have an explicit default set
+- Roles in the database can inherit from the default roles to extend or restrict them. The default roles themselves cannot be overwritten.
+- Rights are stored as strings in the database and used as a bitset at runtime. Unknown strings from the database are ignored and logged as a warning.
+- Max 64 rights per domain, so a domain's rights fit into the bits of a uint64
+- Global cache for role rights, max TTL 10 minutes, invalidated when an admin edits a role
+- Routes that need no permission (login, viewing community info, ...) are grouped in one file
+- Every non-public request with a JWT creates a new token, so an active user's session timeout keeps moving. The session context is still dropped after 10 minutes (hard timeout).
 
-roles: id, parent_role(optional, varchar), role (varchar), description (text)
-parent_role als string, da die default roles in Code definiert sind
+Tables:
 
-roleRights: id, role_id, domain, right (varchar), created_at
-on right per Row
+```text
+roles:      id, parent_role (varchar, optional), role (varchar), description (text)
+role_rights: id, role_id, domain, right (varchar), created_at
+```
+
+`parent_role` is a string rather than a foreign key because the default roles are
+defined in code and have no database row. `role_rights` stores one right per row.
 
 ## DCI: Data, Context, Interaction
 
@@ -184,15 +387,34 @@ Examples:
 
 The Interaction is the readable “story” of the business operation.
 
-## Suggested source organization
+## Source organization
 
 Organize primarily by **business domain**, not by technical layer or database table.
-The exact top-level domains should follow business capabilities rather than blindly mirroring database tables.
+The top-level domains should follow business capabilities rather than blindly mirroring database tables.
+
+The same domain structure exists in TypeScript and C, so that a file on one side
+points at its counterpart on the other:
+
+```text
+packages/backend-core/src/domain/community/interactions/add-member.ts
+fast-servers/backend-core/domain/community/interactions/add-member.cpp
+```
+
+This is a navigation aid, not a requirement that both files be structured the same way
+internally.
+
+Within a domain, the DCI roles are distinguished by file suffix:
+
+```text
+*.data.ts          domain state
+*.logic.ts         small logic operating directly on data
+interactions/      one file per business operation
+```
 
 ## Session implementation boundary
 
-The generic session mechanism belongs near the application layer:
-But the semantics of cached domain data belong to their domain.
+The generic session mechanism belongs near the application layer, but the semantics of
+cached domain data belong to their domain.
 Avoid a giant generic session/cache module containing all domain-specific invalidation rules.
 
 ## Consistency model
@@ -244,6 +466,21 @@ Use stricter validation, shorter lifetimes, or avoid caching it when stale data 
 
 Use an intentionally asymmetric strategy.
 
+**Own writes** — the current Interaction performs the change. It knows exactly what
+changed, so it updates the session directly if easy (no extra logic envolved) or invalidate the cache part if not needed in the current request
+
+**Foreign writes** — someone else changed the data. Do not try to find every session
+that might hold it. Let the data carry a version/generation/cursor, and let each
+session notice on access that its copy is behind:
+
+```text
+version/generation changes
+        -> session detects stale state when the data is next used
+        -> session refreshes
+```
+
+The asymmetry is deliberate: precise updates where the knowledge exists, lazy
+detection where it does not. Neither direction requires distributed bookkeeping.
 
 ## Repository boundary
 
@@ -265,7 +502,7 @@ The repository is the persistence boundary.
 
 The Interaction decides when data is needed and when session state must be updated. The repository knows how to retrieve or persist it.
 
-This keeps the consistency strategy visible in business code without coupling the business logic directly to MariaDB/Drizzle details.
+This keeps the consistency strategy visible in business code without coupling the business logic directly to PostgreSQL/SQLite or Drizzle details.
 
 The important architectural property is that the session update is visible directly beside the business operation that caused it.
 
