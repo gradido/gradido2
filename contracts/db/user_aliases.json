@@ -1,0 +1,29 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "user_aliases",
+  "description": "Every name a member owns — not a log of the ones they left behind. users.alias marks which of them is current, so reclaiming an earlier name moves that marker and writes nothing here.",
+  "source": "database/src/entity/UserAlias.ts plus database/migration/migrations 0116 and 0117",
+  "columns": [
+    { "name": "id", "type": "uint64", "nullable": false, "identity": true },
+    { "name": "user_id", "type": "uint64", "nullable": false, "references": { "table": "users", "column": "id" } },
+    { "name": "alias", "type": "varchar(20)", "nullable": false },
+    { "name": "community_uuid", "type": "uuid", "nullable": false, "references": { "table": "communities", "column": "community_uuid" }, "description": "Names are unique per community, not globally — the same reason users.uuid_key is a pair." },
+    { "name": "origin", "type": "varchar(8)", "nullable": false, "default": "chosen", "enum": "AliasOrigin", "description": "Where the name came from. It answers two questions that do not move together: whether the member has answered the naming question at all, and whether the name cost one of their four picks." },
+    { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now", "description": "When the name was taken. The quota counts rows in the last ALIAS_QUOTA_WINDOW_MS." }
+  ],
+  "primaryKey": ["id"],
+  "unique": [
+    { "name": "alias", "columns": ["alias", "community_uuid"] }
+  ],
+  "indexes": [
+    { "name": "user_id", "columns": ["user_id"] }
+  ],
+  "notes": [
+    "Only origin = 'chosen' counts against ALIAS_QUOTA_PER_WINDOW. Keeping the name the system built is an answer, not a pick, and costs nothing. An implementation that counts rows instead of counting chosen rows charges a member a quarter of their yearly quota for a name nobody chose.",
+    "'chosen' and 'adopted' mean the member has answered the question the window at first login asks; 'assigned' and 'migrated' mean they have not. That is the only thing the first-login window may test.",
+    "'migrated' is an 'assigned' that migration 0116 handed out. It exists so that migration's rollback takes back its own work and leaves alone the names that were already there. gradido2 has no such rollback and may fold it into 'assigned' — but only after no database still carries the value.",
+    "A row is never deleted. Leaving a name writes nothing; taking it back only moves users.alias. Deleting here would let somebody else claim a name a member still owns.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json. This table uses datetime(3)."
+  ]
+}

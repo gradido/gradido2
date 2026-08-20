@@ -1,0 +1,25 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "thank_you_card_settings",
+  "description": "The PIN and the limits behind a member's printed cards. The existence of the row IS the on/off switch: enabling means setting a PIN, disabling means deleting it, and 'enabled but without a PIN' therefore cannot exist.",
+  "source": "database/src/schemas/drizzle.schema.ts plus database/migration/migrations 0115",
+  "columns": [
+    { "name": "user_id", "type": "uint64", "nullable": false, "identity": false, "references": { "table": "users", "column": "id" }, "description": "The primary key. One member, one set of settings." },
+    { "name": "pin", "type": "uint64", "nullable": false, "description": "Same derivation as users.password — argon2id, then a 64 bit shorthash — but with its own salt, so a leak of one secret says nothing about the other.", "secret": true, "note": "Unsigned and full width, both load-bearing. The derivation returns a whole 64 bit word: only one value in 2048 is small enough to survive as a JavaScript number, and everything above 2^63 would additionally overflow a signed column. Either one turns a correct PIN into a wrong one — and did. In gradido2 this is a bigint, never a number." },
+    { "name": "pin_salt", "type": "varchar(64)", "nullable": false, "secret": true },
+    { "name": "max_per_payment_gdd4", "type": "gradido_cent", "nullable": false },
+    { "name": "max_per_day_gdd4", "type": "gradido_cent", "nullable": false, "description": "Across all of the member's cards, not per card." },
+    { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" },
+    { "name": "updated_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
+  ],
+  "primaryKey": ["user_id"],
+  "unique": [],
+  "indexes": [],
+  "notes": [
+    "Deleting the row switches card payment off. The cards themselves stay — see thank_you_cards.json, where a row is never deleted — so switching back on with a new PIN revives them. An implementation that deletes cards along with the settings destroys the record an old receipt refers to.",
+    "The PIN is stored as a 64 bit derivation, not as the six digits. The digits travel as a string on the wire so leading zeros survive: 040731 is a PIN, 40731 is not. See server/backend/thank-you-card.json.",
+    "pin and pin_salt are secrets. Never logged, never returned, never selected into a response. See logging.json.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json."
+  ]
+}

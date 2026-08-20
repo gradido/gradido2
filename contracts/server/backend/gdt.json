@@ -1,0 +1,132 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "Gdt",
+  "description": "The GDT server: entries, balance and PID lookup. Read through an external service.",
+  "mount": "/",
+  "source": [
+    "../gradido/backend/src/graphql/resolver/GdtResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "gdt.listEntries",
+      "method": "GET",
+      "path": "/gdt/list-entries",
+      "rights": [
+        "LIST_GDT_ENTRIES"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "currentPage",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int",
+            "default": "1"
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int",
+            "default": "5"
+          },
+          {
+            "name": "order",
+            "required": true,
+            "type": "enum",
+            "enum": "Order",
+            "legacyType": "Order",
+            "default": "DESC"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "GdtEntryList",
+        "type": "object",
+        "model": "GdtEntryList",
+        "open": "shape of GdtEntryList not contracted yet"
+      },
+      "legacy": {
+        "resolver": "GdtResolver",
+        "operation": "query",
+        "field": "listGDTEntries",
+        "file": "../gradido/backend/src/graphql/resolver/GdtResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "gdt.getBalance",
+      "method": "GET",
+      "path": "/gdt/get-balance",
+      "rights": [
+        "GDT_BALANCE"
+      ],
+      "request": null,
+      "response": {
+        "nullable": true,
+        "legacyType": "Float",
+        "type": null,
+        "open": "legacy Float — the contract type vocabulary has no float; decide before implementing"
+      },
+      "legacy": {
+        "resolver": "GdtResolver",
+        "operation": "query",
+        "field": "gdtBalance",
+        "file": "../gradido/backend/src/graphql/resolver/GdtResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "gdt.existPid",
+      "method": "GET",
+      "path": "/gdt/exist-pid",
+      "rights": [
+        "EXIST_PID"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "pid",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int",
+            "note": "GDT publisher id, external to gradido"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Int",
+        "type": "uint32"
+      },
+      "legacy": {
+        "resolver": "GdtResolver",
+        "operation": "query",
+        "field": "existPid",
+        "file": "../gradido/backend/src/graphql/resolver/GdtResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "Space",
+  "description": "HumHub spaces, read through the HumHub client. Not a gradido table.",
+  "mount": "/",
+  "source": [
+    "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "space.get",
+      "method": "GET",
+      "path": "/space/get",
+      "rights": [
+        "LIST_HUMHUB_SPACES"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "id",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "ID",
+            "note": "HumHub space id, external to gradido"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Space",
+        "type": "object",
+        "model": "Space",
+        "open": "shape of Space not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ProjectBrandingResolver",
+        "operation": "query",
+        "field": "space",
+        "file": "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "space.list",
+      "method": "GET",
+      "path": "/space/list",
+      "rights": [
+        "LIST_HUMHUB_SPACES"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "page",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int",
+            "default": "1"
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int",
+            "default": "20"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "SpaceList",
+        "type": "object",
+        "model": "SpaceList",
+        "open": "shape of SpaceList not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ProjectBrandingResolver",
+        "operation": "query",
+        "field": "spaces",
+        "file": "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    }
+  ]
+}

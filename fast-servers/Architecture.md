@@ -24,9 +24,18 @@ C      the fast server: h2o, request path, session, repositories.
        Also shared-native. This is where most native code lives.
 C++    leaf modules only, behind an extern "C" header:
        Justified by a library without a C equivalent
+Rust   one module, dht-node, behind an extern "C" header.
+       Justified by the same rule as C++ and by nothing else:
+       libp2p has no C equivalent and writing one is not a module,
+       it is a second project. See dht-node/Architecture.md.
 zig    build system and cross compilation. No application code —
        its API still moves between versions.
 ```
+
+The Rust module is the only one whose counterpart in `packages/` is a different
+implementation rather than the same code seen from the other side. `../Architecture.md`,
+*Peer discovery*, holds why, and what replaces the shared code: an interop test between the
+two nodes, in CI, because no contract vector can express "these two find each other".
 
 ---
 
@@ -39,6 +48,11 @@ Non-negotiable wherever C runs, and more so where it was AI-generated:
 - Fuzzing for every parser that touches attacker-supplied bytes: JWT and JSON. The signature
   is verified before anything else is read; everything after it is hostile input.
 - Contract vectors as a merge gate, green on both implementations.
+- The Rust module is not exempt. Safe Rust ends at the `extern "C"` line: the pointers, the
+  lengths and the lifetimes on the C side of `dht-node` are as unchecked as any other FFI
+  seam, and they run under the same sanitizers. `#![forbid(unsafe_code)]` in the Rust
+  interior, the `unsafe` confined to one file, and that file fuzzed like a parser — because
+  what arrives there is a peer list built from what strangers on the network said.
 
 ---
 

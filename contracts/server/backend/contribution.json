@@ -1,0 +1,768 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "Contribution",
+  "description": "Member contributions: submission, the member and moderator lists, and the admin creation path.",
+  "mount": "/",
+  "source": [
+    "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "contribution.get",
+      "method": "GET",
+      "path": "/contribution/get",
+      "rights": [
+        "ADMIN_LIST_CONTRIBUTIONS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "id",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Contribution",
+        "type": "object",
+        "model": "Contribution",
+        "open": "shape of Contribution not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "query",
+        "field": "contribution",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contribution.create",
+      "method": "POST",
+      "path": "/contribution/create",
+      "rights": [
+        "CREATE_CONTRIBUTION"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "amount",
+            "required": true,
+            "type": "gradido_cent",
+            "legacyType": "GradidoUnit"
+          },
+          {
+            "name": "memo",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "contributionDate",
+            "required": true,
+            "type": "timestamp_ms",
+            "legacyType": "String",
+            "note": "legacy sends a date string"
+          },
+          {
+            "name": "creationGroups",
+            "required": false,
+            "type": "text[]",
+            "legacyType": "[String]"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "UnconfirmedContribution",
+        "type": "object",
+        "model": "UnconfirmedContribution",
+        "open": "shape of UnconfirmedContribution not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "mutation",
+        "field": "createContribution",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contribution.assignCreationGroups",
+      "method": "POST",
+      "path": "/contribution/assign-creation-groups",
+      "rights": [
+        "ADMIN_UPDATE_CONTRIBUTION"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "contributionId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          },
+          {
+            "name": "tags",
+            "required": true,
+            "type": "text[]",
+            "legacyType": "[String]"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "mutation",
+        "field": "assignContributionCreationGroups",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contribution.delete",
+      "method": "POST",
+      "path": "/contribution/delete",
+      "rights": [
+        "DELETE_CONTRIBUTION"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "id",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "mutation",
+        "field": "deleteContribution",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contribution.list",
+      "method": "GET",
+      "path": "/contribution/list",
+      "rights": [
+        "LIST_CONTRIBUTIONS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "currentPage",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int"
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int"
+          },
+          {
+            "name": "order",
+            "required": true,
+            "type": "enum",
+            "enum": "Order",
+            "legacyType": "Order"
+          },
+          {
+            "name": "query",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "creationGroup",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ContributionListResult",
+        "type": "object",
+        "model": "ContributionListResult",
+        "open": "shape of ContributionListResult not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "query",
+        "field": "listContributions",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contribution.countInProgress",
+      "method": "GET",
+      "path": "/contribution/count-in-progress",
+      "rights": [
+        "LIST_CONTRIBUTIONS"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "Int",
+        "type": "uint32"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "query",
+        "field": "countContributionsInProgress",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contribution.listAll",
+      "method": "GET",
+      "path": "/contribution/list-all",
+      "rights": [
+        "LIST_ALL_CONTRIBUTIONS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "currentPage",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int"
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int"
+          },
+          {
+            "name": "order",
+            "required": true,
+            "type": "enum",
+            "enum": "Order",
+            "legacyType": "Order"
+          },
+          {
+            "name": "query",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "creationGroup",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "CommunityContributionListResult",
+        "type": "object",
+        "model": "CommunityContributionListResult",
+        "open": "shape of CommunityContributionListResult not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "query",
+        "field": "listAllContributions",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contribution.update",
+      "method": "POST",
+      "path": "/contribution/update",
+      "rights": [
+        "UPDATE_CONTRIBUTION"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "amount",
+            "required": true,
+            "type": "gradido_cent",
+            "legacyType": "GradidoUnit"
+          },
+          {
+            "name": "memo",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "contributionDate",
+            "required": true,
+            "type": "timestamp_ms",
+            "legacyType": "String",
+            "note": "legacy sends a date string"
+          },
+          {
+            "name": "creationGroups",
+            "required": false,
+            "type": "text[]",
+            "legacyType": "[String]"
+          },
+          {
+            "name": "contributionId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "UnconfirmedContribution",
+        "type": "object",
+        "model": "UnconfirmedContribution",
+        "open": "shape of UnconfirmedContribution not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "mutation",
+        "field": "updateContribution",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contribution.adminCreate",
+      "method": "POST",
+      "path": "/contribution/admin-create",
+      "rights": [
+        "ADMIN_CREATE_CONTRIBUTION"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "email",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "amount",
+            "required": true,
+            "type": "gradido_cent",
+            "legacyType": "GradidoUnit"
+          },
+          {
+            "name": "memo",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "creationDate",
+            "required": true,
+            "type": "timestamp_ms",
+            "legacyType": "String",
+            "note": "legacy sends a date string"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "[GradidoUnit]",
+        "type": "gradido_cent[]"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "mutation",
+        "field": "adminCreateContribution",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contribution.adminUpdate",
+      "method": "POST",
+      "path": "/contribution/admin-update",
+      "rights": [
+        "ADMIN_UPDATE_CONTRIBUTION"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "id",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          },
+          {
+            "name": "amount",
+            "required": false,
+            "type": "gradido_cent",
+            "legacyType": "GradidoUnit"
+          },
+          {
+            "name": "memo",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "creationDate",
+            "required": false,
+            "type": "timestamp_ms",
+            "legacyType": "String",
+            "note": "legacy sends a date string"
+          },
+          {
+            "name": "resubmissionAt",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "AdminUpdateContribution",
+        "type": "object",
+        "model": "AdminUpdateContribution",
+        "open": "shape of AdminUpdateContribution not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "mutation",
+        "field": "adminUpdateContribution",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contribution.adminList",
+      "method": "GET",
+      "path": "/contribution/admin-list",
+      "rights": [
+        "ADMIN_LIST_CONTRIBUTIONS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "statusFilter",
+            "required": false,
+            "type": "enum[]",
+            "enum": "ContributionStatus",
+            "legacyType": "[ContributionStatus]"
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "type": "uint64",
+            "legacyType": "Int"
+          },
+          {
+            "name": "query",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "hideResubmission",
+            "required": false,
+            "type": "bool",
+            "legacyType": "Boolean"
+          },
+          {
+            "name": "creationGroup",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "currentPage",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int"
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int"
+          },
+          {
+            "name": "order",
+            "required": true,
+            "type": "enum",
+            "enum": "Order",
+            "legacyType": "Order"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ContributionListResult",
+        "type": "object",
+        "model": "ContributionListResult",
+        "open": "shape of ContributionListResult not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "query",
+        "field": "adminListContributions",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contribution.adminDelete",
+      "method": "POST",
+      "path": "/contribution/admin-delete",
+      "rights": [
+        "ADMIN_DELETE_CONTRIBUTION"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "id",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "mutation",
+        "field": "adminDeleteContribution",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contribution.confirm",
+      "method": "POST",
+      "path": "/contribution/confirm",
+      "rights": [
+        "CONFIRM_CONTRIBUTION"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "id",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "mutation",
+        "field": "confirmContribution",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contribution.openCreations",
+      "method": "GET",
+      "path": "/contribution/open-creations",
+      "rights": [
+        "OPEN_CREATIONS"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "[OpenCreation]",
+        "type": "object[]",
+        "model": "OpenCreation",
+        "open": "shape of OpenCreation not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "query",
+        "field": "openCreations",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contribution.adminOpenCreations",
+      "method": "GET",
+      "path": "/contribution/admin-open-creations",
+      "rights": [
+        "ADMIN_OPEN_CREATIONS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "userId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "[OpenCreation]",
+        "type": "object[]",
+        "model": "OpenCreation",
+        "open": "shape of OpenCreation not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "query",
+        "field": "adminOpenCreations",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contribution.deny",
+      "method": "POST",
+      "path": "/contribution/deny",
+      "rights": [
+        "DENY_CONTRIBUTION"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "id",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "ContributionResolver",
+        "operation": "mutation",
+        "field": "denyContribution",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    }
+  ]
+}

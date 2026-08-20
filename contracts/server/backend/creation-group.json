@@ -1,0 +1,513 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "CreationGroup",
+  "description": "Creation groups (structured tags) on contributions, per community, per member, per moderator scope.",
+  "mount": "/",
+  "source": [
+    "../gradido/backend/src/graphql/resolver/CreationGroupResolver.ts",
+    "../gradido/backend/src/graphql/resolver/UserCreationGroupResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "creationGroup.list",
+      "method": "GET",
+      "path": "/creation-group/list",
+      "rights": [
+        "LIST_CREATION_GROUPS"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "[CreationGroup]",
+        "type": "object[]",
+        "model": "CreationGroup",
+        "open": "shape of CreationGroup not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreationGroupResolver",
+        "operation": "query",
+        "field": "creationGroups",
+        "file": "../gradido/backend/src/graphql/resolver/CreationGroupResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "creationGroup.listCommunity",
+      "method": "GET",
+      "path": "/creation-group/list-community",
+      "rights": [
+        "LIST_CREATION_GROUPS"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "[CreationGroup]",
+        "type": "object[]",
+        "model": "CreationGroup",
+        "open": "shape of CreationGroup not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreationGroupResolver",
+        "operation": "query",
+        "field": "communityCreationGroups",
+        "file": "../gradido/backend/src/graphql/resolver/CreationGroupResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "creationGroup.listMyContribution",
+      "method": "GET",
+      "path": "/creation-group/list-my-contribution",
+      "rights": [
+        "LIST_CREATION_GROUPS"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "[CreationGroup]",
+        "type": "object[]",
+        "model": "CreationGroup",
+        "open": "shape of CreationGroup not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreationGroupResolver",
+        "operation": "query",
+        "field": "myContributionCreationGroups",
+        "file": "../gradido/backend/src/graphql/resolver/CreationGroupResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "creationGroup.add",
+      "method": "POST",
+      "path": "/creation-group/add",
+      "rights": [
+        "MANAGE_CREATION_GROUPS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "tag",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "name",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "CreationGroup",
+        "type": "object",
+        "model": "CreationGroup",
+        "open": "shape of CreationGroup not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreationGroupResolver",
+        "operation": "mutation",
+        "field": "addCreationGroup",
+        "file": "../gradido/backend/src/graphql/resolver/CreationGroupResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin"
+      ]
+    },
+    {
+      "name": "creationGroup.edit",
+      "method": "POST",
+      "path": "/creation-group/edit",
+      "rights": [
+        "MANAGE_CREATION_GROUPS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "id",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          },
+          {
+            "name": "tag",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "name",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "CreationGroup",
+        "type": "object",
+        "model": "CreationGroup",
+        "open": "shape of CreationGroup not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreationGroupResolver",
+        "operation": "mutation",
+        "field": "editCreationGroup",
+        "file": "../gradido/backend/src/graphql/resolver/CreationGroupResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin"
+      ]
+    },
+    {
+      "name": "creationGroup.legacyHashtagCounts",
+      "method": "GET",
+      "path": "/creation-group/legacy-hashtag-counts",
+      "rights": [
+        "ADOPT_LEGACY_HASHTAGS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "id",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "LegacyHashtagCounts",
+        "type": "object",
+        "model": "LegacyHashtagCounts",
+        "open": "shape of LegacyHashtagCounts not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreationGroupResolver",
+        "operation": "query",
+        "field": "legacyHashtagCounts",
+        "file": "../gradido/backend/src/graphql/resolver/CreationGroupResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin"
+      ]
+    },
+    {
+      "name": "creationGroup.adoptLegacyHashtags",
+      "method": "POST",
+      "path": "/creation-group/adopt-legacy-hashtags",
+      "rights": [
+        "ADOPT_LEGACY_HASHTAGS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "id",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          },
+          {
+            "name": "includeLoose",
+            "required": true,
+            "type": "bool",
+            "legacyType": "Boolean"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "CreationGroup",
+        "type": "object",
+        "model": "CreationGroup",
+        "open": "shape of CreationGroup not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreationGroupResolver",
+        "operation": "mutation",
+        "field": "adoptLegacyHashtags",
+        "file": "../gradido/backend/src/graphql/resolver/CreationGroupResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin"
+      ]
+    },
+    {
+      "name": "creationGroup.listMine",
+      "method": "GET",
+      "path": "/creation-group/list-mine",
+      "rights": [
+        "MANAGE_OWN_CREATION_GROUPS"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "[CreationGroup]",
+        "type": "object[]",
+        "model": "CreationGroup",
+        "open": "shape of CreationGroup not contracted yet"
+      },
+      "legacy": {
+        "resolver": "UserCreationGroupResolver",
+        "operation": "query",
+        "field": "myCreationGroups",
+        "file": "../gradido/backend/src/graphql/resolver/UserCreationGroupResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "creationGroup.getSuggested",
+      "method": "GET",
+      "path": "/creation-group/get-suggested",
+      "rights": [
+        "MANAGE_OWN_CREATION_GROUPS"
+      ],
+      "request": null,
+      "response": {
+        "nullable": true,
+        "legacyType": "CreationGroup",
+        "type": "object",
+        "model": "CreationGroup",
+        "open": "shape of CreationGroup not contracted yet"
+      },
+      "legacy": {
+        "resolver": "UserCreationGroupResolver",
+        "operation": "query",
+        "field": "suggestedCreationGroup",
+        "file": "../gradido/backend/src/graphql/resolver/UserCreationGroupResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "creationGroup.setMine",
+      "method": "POST",
+      "path": "/creation-group/set-mine",
+      "rights": [
+        "MANAGE_OWN_CREATION_GROUPS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "tags",
+            "required": true,
+            "type": "text[]",
+            "legacyType": "[String]"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "[CreationGroup]",
+        "type": "object[]",
+        "model": "CreationGroup",
+        "open": "shape of CreationGroup not contracted yet"
+      },
+      "legacy": {
+        "resolver": "UserCreationGroupResolver",
+        "operation": "mutation",
+        "field": "setMyCreationGroups",
+        "file": "../gradido/backend/src/graphql/resolver/UserCreationGroupResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "creationGroup.listForUser",
+      "method": "GET",
+      "path": "/creation-group/list-for-user",
+      "rights": [
+        "MANAGE_USER_CREATION_GROUPS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "userId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "[CreationGroup]",
+        "type": "object[]",
+        "model": "CreationGroup",
+        "open": "shape of CreationGroup not contracted yet"
+      },
+      "legacy": {
+        "resolver": "UserCreationGroupResolver",
+        "operation": "query",
+        "field": "userCreationGroups",
+        "file": "../gradido/backend/src/graphql/resolver/UserCreationGroupResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "creationGroup.setForUser",
+      "method": "POST",
+      "path": "/creation-group/set-for-user",
+      "rights": [
+        "MANAGE_USER_CREATION_GROUPS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "userId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          },
+          {
+            "name": "tags",
+            "required": true,
+            "type": "text[]",
+            "legacyType": "[String]"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "[CreationGroup]",
+        "type": "object[]",
+        "model": "CreationGroup",
+        "open": "shape of CreationGroup not contracted yet"
+      },
+      "legacy": {
+        "resolver": "UserCreationGroupResolver",
+        "operation": "mutation",
+        "field": "setUserCreationGroups",
+        "file": "../gradido/backend/src/graphql/resolver/UserCreationGroupResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "creationGroup.getModeratorScope",
+      "method": "GET",
+      "path": "/creation-group/get-moderator-scope",
+      "rights": [
+        "SET_MODERATOR_CREATION_GROUP_SCOPE"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "userId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "[String]",
+        "type": "text[]"
+      },
+      "legacy": {
+        "resolver": "UserCreationGroupResolver",
+        "operation": "query",
+        "field": "moderatorCreationGroupScope",
+        "file": "../gradido/backend/src/graphql/resolver/UserCreationGroupResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin"
+      ]
+    },
+    {
+      "name": "creationGroup.setModeratorScope",
+      "method": "POST",
+      "path": "/creation-group/set-moderator-scope",
+      "rights": [
+        "SET_MODERATOR_CREATION_GROUP_SCOPE"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "userId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          },
+          {
+            "name": "scope",
+            "required": true,
+            "type": "text[]",
+            "legacyType": "[String]"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "[String]",
+        "type": "text[]"
+      },
+      "legacy": {
+        "resolver": "UserCreationGroupResolver",
+        "operation": "mutation",
+        "field": "setModeratorCreationGroupScope",
+        "file": "../gradido/backend/src/graphql/resolver/UserCreationGroupResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin"
+      ]
+    }
+  ]
+}

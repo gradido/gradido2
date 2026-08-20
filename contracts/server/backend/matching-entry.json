@@ -1,0 +1,240 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "MatchingEntry",
+  "description": "Offers and requests a member publishes for matching.",
+  "mount": "/",
+  "source": [
+    "../gradido/backend/src/graphql/resolver/MatchingEntryResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "matchingEntry.list",
+      "method": "GET",
+      "path": "/matching-entry/list",
+      "rights": [
+        "LIST_MATCHING_ENTRY"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "[MatchingEntry]",
+        "type": "object[]",
+        "model": "MatchingEntry",
+        "open": "shape of MatchingEntry not contracted yet"
+      },
+      "legacy": {
+        "resolver": "MatchingEntryResolver",
+        "operation": "query",
+        "field": "listMatchingEntries",
+        "file": "../gradido/backend/src/graphql/resolver/MatchingEntryResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "matchingEntry.create",
+      "method": "POST",
+      "path": "/matching-entry/create",
+      "rights": [
+        "CREATE_MATCHING_ENTRY"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "matchingType",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "summary",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "details",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "remote",
+            "required": false,
+            "type": "bool",
+            "legacyType": "Boolean"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "MatchingEntry",
+        "type": "object",
+        "model": "MatchingEntry",
+        "open": "shape of MatchingEntry not contracted yet"
+      },
+      "legacy": {
+        "resolver": "MatchingEntryResolver",
+        "operation": "mutation",
+        "field": "createMatchingEntry",
+        "file": "../gradido/backend/src/graphql/resolver/MatchingEntryResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "matchingEntry.update",
+      "method": "POST",
+      "path": "/matching-entry/update",
+      "rights": [
+        "UPDATE_MATCHING_ENTRY"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "uuid",
+            "required": true,
+            "type": "uuid",
+            "legacyType": "String"
+          },
+          {
+            "name": "matchingType",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "summary",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "details",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "remote",
+            "required": false,
+            "type": "bool",
+            "legacyType": "Boolean"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "MatchingEntry",
+        "type": "object",
+        "model": "MatchingEntry",
+        "open": "shape of MatchingEntry not contracted yet"
+      },
+      "legacy": {
+        "resolver": "MatchingEntryResolver",
+        "operation": "mutation",
+        "field": "updateMatchingEntry",
+        "file": "../gradido/backend/src/graphql/resolver/MatchingEntryResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "matchingEntry.setActive",
+      "method": "POST",
+      "path": "/matching-entry/set-active",
+      "rights": [
+        "UPDATE_MATCHING_ENTRY"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "uuid",
+            "required": true,
+            "type": "uuid",
+            "legacyType": "String"
+          },
+          {
+            "name": "active",
+            "required": true,
+            "type": "bool",
+            "legacyType": "Boolean"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "MatchingEntry",
+        "type": "object",
+        "model": "MatchingEntry",
+        "open": "shape of MatchingEntry not contracted yet"
+      },
+      "legacy": {
+        "resolver": "MatchingEntryResolver",
+        "operation": "mutation",
+        "field": "setMatchingEntryActive",
+        "file": "../gradido/backend/src/graphql/resolver/MatchingEntryResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "matchingEntry.delete",
+      "method": "POST",
+      "path": "/matching-entry/delete",
+      "rights": [
+        "DELETE_MATCHING_ENTRY"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "uuid",
+            "required": true,
+            "type": "uuid",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "MatchingEntryResolver",
+        "operation": "mutation",
+        "field": "deleteMatchingEntry",
+        "file": "../gradido/backend/src/graphql/resolver/MatchingEntryResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    }
+  ]
+}

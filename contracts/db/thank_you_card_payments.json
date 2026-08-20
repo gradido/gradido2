@@ -1,0 +1,29 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "thank_you_card_payments",
+  "description": "A payment request between 'amount entered' and 'money booked'. It exists so the PIN is one way to confirm a payment and a later tap on the payer's own device can be another, without touching the booking path again.",
+  "source": "database/src/schemas/drizzle.schema.ts plus database/migration/migrations 0115",
+  "columns": [
+    { "name": "id", "type": "uint64", "nullable": false, "identity": true },
+    { "name": "card_id", "type": "uint64", "nullable": false, "references": { "table": "thank_you_cards", "column": "id" }, "description": "Whose money is being asked for — the card's owner pays." },
+    { "name": "recipient_id", "type": "uint64", "nullable": false, "references": { "table": "users", "column": "id" }, "description": "The till: who receives it." },
+    { "name": "amount_gdd4", "type": "gradido_cent", "nullable": false },
+    { "name": "memo", "type": "varchar(512)", "nullable": false, "maxChars": "THANK_YOU_CARD_MEMO_MAX_CHARS", "minChars": "MEMO_MIN_CHARS" },
+    { "name": "state", "type": "varchar(16)", "nullable": false, "default": "open", "enum": "ThankYouCardPaymentState" },
+    { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" },
+    { "name": "valid_until", "type": "timestamp_ms", "nullable": false, "description": "A request that is past this is not payable, whatever its state says." }
+  ],
+  "primaryKey": ["id"],
+  "unique": [],
+  "indexes": [
+    { "name": "thank_you_card_payments_card_id_idx", "columns": ["card_id"] }
+  ],
+  "notes": [
+    "state is set to consumed BEFORE the booking runs. The consuming update is conditional on the row still being open, which is what makes it the lock: a second caller finds nothing to consume. A crash between the two steps therefore leaves 'request used, no money moved' rather than 'money moved, request still open' — and only the second of those can be booked twice.",
+    "Expiry is derived from valid_until on read, not written by a timer. An implementation that only looks at state will honour a request that expired an hour ago.",
+    "A consumed row is kept. It is what an old receipt refers to, together with the card row that must never be deleted.",
+    "The memo limit is the card's own constant, which happens to equal MEMO_MAX_CHARS. They are written separately because they are separate decisions — the column is varchar(512) and an unchecked longer memo comes back as a raw driver error.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json."
+  ]
+}

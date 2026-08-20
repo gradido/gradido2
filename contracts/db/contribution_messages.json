@@ -1,0 +1,30 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "contribution_messages",
+  "description": "The dialogue on one contribution: what the member wrote, what the moderator answered, and the moderator-only notes beside it.",
+  "source": "database/src/entity/ContributionMessage.ts plus database/migration/migrations",
+  "columns": [
+    { "name": "id", "type": "uint64", "nullable": false, "identity": true },
+    { "name": "contribution_id", "type": "uint64", "nullable": false, "references": { "table": "contributions", "column": "id" } },
+    { "name": "user_id", "type": "uint64", "nullable": false, "references": { "table": "users", "column": "id" }, "description": "Who wrote it — member or moderator. is_moderator says which." },
+    { "name": "message", "type": "varchar(2000)", "nullable": false, "maxChars": "MESSAGE_MAX_CHARS", "minChars": "MESSAGE_MIN_CHARS" },
+    { "name": "type", "type": "varchar(12)", "nullable": false, "default": "DIALOG", "enum": "ContributionMessageType" },
+    { "name": "is_moderator", "type": "bool", "nullable": false, "default": "false", "description": "Whether the author acted as a moderator when writing this. Not the same as the author holding the moderator role today — a role can be taken away, the message stays what it was." },
+    { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" },
+    { "name": "updated_at", "type": "timestamp_ms", "nullable": true, "default": null },
+    { "name": "deleted_at", "type": "timestamp_ms", "nullable": true, "default": null, "description": "Soft delete." },
+    { "name": "deleted_by", "type": "uint64", "nullable": true, "default": null, "references": { "table": "users", "column": "id" } }
+  ],
+  "primaryKey": ["id"],
+  "unique": [],
+  "indexes": [
+    { "name": "idx_contribution_messages_contribution_id", "columns": ["contribution_id"], "note": "Legacy declares it with a bare @Index() on the column, so TypeORM names it. Migration 0075 added it; the generated name in a legacy database is not this one." }
+  ],
+  "notes": [
+    "MODERATOR messages are visible to moderators only. That is an access rule, not a display preference: a query serving a member must filter the type, not the frontend. See types/ContributionMessageType.json.",
+    "HISTORY rows are written by the system when a contribution changes, not by a person. user_id then holds whoever caused the change.",
+    "Legacy declares created_at and updated_at as datetime WITHOUT precision(3) — second precision. Two messages written in the same second do not order by timestamp; order by id. See types/Timestamp.json.",
+    "The entity carries both @CreateDateColumn/@UpdateDateColumn and a plain @Column for the same field. TypeORM takes the last one; the effective column is what is written here."
+  ]
+}

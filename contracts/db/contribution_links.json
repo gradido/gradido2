@@ -1,0 +1,41 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "contribution_links",
+  "description": "A link a community publishes so members can claim a contribution themselves, within a cycle and a cap. Redeeming one writes a contributions row that points back here.",
+  "source": "database/src/entity/ContributionLink.ts plus database/migration/migrations",
+  "columns": [
+    { "name": "id", "type": "uint64", "nullable": false, "identity": true },
+    { "name": "name", "type": "varchar(100)", "nullable": false, "maxChars": "CONTRIBUTIONLINK_NAME_MAX_CHARS", "minChars": "CONTRIBUTIONLINK_NAME_MIN_CHARS" },
+    { "name": "memo", "type": "varchar(512)", "nullable": false, "maxChars": "MEMO_MAX_CHARS", "minChars": "MEMO_MIN_CHARS", "description": "Becomes the memo of every contribution claimed through this link." },
+    { "name": "code", "type": "varchar(24)", "nullable": false, "description": "The code carried in the published link. Unlike a transaction link this one is meant to be handed out widely — it is not a bearer secret." },
+    { "name": "amount_gdd4", "type": "gradido_cent", "nullable": false, "max": "MAX_CREATION_AMOUNT", "description": "What one claim is worth.", "legacyName": "amount" },
+    { "name": "cycle", "type": "varchar(12)", "nullable": false, "default": "ONCE", "enum": "ContributionCycleType", "description": "How often the same member may claim it." },
+    { "name": "max_per_cycle", "type": "uint32", "nullable": false, "default": "1", "description": "Claims per member per cycle." },
+    { "name": "max_amount_per_month_gdd4", "type": "gradido_cent", "nullable": true, "default": null, "legacyName": "max_amount_per_month" },
+    { "name": "total_max_count_of_contribution", "type": "uint32", "nullable": true, "default": null, "description": "Cap across all members, not per member. NULL means uncapped." },
+    { "name": "max_account_balance_gdd4", "type": "gradido_cent", "nullable": true, "default": null, "description": "Refuse the claim if the member's balance is already above this. NULL means no such check.", "legacyName": "max_account_balance" },
+    { "name": "min_gap_hours", "type": "uint32", "nullable": true, "default": null, "description": "Minimum distance between two claims by the same member, on top of the cycle." },
+    { "name": "valid_from", "type": "timestamp_ms", "nullable": false },
+    { "name": "valid_to", "type": "timestamp_ms", "nullable": true, "default": null, "description": "NULL means open ended." },
+    { "name": "link_enabled", "type": "bool", "nullable": false, "default": "true", "description": "An admin switch that is independent of the validity window. Disabled inside the window is a normal state." },
+    { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" },
+    { "name": "deleted_at", "type": "timestamp_ms", "nullable": true, "default": null, "description": "Soft delete. The contributions that were claimed through the link keep pointing at it." }
+  ],
+  "primaryKey": ["id"],
+  "unique": [],
+  "indexes": [],
+  "notes": [
+    "Whether a claim is allowed is decided by five independent limits — cycle, max_per_cycle, max_amount_per_month_gdd4, total_max_count_of_contribution, max_account_balance_gdd4, min_gap_hours — plus the validity window and link_enabled. Both implementations must evaluate all of them; passing one is not passing the link. This is the strongest candidate in db/ for a test-vector file.",
+    "contributions.contribution_link_id points here but carries no foreign key in legacy, and a soft-deleted link keeps its contributions. Deleting a row outright would orphan them.",
+    "Legacy declares created_at, valid_from and valid_to as datetime WITHOUT precision(3) — second precision. min_gap_hours arithmetic on second-precision timestamps is unaffected, but do not rely on sub-second ordering. See types/Timestamp.json.",
+    "The three money columns carry the _gdd4 suffix since migration 0100; the entity still exposes them as amount, maxAmountPerMonth and maxAccountBalance. legacyName records the pre-0100 column names for a migration reading an old dump."
+  ],
+  "open": [
+    {
+      "question": "Is code unique?",
+      "detail": "No unique constraint exists in legacy, and the lookup is by code. Two links sharing a code would make the claim path ambiguous.",
+      "status": "unanswered — the same question transaction_links.code raises, and it should be answered the same way for both"
+    }
+  ]
+}

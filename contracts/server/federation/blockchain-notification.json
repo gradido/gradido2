@@ -1,0 +1,122 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "federation",
+  "model": "BlockchainNotification",
+  "description": "The DLT connector reporting back that a transaction was confirmed or rejected.",
+  "mount": "/api/{apiVersion}",
+  "apiVersions": [
+    "1_0"
+  ],
+  "source": [
+    "../gradido/federation/src/graphql/api/1_0/resolver/BlockchainNotificationResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "blockchainNotification.confirmedTx",
+      "method": "POST",
+      "path": "/blockchain-notification/confirmed-tx",
+      "rights": null,
+      "request": {
+        "fields": [
+          {
+            "name": "transactionBase64",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "communityUuid",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "MutationResult",
+        "type": "object",
+        "fields": [
+          {
+            "name": "success",
+            "required": true,
+            "type": "bool",
+            "legacyType": "Boolean"
+          },
+          {
+            "name": "error",
+            "required": false,
+            "type": null,
+            "open": "legacy type MutationError — not in the contract type vocabulary yet",
+            "legacyType": "MutationError"
+          }
+        ]
+      },
+      "legacy": {
+        "resolver": "BlockchainNotificationResolver",
+        "operation": "mutation",
+        "field": "blockchainConfirmedTx",
+        "file": "../gradido/federation/src/graphql/api/1_0/resolver/BlockchainNotificationResolver.ts",
+        "apiVersion": "1_0"
+      },
+      "auth": "federation-handshake"
+    },
+    {
+      "name": "blockchainNotification.rejectedTx",
+      "method": "POST",
+      "path": "/blockchain-notification/rejected-tx",
+      "rights": null,
+      "request": {
+        "fields": [
+          {
+            "name": "errorMessage",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "hieroTransactionId",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "communityUuid",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "MutationResult",
+        "type": "object",
+        "fields": [
+          {
+            "name": "success",
+            "required": true,
+            "type": "bool",
+            "legacyType": "Boolean"
+          },
+          {
+            "name": "error",
+            "required": false,
+            "type": null,
+            "open": "legacy type MutationError — not in the contract type vocabulary yet",
+            "legacyType": "MutationError"
+          }
+        ]
+      },
+      "legacy": {
+        "resolver": "BlockchainNotificationResolver",
+        "operation": "mutation",
+        "field": "blockchainRejectedTx",
+        "file": "../gradido/federation/src/graphql/api/1_0/resolver/BlockchainNotificationResolver.ts",
+        "apiVersion": "1_0"
+      },
+      "auth": "federation-handshake"
+    }
+  ]
+}

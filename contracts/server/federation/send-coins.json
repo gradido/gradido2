@@ -1,0 +1,185 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "federation",
+  "model": "SendCoins",
+  "description": "The four-step cross-community transfer: vote, settle, revert, revert-settled.",
+  "mount": "/api/{apiVersion}",
+  "apiVersions": [
+    "1_0",
+    "1_1"
+  ],
+  "source": [
+    "../gradido/federation/src/graphql/api/1_0/resolver/SendCoinsResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "sendCoins.vote",
+      "method": "POST",
+      "path": "/send-coins/vote",
+      "rights": null,
+      "request": {
+        "fields": [
+          {
+            "name": "handshakeID",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "publicKey",
+            "required": true,
+            "type": "bytes(32)",
+            "legacyType": "String",
+            "note": "legacy sends it hex-encoded as a string"
+          },
+          {
+            "name": "jwt",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "String",
+        "type": "text"
+      },
+      "legacy": {
+        "resolver": "SendCoinsResolver",
+        "operation": "mutation",
+        "field": "voteForSendCoins",
+        "file": "../gradido/federation/src/graphql/api/1_0/resolver/SendCoinsResolver.ts",
+        "apiVersion": "1_0"
+      },
+      "auth": "federation-handshake"
+    },
+    {
+      "name": "sendCoins.revert",
+      "method": "POST",
+      "path": "/send-coins/revert",
+      "rights": null,
+      "request": {
+        "fields": [
+          {
+            "name": "handshakeID",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "publicKey",
+            "required": true,
+            "type": "bytes(32)",
+            "legacyType": "String",
+            "note": "legacy sends it hex-encoded as a string"
+          },
+          {
+            "name": "jwt",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "SendCoinsResolver",
+        "operation": "mutation",
+        "field": "revertSendCoins",
+        "file": "../gradido/federation/src/graphql/api/1_0/resolver/SendCoinsResolver.ts",
+        "apiVersion": "1_0"
+      },
+      "auth": "federation-handshake"
+    },
+    {
+      "name": "sendCoins.settle",
+      "method": "POST",
+      "path": "/send-coins/settle",
+      "rights": null,
+      "request": {
+        "fields": [
+          {
+            "name": "handshakeID",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "publicKey",
+            "required": true,
+            "type": "bytes(32)",
+            "legacyType": "String",
+            "note": "legacy sends it hex-encoded as a string"
+          },
+          {
+            "name": "jwt",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "SendCoinsResolver",
+        "operation": "mutation",
+        "field": "settleSendCoins",
+        "file": "../gradido/federation/src/graphql/api/1_0/resolver/SendCoinsResolver.ts",
+        "apiVersion": "1_0"
+      },
+      "auth": "federation-handshake"
+    },
+    {
+      "name": "sendCoins.revertSettled",
+      "method": "POST",
+      "path": "/send-coins/revert-settled",
+      "rights": null,
+      "request": {
+        "fields": [
+          {
+            "name": "handshakeID",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "publicKey",
+            "required": true,
+            "type": "bytes(32)",
+            "legacyType": "String",
+            "note": "legacy sends it hex-encoded as a string"
+          },
+          {
+            "name": "jwt",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "SendCoinsResolver",
+        "operation": "mutation",
+        "field": "revertSettledSendCoins",
+        "file": "../gradido/federation/src/graphql/api/1_0/resolver/SendCoinsResolver.ts",
+        "apiVersion": "1_0"
+      },
+      "auth": "federation-handshake"
+    }
+  ]
+}

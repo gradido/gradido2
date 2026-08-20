@@ -1,0 +1,32 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "events",
+  "description": "The event protocol: one row per thing that happened, naming who it happened to, who did it, and what it touched. Written beside the change, never instead of it.",
+  "source": "database/src/entity/Event.ts plus database/migration/migrations 0043 and 0061 to 0064",
+  "columns": [
+    { "name": "id", "type": "uint64", "nullable": false, "identity": true },
+    { "name": "type", "type": "varchar(100)", "nullable": false, "description": "The event name, e.g. CONTRIBUTION_CONFIRM. An open set in legacy — one constant per file under backend/src/event/.", "open": "Not an enum here. Legacy has around 60 of these as string constants, and the set grows with every feature. Whether gradido2 contracts them as a closed enum or keeps them open decides whether an unknown value on read is an error or a fact." },
+    { "name": "affected_user_id", "type": "uint64", "nullable": false, "references": { "table": "users", "column": "id" }, "description": "Whose account the event is about." },
+    { "name": "acting_user_id", "type": "uint64", "nullable": false, "references": { "table": "users", "column": "id" }, "description": "Who caused it. Equal to affected_user_id for an ordinary member action; a moderator or admin id when somebody acted on another's behalf.", "note": "Migration 0061 wrote 0 into this column for the ADMIN_CONTRIBUTION_UPDATE rows it could not reconstruct. A 0 here points at no user and must not be joined blindly." },
+    { "name": "involved_user_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "users", "column": "id" }, "description": "The third party, where there is one — the recipient of a transfer." },
+    { "name": "involved_transaction_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "transactions", "column": "id" } },
+    { "name": "involved_contribution_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "contributions", "column": "id" } },
+    { "name": "involved_contribution_message_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "contribution_messages", "column": "id" } },
+    { "name": "involved_transaction_link_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "transaction_links", "column": "id" } },
+    { "name": "involved_contribution_link_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "contribution_links", "column": "id" } },
+    { "name": "amount_gdd4", "type": "gradido_cent", "nullable": true, "default": null, "description": "Signed: negative on a send, positive on a receive. Migration 0061 flipped the sign of the existing TRANSACTION_SEND rows to make it so." },
+    { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
+  ],
+  "primaryKey": ["id"],
+  "unique": [],
+  "indexes": [],
+  "appendOnly": true,
+  "notes": [
+    "Append-only, like transactions: the row is the event. Nothing updates or deletes here, and both implementations must treat an UPDATE or DELETE on this table as a bug.",
+    "Six nullable involved_* columns, of which an event fills at most two. It is a wide sparse row rather than a polymorphic reference, and a reader must not assume that exactly one is set.",
+    "This is not the log. logging.json describes what both implementations emit to stdout; this table is business history that survives the process. A change that writes one and not the other is incomplete.",
+    "Legacy declares no index at all here, and the admin views read it by affected_user_id and by created_at. Whatever gradido2 reads it by needs an index written into this file — see contracts/AGENTS.md, indexes are part of the contract.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json. Migration 0061 raised created_at to datetime(3), so rows written before it have second precision."
+  ]
+}

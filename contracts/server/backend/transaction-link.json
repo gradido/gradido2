@@ -1,0 +1,484 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "TransactionLink",
+  "description": "Redeemable links a member creates to hand out an amount.",
+  "mount": "/",
+  "source": [
+    "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "transactionLink.create",
+      "method": "POST",
+      "path": "/transaction-link/create",
+      "rights": [
+        "CREATE_TRANSACTION_LINK"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "amount",
+            "required": true,
+            "type": "gradido_cent",
+            "legacyType": "GradidoUnit"
+          },
+          {
+            "name": "memo",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "TransactionLink",
+        "type": "object",
+        "model": "TransactionLink",
+        "open": "shape of TransactionLink not contracted yet"
+      },
+      "legacy": {
+        "resolver": "TransactionLinkResolver",
+        "operation": "mutation",
+        "field": "createTransactionLink",
+        "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "transactionLink.delete",
+      "method": "POST",
+      "path": "/transaction-link/delete",
+      "rights": [
+        "DELETE_TRANSACTION_LINK"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "id",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "TransactionLinkResolver",
+        "operation": "mutation",
+        "field": "deleteTransactionLink",
+        "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "transactionLink.query",
+      "method": "GET",
+      "path": "/transaction-link/query",
+      "rights": [
+        "QUERY_TRANSACTION_LINK"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "code",
+            "required": true,
+            "type": "text",
+            "legacyType": "string"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "QueryLinkResult",
+        "type": "object",
+        "model": "QueryLinkResult",
+        "open": "shape of QueryLinkResult not contracted yet"
+      },
+      "legacy": {
+        "resolver": "TransactionLinkResolver",
+        "operation": "query",
+        "field": "queryTransactionLink",
+        "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
+      },
+      "auth": "public",
+      "roles": [
+        "unauthorized",
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "transactionLink.redeem",
+      "method": "POST",
+      "path": "/transaction-link/redeem",
+      "rights": [
+        "REDEEM_TRANSACTION_LINK"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "code",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "TransactionLinkResolver",
+        "operation": "mutation",
+        "field": "redeemTransactionLink",
+        "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "transactionLink.createRedeemJwt",
+      "method": "POST",
+      "path": "/transaction-link/create-redeem-jwt",
+      "rights": [
+        "QUERY_REDEEM_JWT"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "gradidoId",
+            "required": true,
+            "type": "uuid",
+            "legacyType": "string"
+          },
+          {
+            "name": "senderCommunityUuid",
+            "required": true,
+            "type": "uuid",
+            "legacyType": "string"
+          },
+          {
+            "name": "senderCommunityName",
+            "required": true,
+            "type": "text",
+            "legacyType": "string"
+          },
+          {
+            "name": "recipientCommunityUuid",
+            "required": true,
+            "type": "uuid",
+            "legacyType": "string"
+          },
+          {
+            "name": "code",
+            "required": true,
+            "type": "text",
+            "legacyType": "string"
+          },
+          {
+            "name": "amount",
+            "required": true,
+            "type": "gradido_cent",
+            "legacyType": "string",
+            "note": "legacy sends the amount as a decimal string"
+          },
+          {
+            "name": "memo",
+            "required": true,
+            "type": "text",
+            "legacyType": "string"
+          },
+          {
+            "name": "firstName",
+            "required": false,
+            "type": "text",
+            "legacyType": "string"
+          },
+          {
+            "name": "alias",
+            "required": false,
+            "type": "text",
+            "legacyType": "string"
+          },
+          {
+            "name": "validUntil",
+            "required": false,
+            "type": "timestamp_ms",
+            "legacyType": "string",
+            "note": "legacy sends an ISO date string"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "String",
+        "type": "text"
+      },
+      "legacy": {
+        "resolver": "TransactionLinkResolver",
+        "operation": "mutation",
+        "field": "createRedeemJwt",
+        "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
+      },
+      "auth": "public",
+      "roles": [
+        "unauthorized",
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "transactionLink.disburse",
+      "method": "POST",
+      "path": "/transaction-link/disburse",
+      "rights": [
+        "DISBURSE_TRANSACTION_LINK"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "senderCommunityUuid",
+            "required": true,
+            "type": "uuid",
+            "legacyType": "string"
+          },
+          {
+            "name": "senderGradidoId",
+            "required": true,
+            "type": "uuid",
+            "legacyType": "string"
+          },
+          {
+            "name": "recipientCommunityUuid",
+            "required": true,
+            "type": "uuid",
+            "legacyType": "string"
+          },
+          {
+            "name": "recipientCommunityName",
+            "required": true,
+            "type": "text",
+            "legacyType": "string"
+          },
+          {
+            "name": "recipientGradidoId",
+            "required": true,
+            "type": "uuid",
+            "legacyType": "string"
+          },
+          {
+            "name": "recipientFirstName",
+            "required": true,
+            "type": "text",
+            "legacyType": "string"
+          },
+          {
+            "name": "code",
+            "required": true,
+            "type": "text",
+            "legacyType": "string"
+          },
+          {
+            "name": "amount",
+            "required": true,
+            "type": "gradido_cent",
+            "legacyType": "string",
+            "note": "legacy sends the amount as a decimal string"
+          },
+          {
+            "name": "memo",
+            "required": true,
+            "type": "text",
+            "legacyType": "string"
+          },
+          {
+            "name": "validUntil",
+            "required": false,
+            "type": "timestamp_ms",
+            "legacyType": "string",
+            "note": "legacy sends an ISO date string"
+          },
+          {
+            "name": "recipientAlias",
+            "required": false,
+            "type": "text",
+            "legacyType": "string"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "TransactionLinkResolver",
+        "operation": "mutation",
+        "field": "disburseTransactionLink",
+        "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "transactionLink.list",
+      "method": "GET",
+      "path": "/transaction-link/list",
+      "rights": [
+        "LIST_TRANSACTION_LINKS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "currentPage",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int"
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int"
+          },
+          {
+            "name": "order",
+            "required": true,
+            "type": "enum",
+            "enum": "Order",
+            "legacyType": "Order"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "TransactionLinkResult",
+        "type": "object",
+        "model": "TransactionLinkResult",
+        "open": "shape of TransactionLinkResult not contracted yet"
+      },
+      "legacy": {
+        "resolver": "TransactionLinkResolver",
+        "operation": "query",
+        "field": "listTransactionLinks",
+        "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "transactionLink.adminList",
+      "method": "GET",
+      "path": "/transaction-link/admin-list",
+      "rights": [
+        "LIST_TRANSACTION_LINKS_ADMIN"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "currentPage",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int"
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int"
+          },
+          {
+            "name": "order",
+            "required": true,
+            "type": "enum",
+            "enum": "Order",
+            "legacyType": "Order"
+          },
+          {
+            "name": "withDeleted",
+            "required": false,
+            "type": "bool",
+            "legacyType": "Boolean"
+          },
+          {
+            "name": "withExpired",
+            "required": false,
+            "type": "bool",
+            "legacyType": "Boolean"
+          },
+          {
+            "name": "withRedeemed",
+            "required": false,
+            "type": "bool",
+            "legacyType": "Boolean"
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "TransactionLinkResult",
+        "type": "object",
+        "model": "TransactionLinkResult",
+        "open": "shape of TransactionLinkResult not contracted yet"
+      },
+      "legacy": {
+        "resolver": "TransactionLinkResolver",
+        "operation": "query",
+        "field": "listTransactionLinksAdmin",
+        "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    }
+  ]
+}

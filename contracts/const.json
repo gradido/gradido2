@@ -85,6 +85,37 @@
       "value": "2000",
       "source": "shared/src/const/index.ts"
     },
+    "THANK_YOU_CARD_MAX_FAILED_ATTEMPTS": {
+      "group": "thank_you_card",
+      "type": "uint32",
+      "unit": "attempts",
+      "value": "3",
+      "description": "Wrong PINs a single card survives before it is blocked. Counted on the card, not on the person.",
+      "source": "database/src/queries/thankYouCards.ts"
+    },
+    "THANK_YOU_CARD_CODE_MAX_CHARS": {
+      "group": "validation",
+      "type": "uint32",
+      "unit": "characters",
+      "value": "40",
+      "description": "'DK-' plus 32 hex characters. Bound by the varchar(40) column in thank_you_cards.",
+      "source": "backend/src/data/ThankYouCard.logic.ts"
+    },
+    "THANK_YOU_CARD_LABEL_MAX_CHARS": {
+      "group": "validation",
+      "type": "uint32",
+      "unit": "characters",
+      "value": "64",
+      "source": "backend/src/data/ThankYouCard.logic.ts"
+    },
+    "THANK_YOU_CARD_MEMO_MAX_CHARS": {
+      "group": "validation",
+      "type": "uint32",
+      "unit": "characters",
+      "value": "512",
+      "description": "Equal to MEMO_MAX_CHARS today, but a separate decision: this one is bound by thank_you_card_payments.memo.",
+      "source": "backend/src/data/ThankYouCard.logic.ts"
+    },
     "SALUTATION_MAX_LENGTH": {
       "group": "validation",
       "type": "uint32",
@@ -135,6 +166,21 @@
       "type": "uint32",
       "value": "25",
       "source": "shared/src/const/index.ts"
+    },
+    "DHT_BOOTSTRAP_DEFAULT_URL": {
+      "group": "federation",
+      "type": "text",
+      "value": "https://gdd.gradido.net",
+      "description": "Where a community bootstraps from when its operator configures nothing. Overridable, and any running community can serve the same route — this is the default, not the only entry point.",
+      "source": "gradido2 — the community operated by the Gradido project"
+    },
+    "DHT_BOOTSTRAP_PEERS_MAX": {
+      "group": "federation",
+      "type": "uint32",
+      "unit": "peers",
+      "value": "20",
+      "description": "How many peers peer.bootstrap hands out. Enough to join the network, few enough that the route is not an enumeration endpoint.",
+      "source": "gradido2 — libp2p, unlike hyperswarm, comes with no public network to join"
     },
     "SESSION_HARD_TIMEOUT_MS": {
       "group": "session",

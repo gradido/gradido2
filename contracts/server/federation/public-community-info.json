@@ -1,0 +1,76 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "federation",
+  "model": "PublicCommunityInfo",
+  "description": "What a community publishes about itself without authentication.",
+  "mount": "/api/{apiVersion}",
+  "apiVersions": [
+    "1_0",
+    "1_1"
+  ],
+  "source": [
+    "../gradido/federation/src/graphql/api/1_0/resolver/PublicCommunityInfoResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "publicCommunityInfo.get",
+      "method": "GET",
+      "path": "/public-community-info/get",
+      "rights": null,
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "GetPublicCommunityInfoResult",
+        "type": "object",
+        "fields": [
+          {
+            "name": "name",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "description",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "creationDate",
+            "required": true,
+            "type": "timestamp_ms",
+            "legacyType": "Date"
+          },
+          {
+            "name": "publicKey",
+            "required": true,
+            "type": "bytes(32)",
+            "legacyType": "String",
+            "note": "legacy sends it hex-encoded as a string"
+          },
+          {
+            "name": "publicJwtKey",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "hieroTopicId",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "legacy": {
+        "resolver": "PublicCommunityInfoResolver",
+        "operation": "query",
+        "field": "getPublicCommunityInfo",
+        "file": "../gradido/federation/src/graphql/api/1_0/resolver/PublicCommunityInfoResolver.ts",
+        "apiVersion": "1_0"
+      },
+      "auth": "federation-handshake"
+    }
+  ]
+}

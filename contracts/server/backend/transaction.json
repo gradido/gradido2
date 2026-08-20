@@ -1,0 +1,175 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "Transaction",
+  "description": "The transaction list and sending coins to another member.",
+  "mount": "/",
+  "source": [
+    "../gradido/backend/src/graphql/resolver/TransactionResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "transaction.list",
+      "method": "GET",
+      "path": "/transaction/list",
+      "rights": [
+        "TRANSACTION_LIST"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "currentPage",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int",
+            "default": "1"
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int",
+            "default": "25"
+          },
+          {
+            "name": "order",
+            "required": true,
+            "type": "enum",
+            "enum": "Order",
+            "legacyType": "Order",
+            "default": "DESC"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "TransactionList",
+        "type": "object",
+        "model": "TransactionList",
+        "open": "shape of TransactionList not contracted yet"
+      },
+      "legacy": {
+        "resolver": "TransactionResolver",
+        "operation": "query",
+        "field": "transactionList",
+        "file": "../gradido/backend/src/graphql/resolver/TransactionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "transaction.sendCoins",
+      "method": "POST",
+      "path": "/transaction/send-coins",
+      "rights": [
+        "SEND_COINS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "recipientCommunityIdentifier",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "recipientIdentifier",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "amount",
+            "required": true,
+            "type": "gradido_cent",
+            "legacyType": "GradidoUnit"
+          },
+          {
+            "name": "memo",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "TransactionResolver",
+        "operation": "mutation",
+        "field": "sendCoins",
+        "file": "../gradido/backend/src/graphql/resolver/TransactionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "transaction.sendEmail",
+      "method": "POST",
+      "path": "/transaction/send-email",
+      "rights": [
+        "SEND_COINS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "recipientCommunityIdentifier",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "recipientIdentifier",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "subject",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "memo",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "TransactionResolver",
+        "operation": "mutation",
+        "field": "sendEmail",
+        "file": "../gradido/backend/src/graphql/resolver/TransactionResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    }
+  ]
+}

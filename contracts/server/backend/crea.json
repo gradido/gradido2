@@ -1,0 +1,571 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "Crea",
+  "description": "The AI moderation assistant: evaluating and rewriting contributions, and its settings.",
+  "mount": "/",
+  "source": [
+    "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "crea.evaluateContribution",
+      "method": "POST",
+      "path": "/crea/evaluate-contribution",
+      "rights": [
+        "AI_SEND_MESSAGE"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "text",
+            "required": true,
+            "type": "text",
+            "legacyType": "string"
+          },
+          {
+            "name": "enteredHours",
+            "required": false,
+            "type": "uint32",
+            "legacyType": "Float"
+          },
+          {
+            "name": "enteredGdd",
+            "required": false,
+            "type": "uint32",
+            "legacyType": "Float"
+          },
+          {
+            "name": "monthlyHours",
+            "required": false,
+            "type": "uint32",
+            "legacyType": "Float"
+          },
+          {
+            "name": "memberStatus",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "recipientFirstName",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "salutation",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "moderatorName",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "moderatorSignature",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "contributionRef",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "communityUuid",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "personPseudonym",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "date",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "isNewMember",
+            "required": false,
+            "type": "bool",
+            "legacyType": "Boolean"
+          },
+          {
+            "name": "uiLanguage",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "moderatorDecision",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "moderatorContext",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "CreaEvaluation",
+        "type": "object",
+        "model": "CreaEvaluation",
+        "open": "shape of CreaEvaluation not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreaResolver",
+        "operation": "mutation",
+        "field": "creaEvaluateContribution",
+        "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "crea.rewriteResponse",
+      "method": "POST",
+      "path": "/crea/rewrite-response",
+      "rights": [
+        "AI_SEND_MESSAGE"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "text",
+            "required": true,
+            "type": "text",
+            "legacyType": "string"
+          },
+          {
+            "name": "enteredHours",
+            "required": false,
+            "type": "uint32",
+            "legacyType": "Float"
+          },
+          {
+            "name": "enteredGdd",
+            "required": false,
+            "type": "uint32",
+            "legacyType": "Float"
+          },
+          {
+            "name": "monthlyHours",
+            "required": false,
+            "type": "uint32",
+            "legacyType": "Float"
+          },
+          {
+            "name": "memberStatus",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "recipientFirstName",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "salutation",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "moderatorName",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "moderatorSignature",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "contributionRef",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "communityUuid",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "personPseudonym",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "date",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "isNewMember",
+            "required": false,
+            "type": "bool",
+            "legacyType": "Boolean"
+          },
+          {
+            "name": "uiLanguage",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "moderatorDecision",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "moderatorContext",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "CreaRewriteResult",
+        "type": "object",
+        "model": "CreaRewriteResult",
+        "open": "shape of CreaRewriteResult not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreaResolver",
+        "operation": "mutation",
+        "field": "creaRewriteResponse",
+        "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "crea.evaluateBatch",
+      "method": "POST",
+      "path": "/crea/evaluate-batch",
+      "rights": [
+        "AI_SEND_MESSAGE"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "contributions",
+            "required": true,
+            "type": null,
+            "open": "legacy type [CreaBatchContribution] — not in the contract type vocabulary yet",
+            "legacyType": "[CreaBatchContribution]"
+          },
+          {
+            "name": "recipientFirstName",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "salutation",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "uiLanguage",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "moderatorDecision",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "moderatorContext",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "CreaBatchEvaluation",
+        "type": "object",
+        "model": "CreaBatchEvaluation",
+        "open": "shape of CreaBatchEvaluation not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreaResolver",
+        "operation": "mutation",
+        "field": "creaEvaluateBatch",
+        "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "crea.rewriteBatch",
+      "method": "POST",
+      "path": "/crea/rewrite-batch",
+      "rights": [
+        "AI_SEND_MESSAGE"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "contributions",
+            "required": true,
+            "type": null,
+            "open": "legacy type [CreaBatchContribution] — not in the contract type vocabulary yet",
+            "legacyType": "[CreaBatchContribution]"
+          },
+          {
+            "name": "recipientFirstName",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "salutation",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "uiLanguage",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "moderatorDecision",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "moderatorContext",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "CreaRewriteResult",
+        "type": "object",
+        "model": "CreaRewriteResult",
+        "open": "shape of CreaRewriteResult not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreaResolver",
+        "operation": "mutation",
+        "field": "creaRewriteBatch",
+        "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "crea.setSalutation",
+      "method": "POST",
+      "path": "/crea/set-salutation",
+      "rights": [
+        "SET_USER_SALUTATION"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "userId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          },
+          {
+            "name": "salutation",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "CreaResolver",
+        "operation": "mutation",
+        "field": "setCreaSalutation",
+        "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "crea.getSettings",
+      "method": "GET",
+      "path": "/crea/get-settings",
+      "rights": [
+        "AI_SETTINGS"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "CreaSettings",
+        "type": "object",
+        "model": "CreaSettings",
+        "open": "shape of CreaSettings not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreaResolver",
+        "operation": "query",
+        "field": "creaSettings",
+        "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin"
+      ]
+    },
+    {
+      "name": "crea.setSettings",
+      "method": "POST",
+      "path": "/crea/set-settings",
+      "rights": [
+        "AI_SETTINGS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "model",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "effort",
+            "required": true,
+            "type": "text",
+            "legacyType": "string"
+          },
+          {
+            "name": "fastMode",
+            "required": false,
+            "type": "bool",
+            "legacyType": "Boolean"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "CreaSettings",
+        "type": "object",
+        "model": "CreaSettings",
+        "open": "shape of CreaSettings not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreaResolver",
+        "operation": "mutation",
+        "field": "setCreaSettings",
+        "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin"
+      ]
+    },
+    {
+      "name": "crea.testModel",
+      "method": "POST",
+      "path": "/crea/test-model",
+      "rights": [
+        "AI_SETTINGS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "model",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "effort",
+            "required": true,
+            "type": "text",
+            "legacyType": "string"
+          },
+          {
+            "name": "fastMode",
+            "required": false,
+            "type": "bool",
+            "legacyType": "Boolean"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "CreaModelTestResult",
+        "type": "object",
+        "model": "CreaModelTestResult",
+        "open": "shape of CreaModelTestResult not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreaResolver",
+        "operation": "mutation",
+        "field": "testCreaModel",
+        "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin"
+      ]
+    }
+  ]
+}

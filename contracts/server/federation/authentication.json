@@ -1,0 +1,143 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "federation",
+  "model": "Authentication",
+  "description": "The handshake that establishes a trusted channel between two communities.",
+  "mount": "/api/{apiVersion}",
+  "apiVersions": [
+    "1_0",
+    "1_1"
+  ],
+  "source": [
+    "../gradido/federation/src/graphql/api/1_0/resolver/AuthenticationResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "authentication.openConnection",
+      "method": "POST",
+      "path": "/authentication/open-connection",
+      "rights": null,
+      "request": {
+        "fields": [
+          {
+            "name": "handshakeID",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "publicKey",
+            "required": true,
+            "type": "bytes(32)",
+            "legacyType": "String",
+            "note": "legacy sends it hex-encoded as a string"
+          },
+          {
+            "name": "jwt",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "AuthenticationResolver",
+        "operation": "mutation",
+        "field": "openConnection",
+        "file": "../gradido/federation/src/graphql/api/1_0/resolver/AuthenticationResolver.ts",
+        "apiVersion": "1_0"
+      },
+      "auth": "federation-handshake"
+    },
+    {
+      "name": "authentication.openConnectionCallback",
+      "method": "POST",
+      "path": "/authentication/open-connection-callback",
+      "rights": null,
+      "request": {
+        "fields": [
+          {
+            "name": "handshakeID",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "publicKey",
+            "required": true,
+            "type": "bytes(32)",
+            "legacyType": "String",
+            "note": "legacy sends it hex-encoded as a string"
+          },
+          {
+            "name": "jwt",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "AuthenticationResolver",
+        "operation": "mutation",
+        "field": "openConnectionCallback",
+        "file": "../gradido/federation/src/graphql/api/1_0/resolver/AuthenticationResolver.ts",
+        "apiVersion": "1_0"
+      },
+      "auth": "federation-handshake"
+    },
+    {
+      "name": "authentication.authenticate",
+      "method": "POST",
+      "path": "/authentication/authenticate",
+      "rights": null,
+      "request": {
+        "fields": [
+          {
+            "name": "handshakeID",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "publicKey",
+            "required": true,
+            "type": "bytes(32)",
+            "legacyType": "String",
+            "note": "legacy sends it hex-encoded as a string"
+          },
+          {
+            "name": "jwt",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": true,
+        "legacyType": "String",
+        "type": "text"
+      },
+      "legacy": {
+        "resolver": "AuthenticationResolver",
+        "operation": "mutation",
+        "field": "authenticate",
+        "file": "../gradido/federation/src/graphql/api/1_0/resolver/AuthenticationResolver.ts",
+        "apiVersion": "1_0"
+      },
+      "auth": "federation-handshake"
+    }
+  ]
+}

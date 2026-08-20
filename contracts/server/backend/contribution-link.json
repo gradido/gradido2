@@ -1,0 +1,260 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "ContributionLink",
+  "description": "Links a community publishes so members can claim a recurring contribution.",
+  "mount": "/",
+  "source": [
+    "../gradido/backend/src/graphql/resolver/ContributionLinkResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "contributionLink.create",
+      "method": "POST",
+      "path": "/contribution-link/create",
+      "rights": [
+        "CREATE_CONTRIBUTION_LINK"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "amount",
+            "required": true,
+            "type": "gradido_cent",
+            "legacyType": "GradidoUnit"
+          },
+          {
+            "name": "name",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "memo",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "cycle",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "validFrom",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "validTo",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "maxAmountPerMonth",
+            "required": false,
+            "type": "gradido_cent",
+            "legacyType": "GradidoUnit"
+          },
+          {
+            "name": "maxPerCycle",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ContributionLink",
+        "type": "object",
+        "model": "ContributionLink",
+        "open": "shape of ContributionLink not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionLinkResolver",
+        "operation": "mutation",
+        "field": "createContributionLink",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionLinkResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin"
+      ]
+    },
+    {
+      "name": "contributionLink.list",
+      "method": "GET",
+      "path": "/contribution-link/list",
+      "rights": [
+        "LIST_CONTRIBUTION_LINKS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "currentPage",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int",
+            "default": "1"
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int",
+            "default": "5"
+          },
+          {
+            "name": "order",
+            "required": true,
+            "type": "enum",
+            "enum": "Order",
+            "legacyType": "Order",
+            "default": "DESC"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ContributionLinkList",
+        "type": "object",
+        "model": "ContributionLinkList",
+        "open": "shape of ContributionLinkList not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionLinkResolver",
+        "operation": "query",
+        "field": "listContributionLinks",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionLinkResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contributionLink.delete",
+      "method": "POST",
+      "path": "/contribution-link/delete",
+      "rights": [
+        "DELETE_CONTRIBUTION_LINK"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "id",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "ContributionLinkResolver",
+        "operation": "mutation",
+        "field": "deleteContributionLink",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionLinkResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin"
+      ]
+    },
+    {
+      "name": "contributionLink.update",
+      "method": "POST",
+      "path": "/contribution-link/update",
+      "rights": [
+        "UPDATE_CONTRIBUTION_LINK"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "amount",
+            "required": true,
+            "type": "gradido_cent",
+            "legacyType": "GradidoUnit"
+          },
+          {
+            "name": "name",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "memo",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "cycle",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "validFrom",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "validTo",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "maxAmountPerMonth",
+            "required": false,
+            "type": "gradido_cent",
+            "legacyType": "GradidoUnit"
+          },
+          {
+            "name": "maxPerCycle",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int"
+          },
+          {
+            "name": "id",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ContributionLink",
+        "type": "object",
+        "model": "ContributionLink",
+        "open": "shape of ContributionLink not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionLinkResolver",
+        "operation": "mutation",
+        "field": "updateContributionLink",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionLinkResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin"
+      ]
+    }
+  ]
+}

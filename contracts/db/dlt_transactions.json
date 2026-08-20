@@ -1,0 +1,34 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "dlt_transactions",
+  "description": "What the DLT connector sent to the Hiero network and what came back. One row per attempt to anchor a transaction, a user registration or a transaction link on the chain.",
+  "source": "database/src/entity/DltTransaction.ts and database/src/schemas/drizzle.schema.ts plus database/migration/migrations 0070, 0101 and 0103",
+  "columns": [
+    { "name": "id", "type": "uint64", "nullable": false, "identity": true },
+    { "name": "transaction_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "transactions", "column": "id" } },
+    { "name": "user_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "users", "column": "id" } },
+    { "name": "transaction_link_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "transaction_links", "column": "id" } },
+    { "name": "type_id", "type": "uint32", "nullable": false, "enum": "DltTransactionType", "description": "Which of the three reference columns is the meaningful one." },
+    { "name": "hiero_transaction_id", "type": "varchar(255)", "nullable": true, "default": null, "description": "The network's own identifier for the submitted transaction. NULL until it has been sent.", "legacyName": "message_id" },
+    { "name": "verified", "type": "bool", "nullable": false, "default": "false", "description": "Whether the network confirmed it. Redundant with verified_at — see the note." },
+    { "name": "verified_at", "type": "timestamp_ms", "nullable": true, "default": null },
+    { "name": "error", "type": "text", "nullable": true, "default": null, "description": "Why the network rejected it. Set by the rejectedTx notification, see server/federation/blockchain-notification.json." },
+    { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
+  ],
+  "primaryKey": ["id"],
+  "unique": [
+    { "name": "dlt_transactions_hiero_transacion_id_unique", "columns": ["hiero_transaction_id"], "note": "The name is misspelled in legacy ('transacion'). Names are stable forever — see contracts/AGENTS.md — so it is written here as it is, not as it should have been." }
+  ],
+  "indexes": [
+    { "name": "idx_dlt_transaction_id", "columns": ["transaction_id"] },
+    { "name": "idx_dlt_user_id", "columns": ["user_id"] },
+    { "name": "idx_dlt_transaction_link_id", "columns": ["transaction_link_id"] }
+  ],
+  "notes": [
+    "verified and verified_at say the same thing twice, and nothing in the schema keeps them in step. Both implementations must write both or gradido2 must drop the boolean; a row with verified = true and verified_at NULL is an inconsistency, not a state.",
+    "The unique on hiero_transaction_id is what makes the confirmation idempotent: the same notification arriving twice cannot create a second row. It is a correctness constraint, not an optimisation.",
+    "error set together with verified = true is a contradiction. A row is confirmed or rejected, never both — the same rule contributions.json states for confirmed_by and denied_by.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json. This table uses datetime(3)."
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "ThankYouCardPaymentState",
+  "representation": "string",
+  "source": "database/src/queries/thankYouCardPayments.ts",
+  "storedIn": "thank_you_card_payments.state",
+  "unknownValuePolicy": "reject",
+  "description": "Whether a payment request is still payable. Expiry is not one of the values — it is derived from valid_until on read.",
+  "values": [
+    { "name": "OPEN", "value": "open", "description": "Asked for, not yet confirmed. Still payable if valid_until has not passed." },
+    { "name": "CONSUMED", "value": "consumed", "description": "Taken. Set before the booking runs, by an update conditional on the row still being open — that conditional update is the lock." }
+  ],
+  "notes": [
+    "There is no 'booked' value, on purpose. Consuming and booking are two writes that cannot be made atomic, so the state says only that the request was taken; whether the money moved is a question for transactions.",
+    "An expired request is still 'open' in this column. Both implementations must compare valid_until on read — reading the state alone honours a request that ran out an hour ago."
+  ]
+}

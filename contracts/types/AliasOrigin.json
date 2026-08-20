@@ -1,0 +1,20 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "AliasOrigin",
+  "representation": "string",
+  "source": "database/src/entity/UserAlias.ts",
+  "storedIn": "user_aliases.origin",
+  "unknownValuePolicy": "reject",
+  "description": "Where a name came from. Four values rather than two, because the origin answers two questions that do not move together: whether the member has answered the naming question at all, and whether the name cost one of their picks.",
+  "values": [
+    { "name": "ASSIGNED", "value": "assigned", "settled": false, "countsAgainstQuota": false, "description": "The system built the name and the member has not answered yet." },
+    { "name": "MIGRATED", "value": "migrated", "settled": false, "countsAgainstQuota": false, "description": "An assigned name that migration 0116 handed out. Kept apart only so that migration's rollback takes back its own work; behaves like assigned everywhere else." },
+    { "name": "CHOSEN", "value": "chosen", "settled": true, "countsAgainstQuota": true, "description": "The member typed it themselves. The only value that costs one of ALIAS_QUOTA_PER_WINDOW." },
+    { "name": "ADOPTED", "value": "adopted", "settled": true, "countsAgainstQuota": false, "description": "The member kept the name the system built. That is an answer, not a pick, so it costs nothing." }
+  ],
+  "notes": [
+    "settled answers 'has the member answered the question the first-login window asks'. countsAgainstQuota answers 'does it spend one of the four picks a year'. Conflating them charged a member a quarter of their yearly quota for a name nobody chose.",
+    "An implementation that counts rows in user_aliases instead of counting the ones with countsAgainstQuota is wrong, in exactly that way."
+  ]
+}

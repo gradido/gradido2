@@ -130,7 +130,7 @@ Do not create an alternative location because the directory was previously empty
 
 ---
 
-## 4. Three kinds of code
+## 4. Four kinds of code
 
 Before writing anything, decide which of these it is:
 
@@ -138,6 +138,7 @@ Before writing anything, decide which of these it is:
 |---|---|---|
 | **determinism-critical** | once, in C, in `shared-native` | **never** |
 | **single-implementation** | once, in C, in `blockchain-core` | **never** |
+| **protocol-defined** | twice, on a conformant library per language | yes — by the protocol, not by us |
 | **domain / business** | TypeScript reference | yes, C follows |
 | **infrastructure** | each implementation its own | no |
 
@@ -149,20 +150,51 @@ performance-motivated   -> no. The crossing costs more than it saves.
 determinism-motivated   -> always, whatever it costs.
 single-implementation   -> yes, when the alternative is writing a protocol or an
                            algorithm twice and hoping the two agree.
+protocol-defined        -> twice, when no one language has the library and the
+                           protocol itself is what keeps the halves together.
 ```
 
-The third case is why the DHT node lives in `blockchain-core` rather than being built twice:
-both paths then speak the same protocol because it is the same code, not because two
-implementations were kept in step.
+The second case is signing, hashing and transaction serialisation: one C++ library called
+from both paths, because two implementations of a wire format disagree without failing a
+test.
 
-The crossing cost that rules out the first case does not apply, and performance is a reason
-here rather than a counter-argument: the sweep is O(communities) every 20 seconds, so at a
-few thousand of them it is real work, and the native module holds the state and hands out
-only what changed. The boundary then scales with the number of changes, not with the number
-of communities.
+The fourth case is peer discovery, and it is the only one. libp2p — Kademlia plus transports,
+multiplexing, NAT traversal, peer store, identify — exists in `rust-libp2p` and `js-libp2p`
+and nowhere else that both paths can reach; writing it in C would be the project instead of
+Gradido. So:
 
-`blockchain-core` does not touch the database. It reports what it discovers; persisting that
-is an Interaction's job, through a Repository, on whichever path is running.
+```text
+packages/dht-node       js-libp2p, TypeScript. The reference path.
+fast-servers/dht-node   rust-libp2p as a static library behind extern "C".
+```
+
+Each path runs its own node. The fast path does not read rows a TypeScript process writes —
+on a small server that second runtime is a whole process's worth of RAM spent on peer
+discovery, and on a high-load server it would make the fast path merely rearranged rather than
+droppable. That is the reason Rust is in this repository at all.
+
+Rust is a leaf language on the fast path in exactly the sense C++ already is: one module, one
+`extern "C"` surface, no Rust type across the boundary, no application logic behind it. Do not
+put Rust anywhere else, and do not add a second Rust module without changing this document
+first.
+
+Two peer-discovery implementations that drift apart stop finding each other without failing
+anything, so the gate is an **interop test** in CI, not a contract vector — there is no value
+to compare, only a behavior between two running processes. Both libraries are pinned; neither
+is raised without that test green on the pair.
+
+The DHT node does not touch the database, on either path. It reports what it discovers;
+persisting that is an Interaction's job, through a Repository. The sweep is O(communities)
+every 20 seconds, so both nodes keep the peer state inside the library and hand out only what
+changed — the boundary then scales with the number of changes, not with the number of
+communities.
+
+Transports are TCP + QUIC with circuit relay v2 as the fallback; WebRTC stays off, because
+Gradido's peers are servers and the frontend never joins the DHT. Bootstrap is one community
+URL, `gdd.gradido.net` by default, over the public `peer.bootstrap` route. What that route
+returns is a sample of currently reachable peers and a **hint, not a trust decision** — a peer
+is verified when it is contacted, never when it is named. Do not write a bootstrap answer into
+`federated_communities` unverified.
 
 Anything moved into `shared-native` needs no mirror and cannot diverge. Prefer it whenever a
 differing result would be a *wrong* result rather than a slower one.

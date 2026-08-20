@@ -1,0 +1,249 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "Community",
+  "description": "Home community, the communities reachable through federation, and their admin view.",
+  "mount": "/",
+  "source": [
+    "../gradido/backend/src/graphql/resolver/CommunityResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "community.adminList",
+      "method": "GET",
+      "path": "/community/admin-list",
+      "rights": [
+        "COMMUNITY_WITH_API_KEYS"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "currentPage",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int"
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int"
+          },
+          {
+            "name": "order",
+            "required": true,
+            "type": "enum",
+            "enum": "Order",
+            "legacyType": "Order"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "[AdminCommunityView]",
+        "type": "object[]",
+        "model": "AdminCommunityView",
+        "open": "shape of AdminCommunityView not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CommunityResolver",
+        "operation": "query",
+        "field": "allCommunities",
+        "file": "../gradido/backend/src/graphql/resolver/CommunityResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin"
+      ]
+    },
+    {
+      "name": "community.listReachable",
+      "method": "GET",
+      "path": "/community/list-reachable",
+      "rights": [
+        "COMMUNITIES"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "[Community]",
+        "type": "object[]",
+        "model": "Community",
+        "open": "shape of Community not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CommunityResolver",
+        "operation": "query",
+        "field": "reachableCommunities",
+        "file": "../gradido/backend/src/graphql/resolver/CommunityResolver.ts"
+      },
+      "auth": "public",
+      "roles": [
+        "unauthorized",
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin",
+        "dlt-connector"
+      ]
+    },
+    {
+      "name": "community.listAuthorized",
+      "method": "GET",
+      "path": "/community/list-authorized",
+      "rights": [
+        "COMMUNITIES"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "[Community]",
+        "type": "object[]",
+        "model": "Community",
+        "open": "shape of Community not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CommunityResolver",
+        "operation": "query",
+        "field": "authorizedCommunities",
+        "file": "../gradido/backend/src/graphql/resolver/CommunityResolver.ts"
+      },
+      "auth": "public",
+      "roles": [
+        "unauthorized",
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin",
+        "dlt-connector"
+      ]
+    },
+    {
+      "name": "community.getByIdentifier",
+      "method": "GET",
+      "path": "/community/get-by-identifier",
+      "rights": [
+        "COMMUNITIES"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "communityIdentifier",
+            "required": true,
+            "type": "text",
+            "legacyType": "string"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Community",
+        "type": "object",
+        "model": "Community",
+        "open": "shape of Community not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CommunityResolver",
+        "operation": "query",
+        "field": "communityByIdentifier",
+        "file": "../gradido/backend/src/graphql/resolver/CommunityResolver.ts"
+      },
+      "auth": "public",
+      "roles": [
+        "unauthorized",
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin",
+        "dlt-connector"
+      ]
+    },
+    {
+      "name": "community.getHome",
+      "method": "GET",
+      "path": "/community/get-home",
+      "rights": [
+        "COMMUNITIES"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "Community",
+        "type": "object",
+        "model": "Community",
+        "open": "shape of Community not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CommunityResolver",
+        "operation": "query",
+        "field": "homeCommunity",
+        "file": "../gradido/backend/src/graphql/resolver/CommunityResolver.ts"
+      },
+      "auth": "public",
+      "roles": [
+        "unauthorized",
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin",
+        "dlt-connector"
+      ]
+    },
+    {
+      "name": "community.updateHome",
+      "method": "POST",
+      "path": "/community/update-home",
+      "rights": [
+        "COMMUNITY_UPDATE"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "uuid",
+            "required": true,
+            "type": "uuid",
+            "legacyType": "String"
+          },
+          {
+            "name": "gmsApiKey",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "location",
+            "required": false,
+            "type": null,
+            "open": "legacy type Location — not in the contract type vocabulary yet",
+            "legacyType": "Location"
+          },
+          {
+            "name": "hieroTopicId",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "AdminCommunityView",
+        "type": "object",
+        "model": "AdminCommunityView",
+        "open": "shape of AdminCommunityView not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CommunityResolver",
+        "operation": "mutation",
+        "field": "updateHomeCommunity",
+        "file": "../gradido/backend/src/graphql/resolver/CommunityResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin",
+        "dlt-connector"
+      ]
+    }
+  ]
+}

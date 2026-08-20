@@ -1,0 +1,101 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "CreaChat",
+  "description": "The AI assistant chat thread of one member.",
+  "mount": "/",
+  "source": [
+    "../gradido/backend/src/graphql/resolver/CreaChatResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "creaChat.resume",
+      "method": "GET",
+      "path": "/crea-chat/resume",
+      "rights": [
+        "AI_SEND_MESSAGE"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "[CreaChatMessage]",
+        "type": "object[]",
+        "model": "CreaChatMessage",
+        "open": "shape of CreaChatMessage not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreaChatResolver",
+        "operation": "query",
+        "field": "resumeChat",
+        "file": "../gradido/backend/src/graphql/resolver/CreaChatResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "creaChat.deleteThread",
+      "method": "POST",
+      "path": "/crea-chat/delete-thread",
+      "rights": [
+        "AI_SEND_MESSAGE"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "threadId",
+            "required": true,
+            "type": "text",
+            "legacyType": "string"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "CreaChatResolver",
+        "operation": "mutation",
+        "field": "deleteThread",
+        "file": "../gradido/backend/src/graphql/resolver/CreaChatResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "creaChat.sendMessage",
+      "method": "POST",
+      "path": "/crea-chat/send-message",
+      "rights": [
+        "AI_SEND_MESSAGE"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "CreaChatMessage",
+        "type": "object",
+        "model": "CreaChatMessage",
+        "open": "shape of CreaChatMessage not contracted yet"
+      },
+      "legacy": {
+        "resolver": "CreaChatResolver",
+        "operation": "mutation",
+        "field": "sendMessage",
+        "file": "../gradido/backend/src/graphql/resolver/CreaChatResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator-ai",
+        "admin"
+      ]
+    }
+  ]
+}

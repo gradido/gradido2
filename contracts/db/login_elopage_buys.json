@@ -1,0 +1,38 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "login_elopage_buys",
+  "description": "Purchases reported by the Elopage webhook. Nothing in gradido reads them except the question 'has this email bought anything', which is what user.hasElopage answers.",
+  "source": "database/src/entity/LoginElopageBuys.ts plus database/migration/migrations 0003 and 0021",
+  "columns": [
+    { "name": "id", "type": "uint64", "nullable": false, "identity": true },
+    { "name": "elopage_user_id", "type": "uint32", "nullable": true, "default": null, "note": "An Elopage number, external to gradido — not a gradido row identifier." },
+    { "name": "affiliate_program_id", "type": "uint32", "nullable": true, "default": null, "note": "External Elopage number." },
+    { "name": "publisher_id", "type": "uint32", "nullable": true, "default": null, "note": "External Elopage number. The same publisher id users.publisher_id carries." },
+    { "name": "order_id", "type": "uint32", "nullable": true, "default": null, "note": "External Elopage number." },
+    { "name": "product_id", "type": "uint32", "nullable": true, "default": null, "note": "External Elopage number." },
+    { "name": "product_price", "type": "uint32", "nullable": false, "open": "Legacy stores a price as a bare int with no unit and no currency. It is not a gradido amount and must not be read as one. What it counts has to be established from the Elopage side before anything computes with it." },
+    { "name": "payer_email", "type": "varchar(255)", "nullable": false, "description": "The only column anything reads: hasElopage counts rows matching a member's email.", "secret": true },
+    { "name": "publisher_email", "type": "varchar(255)", "nullable": false, "secret": true },
+    { "name": "payed", "type": "bool", "nullable": false, "note": "Spelled 'payed' in legacy. Names are stable forever — see contracts/AGENTS.md — so it stays as it is." },
+    { "name": "success_date", "type": "timestamp_ms", "nullable": false },
+    { "name": "event", "type": "varchar(255)", "nullable": false, "description": "The webhook event name as Elopage sent it." }
+  ],
+  "primaryKey": ["id"],
+  "unique": [],
+  "indexes": [],
+  "notes": [
+    "This is inbound data from a foreign system, kept as it arrived. gradido derives one boolean from it and nothing else.",
+    "The lookup is by payer_email and there is no index on it. Legacy scans the table for every hasElopage call.",
+    "payer_email and publisher_email are personal data belonging to a third party's records. They are not login contacts and must never be joined into a user-facing response.",
+    "Legacy's collation on the two email columns is utf8_bin — case sensitive, unlike every other string column here. An implementation that compares emails case-insensitively will find rows legacy does not, and the answer to hasElopage changes.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json. Legacy uses datetime without precision(3) — second precision."
+  ],
+  "open": [
+    {
+      "question": "Does this table survive into gradido2 at all?",
+      "detail": "It exists for one boolean on one route. If the Elopage integration is not carried over, the table and user.hasElopage go together; if it is, the column widths and the missing index on payer_email are worth fixing rather than transcribing.",
+      "status": "unanswered — decide with the Elopage webhook, not separately"
+    }
+  ]
+}

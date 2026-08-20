@@ -1,0 +1,71 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "Peer",
+  "description": "How a fresh community gets into the federation network: one public route that hands out peers to dial. Every running community is a bootstrap node, because every running community already serves HTTP.",
+  "mount": "/",
+  "source": [],
+  "origin": "gradido2",
+  "routes": [
+    {
+      "name": "peer.bootstrap",
+      "method": "GET",
+      "path": "/peer/bootstrap",
+      "rights": [],
+      "auth": "public",
+      "roles": ["unauthorized", "user", "moderator", "moderator-ai", "admin"],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "type": "object",
+        "fields": [
+          {
+            "name": "self",
+            "required": true,
+            "type": "object",
+            "description": "The answering community's own node. Always present, so one URL yields at least one dialable peer even from a community that knows nobody yet.",
+            "fields": [
+              { "name": "peerId", "required": true, "type": "text", "description": "The libp2p peer id, derived from the community key pair. See contracts/test-vectors — the derivation is contracted because the two implementations must agree on it." },
+              { "name": "addresses", "required": true, "type": "text[]", "description": "Multiaddrs the node listens on, most reachable first. TCP and QUIC entries for the same node are separate addresses, not one address with two transports." }
+            ]
+          },
+          {
+            "name": "peers",
+            "required": true,
+            "type": "object[]",
+            "description": "A sample of nodes this community has seen recently and believes reachable now, at most DHT_BOOTSTRAP_PEERS_MAX of them. A sample, not the top of a list: a joining node needs a few *different* entry points, because Kademlia fans out from wherever it starts. Two calls a minute apart may legitimately return different peers. May be empty.",
+            "fields": [
+              { "name": "peerId", "required": true, "type": "text" },
+              { "name": "addresses", "required": true, "type": "text[]" },
+              { "name": "lastSeenAt", "required": true, "type": "timestamp_ms", "description": "When this community last had contact with that node. A caller uses it to order its dialing, not to decide trust." }
+            ]
+          }
+        ]
+      },
+      "legacy": null,
+      "notes": [
+        "Public on purpose. Bootstrapping happens before any handshake exists, so a route that required authentication could not be the way in.",
+        "What this returns is a hint, not a trust decision. Whoever answers could hand out a poisoned list. These peers are somewhere to start dialing; who a community *is* is settled by the federation handshake against communities.public_key. An implementation that treats a bootstrap answer as authority has moved the trust boundary to whoever typed a URL into a config file.",
+        "No request parameters and a fixed bound. A bootstrap endpoint that takes a limit, a filter or a cursor is an enumeration endpoint, and this one deliberately is not: it hands out enough to join the network and no more. Sampling rather than ordering makes that structural — nobody can walk the network by calling it repeatedly.",
+        "Current in the DHT sense, not complete. What belongs here is what was seen recently and is believed reachable now — not the federated_communities table, which knows who ever announced. An answer full of nodes that announced once years ago is a slow failure rather than a fast one.",
+        "The default bootstrap URL is DHT_BOOTSTRAP_DEFAULT_URL. That makes the ordinary case safe without making it a protocol guarantee: the two mechanisms that hold when an operator points somewhere else are the per-peer handshake, and later the signed variant below.",
+        "Legacy has no counterpart. libp2p, unlike hyperswarm, comes with no public network to join, and this route is gradido2's answer to that — see fast-servers/dht-node/Architecture.md, Bootstrap."
+      ]
+    }
+  ],
+  "open": [
+    {
+      "question": "What does the signed variant look like on the wire?",
+      "detail": "Running the federation handshake with the bootstrap community first, and having it sign what it returns, turns an anonymous hint into an attributable statement — it removes the impostor at a hijacked URL. It does not make the named peers trustworthy; that stays the per-peer handshake's job. No signature field is contracted yet, on purpose: fixing a shape before the handshake-first flow is designed would fix the wrong one.",
+      "why_it_matters": "Verifying a signature needs the signer's public key, so a bootstrap entry becomes a URL *and* a key rather than a URL. For DHT_BOOTSTRAP_DEFAULT_URL that key can ship as a default; for any other it is one more thing an operator must configure correctly. Which is why the unsigned route is what lets a community join at all, and the signed one is hardening on top rather than a replacement.",
+      "status": "unanswered — build second, not first"
+    },
+    {
+      "question": "How recent is 'seen recently'?",
+      "detail": "The sample needs a freshness bound, and both implementations must use the same one or the two hand out different notions of current.",
+      "why_it_matters": "A disagreement here is not visible in any single response — it shows up as one path bootstrapping reliably and the other not.",
+      "status": "unanswered — belongs in const.json once there is a node to measure against"
+    }
+  ]
+}

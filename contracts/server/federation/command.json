@@ -1,0 +1,79 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "federation",
+  "model": "Command",
+  "description": "Generic encrypted command channel between communities.",
+  "mount": "/api/{apiVersion}",
+  "apiVersions": [
+    "1_0",
+    "1_1"
+  ],
+  "source": [
+    "../gradido/federation/src/graphql/api/1_0/resolver/CommandResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "command.send",
+      "method": "POST",
+      "path": "/command/send",
+      "rights": null,
+      "request": {
+        "fields": [
+          {
+            "name": "handshakeID",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "publicKey",
+            "required": true,
+            "type": "bytes(32)",
+            "legacyType": "String",
+            "note": "legacy sends it hex-encoded as a string"
+          },
+          {
+            "name": "jwt",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "CommandResult",
+        "type": "object",
+        "fields": [
+          {
+            "name": "success",
+            "required": true,
+            "type": "bool",
+            "legacyType": "Boolean"
+          },
+          {
+            "name": "data",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "error",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "legacy": {
+        "resolver": "CommandResolver",
+        "operation": "mutation",
+        "field": "sendCommand",
+        "file": "../gradido/federation/src/graphql/api/1_0/resolver/CommandResolver.ts",
+        "apiVersion": "1_0"
+      },
+      "auth": "federation-handshake"
+    }
+  ]
+}

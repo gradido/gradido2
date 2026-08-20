@@ -1,0 +1,27 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "project_brandings",
+  "description": "Per-project appearance: the name, the logo and the HumHub space a member registering through that project is put into.",
+  "source": "database/src/schemas/drizzle.schema.ts plus database/migration/migrations 0088 and 0097",
+  "columns": [
+    { "name": "id", "type": "uint64", "nullable": false, "identity": true },
+    { "name": "name", "type": "varchar(255)", "nullable": false },
+    { "name": "alias", "type": "varchar(32)", "nullable": false, "description": "The short name a link carries — the project is looked up by this, not by id. Unique." },
+    { "name": "description", "type": "text", "nullable": true, "default": null },
+    { "name": "space_id", "type": "uint32", "nullable": true, "default": null, "note": "A HumHub space id, external to gradido. It is not a gradido row identifier and stays uint32 — see contracts/AGENTS.md on names ending in _id." },
+    { "name": "space_url", "type": "varchar(255)", "nullable": true, "default": null },
+    { "name": "new_user_to_space", "type": "bool", "nullable": false, "default": "false", "description": "Whether a member registering through this project is added to the space." },
+    { "name": "logo_url", "type": "varchar(255)", "nullable": true, "default": null }
+  ],
+  "primaryKey": ["id"],
+  "unique": [
+    { "name": "project_brandings_alias_unique", "columns": ["alias"] }
+  ],
+  "indexes": [],
+  "notes": [
+    "No created_at, no updated_at. Legacy never added them and nothing reads them; gradido2 adding them is a schema decision, not a repair.",
+    "The banner route is public — projectBranding.getBanner needs no session, because a logo is shown before anybody has logged in. See server/backend/project-branding.json.",
+    "space_id and space_url point at HumHub, which is a foreign system. A row whose space no longer exists is a normal state and must not fail the read."
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "matching_entries",
+  "description": "What a member offers, needs or is interested in. Published to the GMS for matching, which is why the boolean columns must travel as booleans.",
+  "source": "database/src/schemas/drizzle.schema.ts plus database/migration/migrations 0112",
+  "columns": [
+    { "name": "id", "type": "uint64", "nullable": false, "identity": true },
+    { "name": "uuid", "type": "uuid", "nullable": false, "description": "The identifier the entry is known by outside this database — routes take and return it, never the id. Unique." },
+    { "name": "user_id", "type": "uint64", "nullable": false, "references": { "table": "users", "column": "id" } },
+    { "name": "matching_type", "type": "varchar(12)", "nullable": false, "enum": "MatchingEntryType" },
+    { "name": "summary", "type": "varchar(160)", "nullable": false, "description": "One line. The length is enforced in the input validator, not by a named constant." },
+    { "name": "details", "type": "text", "nullable": true, "default": null, "maxChars": "MATCHING_ENTRY_DETAILS_MAX_CHARS" },
+    { "name": "remote", "type": "bool", "nullable": false, "default": "false", "description": "Whether the offer or need works at a distance." },
+    { "name": "active", "type": "bool", "nullable": false, "default": "true", "description": "Switched off rather than deleted, so the uuid keeps meaning something." },
+    { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" },
+    { "name": "updated_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
+  ],
+  "primaryKey": ["id"],
+  "unique": [
+    { "name": "uniq_matching_entries_uuid", "columns": ["uuid"] }
+  ],
+  "indexes": [
+    { "name": "idx_matching_entries_user_id", "columns": ["user_id"] }
+  ],
+  "notes": [
+    "remote and active are forwarded to the GMS as JSON. A 1 where a true belongs is a changed payload, so the conversion has to happen once on the way out of the database rather than at every call site. Legacy makes this explicit by declaring them boolean() where the neighbouring tables use tinyint().",
+    "The entry is addressed by uuid everywhere above the database — see server/backend/matching-entry.json. An implementation that exposes the id has widened the API.",
+    "Deactivating is not deleting: an inactive entry keeps its row and its uuid. A query that serves the matching list must filter on active; a query that resolves a uuid must not.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json."
+  ]
+}

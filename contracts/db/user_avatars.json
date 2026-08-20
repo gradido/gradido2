@@ -1,0 +1,24 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "user_avatars",
+  "description": "The member's own profile picture, in two renditions. A side table rather than columns on users, because users is read on nearly every request and an image would weigh every one of those reads down.",
+  "source": "database/src/schemas/drizzle.schema.ts plus database/migration/migrations 0114",
+  "columns": [
+    { "name": "user_id", "type": "uint64", "nullable": false, "identity": false, "references": { "table": "users", "column": "id" }, "description": "The primary key. One member, one picture — a duplicate is impossible by shape rather than by care." },
+    { "name": "avatar_small", "type": "blob", "nullable": false, "description": "What other people see, and what will federate. Subject to users.avatar_visible_to_members.", "open": "The type vocabulary has bytes(n) for a fixed width and nothing for a variable one. Legacy uses MySQL mediumblob (up to 16 MiB); PostgreSQL bytea and SQLite BLOB both fit, but the entry has to be added to contracts/AGENTS.md before this column has a contract type — and it may not need to at all, see the note about the object key below." },
+    { "name": "avatar_full", "type": "blob", "nullable": false, "description": "Own-view only: the member looking at their own picture, and the printed card. Never hand it to anybody else.", "open": "same as avatar_small", "secret": true },
+    { "name": "mime_type", "type": "varchar(32)", "nullable": false, "description": "Applies to both renditions — one upload, one crop, two encodings of the same thing." },
+    { "name": "updated_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
+  ],
+  "primaryKey": ["user_id"],
+  "unique": [],
+  "indexes": [],
+  "notes": [
+    "avatar_full is own-view only. That is an access rule, so it is contracted rather than left to each caller: a query that serves anyone other than the owner must select avatar_small, and a response builder must never fall back to the full rendition when the small one is missing.",
+    "Renditions are produced by the browser. The server never decodes an image — which keeps an image library and its CPU out of the request path, and a decoder out of C. See Architecture.md, Media storage.",
+    "The accepted content types are not fixed here. Legacy restricted uploads to JPEG; that restriction is deliberately not carried over and mime_type is therefore an open set until the media decision is settled.",
+    "Storing the bytes in the database is legacy's answer, not necessarily gradido2's. Architecture.md, Media storage, expects the column to become an object key. When it does, this file changes shape and the access rule above stays exactly as it is.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json."
+  ]
+}

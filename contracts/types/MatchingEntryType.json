@@ -1,0 +1,15 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "MatchingEntryType",
+  "representation": "string",
+  "source": "backend/src/graphql/input/MatchingEntryInput.ts",
+  "storedIn": "matching_entries.matching_type",
+  "unknownValuePolicy": "reject",
+  "note": "Lowercase. These are stored values and travel to the GMS as they are, so the casing is part of the contract and must not be normalised.",
+  "values": [
+    { "name": "OFFER", "value": "offer" },
+    { "name": "NEED", "value": "need" },
+    { "name": "INTEREST", "value": "interest" }
+  ]
+}

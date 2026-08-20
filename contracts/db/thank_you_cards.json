@@ -1,0 +1,30 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "thank_you_cards",
+  "description": "One row per printed card. user_id is indexed rather than unique: blocking a card creates the plural by itself, because a blocked card is kept rather than deleted.",
+  "source": "database/src/schemas/drizzle.schema.ts plus database/migration/migrations 0115",
+  "columns": [
+    { "name": "id", "type": "uint64", "nullable": false, "identity": true },
+    { "name": "user_id", "type": "uint64", "nullable": false, "references": { "table": "users", "column": "id" } },
+    { "name": "code", "type": "varchar(40)", "nullable": false, "maxChars": "THANK_YOU_CARD_CODE_MAX_CHARS", "description": "'DK-' plus 32 hex characters: 16 fully random bytes, no timestamp. Length inside a QR code is free, so there is no reason to spend part of it on the creation time the way transaction links do.", "secret": true },
+    { "name": "label", "type": "varchar(64)", "nullable": false, "maxChars": "THANK_YOU_CARD_LABEL_MAX_CHARS", "description": "The member's own word for the card. It is printed on it, so the till that scans it shows it back — never a secret from whoever holds the card, and never reaching anybody else." },
+    { "name": "failed_attempts", "type": "uint32", "nullable": false, "default": "0", "max": "THANK_YOU_CARD_MAX_FAILED_ATTEMPTS", "description": "Counted on the card, not on the person: once more than one card may be valid, guessing at one must not block the other." },
+    { "name": "blocked_at", "type": "timestamp_ms", "nullable": true, "default": null, "description": "NULL means usable. Blocking is reversible; deleting is not, which is why blocking is what exists." },
+    { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
+  ],
+  "primaryKey": ["id"],
+  "unique": [
+    { "name": "thank_you_cards_code_unique", "columns": ["code"] }
+  ],
+  "indexes": [
+    { "name": "thank_you_cards_user_id_idx", "columns": ["user_id"] }
+  ],
+  "notes": [
+    "Never delete a row here. A kept row is what lets a scan of an old card answer 'this card is blocked' instead of running into nothing, and what lets an old receipt still name the card a payment was made with. transactions.thank_you_card_id points at it.",
+    "code is a bearer secret in the sense that whoever scans it can ask for a payment — but not authorise one, which needs the PIN. It must not be logged and must not be returned for a card the caller does not own.",
+    "failed_attempts is reset to 0 on a successful payment, and reaching THANK_YOU_CARD_MAX_FAILED_ATTEMPTS is what sets blocked_at. The counter is incremented by the database (failed_attempts + 1), not by reading and writing back — two tills guessing at once must not lose a count.",
+    "Blocking an already blocked card does not move blocked_at forward: the moment a card died is worth keeping. Unblocking clears blocked_at and resets failed_attempts together — one without the other leaves a usable card one wrong PIN from dying again.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json."
+  ]
+}

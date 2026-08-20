@@ -1,0 +1,43 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "pending_transactions",
+  "description": "A cross-community transfer while it is still in flight. Both communities hold a row; it becomes a transactions row when the transfer settles, and is dropped when it reverts.",
+  "source": "database/src/entity/PendingTransaction.ts plus database/migration/migrations 0071, 0093 and 0100",
+  "columns": [
+    { "name": "id", "type": "uint64", "nullable": false, "identity": true },
+    { "name": "state", "type": "uint32", "nullable": false, "enum": "PendingTransactionState", "description": "NEW, PENDING, SETTLED or REVERTED — the four steps of server/federation/send-coins.json." },
+    { "name": "previous", "type": "uint64", "nullable": true, "default": null, "description": "The preceding transaction of the same account. Unique, exactly as on transactions: no two rows may claim the same predecessor." },
+    { "name": "type_id", "type": "uint32", "nullable": false, "enum": "TransactionTypeId" },
+    { "name": "transaction_link_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "transaction_links", "column": "id" } },
+    { "name": "amount_gdd4", "type": "gradido_cent", "nullable": false },
+    { "name": "balance_gdd4", "type": "gradido_cent", "nullable": false, "description": "Account balance this transfer would leave behind, at balance_date." },
+    { "name": "balance_date", "type": "timestamp_ms", "nullable": false, "default": "now" },
+    { "name": "decay_gdd4", "type": "gradido_cent", "nullable": false },
+    { "name": "decay_start", "type": "timestamp_ms", "nullable": true, "default": null },
+    { "name": "decay_calculation_type", "type": "uint32", "nullable": false, "default": "0", "enum": "DecayCalculationType" },
+    { "name": "memo", "type": "varchar(512)", "nullable": false, "maxChars": "MEMO_MAX_CHARS", "minChars": "MEMO_MIN_CHARS" },
+    { "name": "creation_date", "type": "timestamp_ms", "nullable": true, "default": null },
+    { "name": "user_id", "type": "uint64", "nullable": false, "references": { "table": "users", "column": "id" } },
+    { "name": "user_gradido_id", "type": "uuid", "nullable": false },
+    { "name": "user_community_uuid", "type": "uuid", "nullable": false },
+    { "name": "user_name", "type": "varchar(512)", "nullable": true, "default": null, "denormalized": true },
+    { "name": "linked_user_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "users", "column": "id" }, "description": "NULL when the other side is a member of the other community and unknown here." },
+    { "name": "linked_user_gradido_id", "type": "uuid", "nullable": true, "default": null, "note": "The entity says nullable, migration 0071 created the column NOT NULL. The database is the stricter one; written here as the entity has it because that is what the code assumes. Confirm against the live schema before generating DDL." },
+    { "name": "linked_user_community_uuid", "type": "uuid", "nullable": false },
+    { "name": "linked_user_name", "type": "varchar(512)", "nullable": true, "default": null, "denormalized": true },
+    { "name": "linked_transaction_id", "type": "uint64", "nullable": true, "default": null }
+  ],
+  "primaryKey": ["id"],
+  "unique": [
+    { "name": "previous", "columns": ["previous"] }
+  ],
+  "indexes": [],
+  "notes": [
+    "This table mirrors transactions column for column, minus the append-only rule. That is deliberate: settling means moving the row's content into transactions unchanged, so any column that exists on one and not the other is a settle-time conversion waiting to go wrong.",
+    "Rows are short-lived. Both communities delete or settle them; a row that stays PENDING past FEDERATION_AUTHENTICATION_TIMEOUT_MS is a stuck transfer, and both implementations must decide it the same way rather than leaving it to whoever notices.",
+    "Unlike transactions, this table has no index at all in legacy — not even on user_id — although the balance calculation reads it per user. Whatever gradido2 reads it by belongs in this file.",
+    "The denormalized name and uuid columns raise the same footprint question transactions.json records as open. Answer it once, for both.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json. This table uses datetime(3) throughout."
+  ]
+}

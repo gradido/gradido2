@@ -1,0 +1,28 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "user_creation_groups",
+  "description": "A member's own list of creation groups. The entry with the lowest sort_order is their main one and pre-fills the group field on submission.",
+  "source": "database/src/entity/UserCreationGroup.ts plus database/migration/migrations 0108 and 0110",
+  "columns": [
+    { "name": "id", "type": "uint64", "nullable": false, "identity": true },
+    { "name": "user_id", "type": "uint64", "nullable": false, "references": { "table": "users", "column": "id" } },
+    { "name": "creation_group_id", "type": "uint64", "nullable": false, "references": { "table": "creation_groups", "column": "id" }, "legacyName": "group_tag_id" },
+    { "name": "sort_order", "type": "uint32", "nullable": false, "default": "0", "description": "Lowest wins. Ties are not resolved by the schema — see the note." },
+    { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" },
+    { "name": "updated_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
+  ],
+  "primaryKey": ["id"],
+  "unique": [
+    { "name": "uniq_user_creation_group", "columns": ["user_id", "creation_group_id"] }
+  ],
+  "indexes": [
+    { "name": "idx_ucg_user_id", "columns": ["user_id"], "note": "Redundant with the leading column of uniq_user_creation_group. Do not recreate it in gradido2." },
+    { "name": "idx_ucg_creation_group_id", "columns": ["creation_group_id"] }
+  ],
+  "notes": [
+    "The list is user-maintained AND moderator-editable: fixing a misspelled tag happens here, not on one contribution. Both writers use the same rows, so neither may assume it is the only one.",
+    "sort_order carries no unique constraint, so two rows can share the lowest value. Legacy breaks the tie by ordering sort_order ASC, id ASC — the row's own id, not the creation group's — and both implementations must use that same order, or a member sees a different main tag depending on which backend answered. Legacy assigns the values densely (a new row takes the current count), so a gap or a duplicate is a repair case rather than a state.",
+    "No foreign keys in legacy; see the open question in contribution_creation_groups.json."
+  ]
+}

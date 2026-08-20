@@ -1,0 +1,306 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "ThankYouCard",
+  "description": "A member’s printed cards and the settings (PIN, limits) behind them.",
+  "mount": "/",
+  "source": [
+    "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "thankYouCard.getSettings",
+      "method": "GET",
+      "path": "/thank-you-card/get-settings",
+      "rights": [
+        "MANAGE_OWN_THANK_YOU_CARD"
+      ],
+      "request": null,
+      "response": {
+        "nullable": true,
+        "legacyType": "ThankYouCardSettings",
+        "type": "object",
+        "model": "ThankYouCardSettings",
+        "open": "shape of ThankYouCardSettings not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ThankYouCardResolver",
+        "operation": "query",
+        "field": "thankYouCardSettings",
+        "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "thankYouCard.list",
+      "method": "GET",
+      "path": "/thank-you-card/list",
+      "rights": [
+        "MANAGE_OWN_THANK_YOU_CARD"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "[ThankYouCard]",
+        "type": "object[]",
+        "model": "ThankYouCard",
+        "open": "shape of ThankYouCard not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ThankYouCardResolver",
+        "operation": "query",
+        "field": "thankYouCards",
+        "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "thankYouCard.setSettings",
+      "method": "POST",
+      "path": "/thank-you-card/set-settings",
+      "rights": [
+        "MANAGE_OWN_THANK_YOU_CARD"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "pin",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "maxPerPayment",
+            "required": true,
+            "type": "gradido_cent",
+            "legacyType": "GradidoUnit"
+          },
+          {
+            "name": "maxPerDay",
+            "required": true,
+            "type": "gradido_cent",
+            "legacyType": "GradidoUnit"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ThankYouCardSettings",
+        "type": "object",
+        "model": "ThankYouCardSettings",
+        "open": "shape of ThankYouCardSettings not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ThankYouCardResolver",
+        "operation": "mutation",
+        "field": "setThankYouCardSettings",
+        "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "thankYouCard.setLimits",
+      "method": "POST",
+      "path": "/thank-you-card/set-limits",
+      "rights": [
+        "MANAGE_OWN_THANK_YOU_CARD"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "maxPerPayment",
+            "required": true,
+            "type": "gradido_cent",
+            "legacyType": "GradidoUnit"
+          },
+          {
+            "name": "maxPerDay",
+            "required": true,
+            "type": "gradido_cent",
+            "legacyType": "GradidoUnit"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ThankYouCardSettings",
+        "type": "object",
+        "model": "ThankYouCardSettings",
+        "open": "shape of ThankYouCardSettings not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ThankYouCardResolver",
+        "operation": "mutation",
+        "field": "setThankYouCardLimits",
+        "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "thankYouCard.deleteSettings",
+      "method": "POST",
+      "path": "/thank-you-card/delete-settings",
+      "rights": [
+        "MANAGE_OWN_THANK_YOU_CARD"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "ThankYouCardResolver",
+        "operation": "mutation",
+        "field": "deleteThankYouCardSettings",
+        "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "thankYouCard.create",
+      "method": "POST",
+      "path": "/thank-you-card/create",
+      "rights": [
+        "MANAGE_OWN_THANK_YOU_CARD"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "label",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ThankYouCard",
+        "type": "object",
+        "model": "ThankYouCard",
+        "open": "shape of ThankYouCard not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ThankYouCardResolver",
+        "operation": "mutation",
+        "field": "createThankYouCard",
+        "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "thankYouCard.block",
+      "method": "POST",
+      "path": "/thank-you-card/block",
+      "rights": [
+        "MANAGE_OWN_THANK_YOU_CARD"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "cardId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ThankYouCard",
+        "type": "object",
+        "model": "ThankYouCard",
+        "open": "shape of ThankYouCard not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ThankYouCardResolver",
+        "operation": "mutation",
+        "field": "blockThankYouCard",
+        "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "thankYouCard.unblock",
+      "method": "POST",
+      "path": "/thank-you-card/unblock",
+      "rights": [
+        "MANAGE_OWN_THANK_YOU_CARD"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "cardId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ThankYouCard",
+        "type": "object",
+        "model": "ThankYouCard",
+        "open": "shape of ThankYouCard not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ThankYouCardResolver",
+        "operation": "mutation",
+        "field": "unblockThankYouCard",
+        "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    }
+  ]
+}

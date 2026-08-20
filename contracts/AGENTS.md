@@ -177,6 +177,46 @@ compare unequal before anything else is checked.
 
 Legacy's per-class log4js categories are deliberately not carried over.
 
+When a legacy column holds something the vocabulary above has no entry for, the column keeps
+a descriptive type name and carries `"open": "..."` saying what has to be decided. It is never
+guessed into the nearest available type — five such columns exist and they are listed in the
+Status section below.
+
+### server/&lt;server&gt;/&lt;model&gt;.json — one file per model
+
+Route definitions, split by the server that serves them: `server/backend/` and
+`server/federation/`. One file per **model**, not per legacy resolver — `CreationGroupResolver`
+and `UserCreationGroupResolver` are one model and one file.
+
+A route name is `&lt;model&gt;.&lt;action&gt;` in camelCase, and the path is
+`/&lt;model&gt;/&lt;action&gt;` in kebab-case. Both are derived from the legacy GraphQL field
+name with the model taken out of the verb: `createContributionLink` becomes
+`contributionLink.create` at `POST /contribution-link/create`. Every path is exactly two
+segments, so a router — including a C one — matches on a fixed shape rather than on a
+pattern. `method` is `GET` for what was a query and `POST` for what was a mutation.
+
+Federation files carry `mount: "/api/{apiVersion}"` and the `apiVersions` that expose them;
+the route paths themselves are relative to that mount. Legacy 1_1 reuses 1_0's resolvers
+except for `PublicKey`, and drops `BlockchainNotification` and `Disbursement` — that is in
+the files, not inferred.
+
+`auth` is `public`, `session` or `federation-handshake`. `roles` lists every legacy role
+holding the route's `rights`; `public` means the unauthorized role holds them, i.e. legacy's
+`INALIENABLE_RIGHTS`. Rights are recorded without the `RIGHTS.` prefix.
+
+Request and response fields carry both the contract `type` and the `legacyType` they came
+from. Where legacy used a type the vocabulary above has no answer for, `type` is `null` and
+`open` says so — an unanswered question stays visible instead of being guessed into a shape.
+`note` is the opposite case: the type is decided, but something about it is worth knowing
+(`publisherId` is an Elopage number, not a gradido row id).
+
+`legacy` on each route points back at the resolver, the operation and the field it was
+collected from. That block is provenance and follows working rule 6 — a lead, not an
+authority. A route gradido2 invents rather than inherits carries `"legacy": null` and the file
+carries `"origin": "gradido2"` — `peer.bootstrap` is the first. Such a route has no legacy
+behavior to be faithful to, so its request and response are contracted in full instead of
+being left open.
+
 ### test-vectors/&lt;subject&gt;.json
 
 Input/expected pairs, referencing types and errors by name. Every vector has a stable `id`
@@ -217,11 +257,11 @@ so a failure names something.
 | Area | State |
 |---|---|
 | `const.json` | from legacy `shared/src/const`. Values exported by `shared-native` are deliberately absent, see working rule 5 |
-| `types/` | 13 enums from legacy `shared` and `database`, plus the `Timestamp` convention |
+| `types/` | 18 enums from legacy `shared`, `database` and the backend, plus the `Timestamp` and `PasswordHash` conventions |
 | `errors/` | database, domain and mutation errors; codes newly assigned |
-| `db/` | **6 of ~24 tables** — `users`, `user_contacts`, `user_roles`, `transactions`, `contributions`, `transaction_links` |
+| `db/` | **29 tables — every one legacy has.** Column types, defaults, keys and indexes are decided; what is not is collected as `open` on the column or on the table |
 | `logging.json` | envelope, levels, 10 categories, 8 seed events, redaction |
-| `server/` | empty — routes are not designed yet |
+| `server/` | **135 routes** — 134 collected from legacy (121 backend, 13 federation) plus `peer.bootstrap`, which legacy has no counterpart for. Names, paths, methods, rights and roles are decided; request fields are filled in from the legacy arg classes, response shapes are not, except on `peer.bootstrap` which is new and therefore fully contracted |
 | `test-vectors/` | empty — **the most valuable missing piece** |
 
 Next, in this order:
@@ -230,8 +270,18 @@ Next, in this order:
    highest cost of divergence and the lowest cost of testing. `shared-native` already has
    the implementation and `../gradido/shared-native/tests/calculateDecay.test.js` has cases
    to lift.
-2. The remaining tables, driven by whichever domain is being rebuilt — not all 24 up front.
-3. Routes, once the first ones exist.
+2. **The five columns whose type has no answer.** `users.location` and `communities.location`
+   (MariaDB geometry, and neither PostgreSQL without PostGIS nor SQLite has one),
+   `user_avatars.avatar_small` and `avatar_full` (a variable-length blob, which the vocabulary
+   above has no entry for — and which may not need one, if the column becomes an object key),
+   and `crea_records.hours` (the only floating point value in the schema; a count of minutes
+   would remove it). Each is written as `open` on its column.
+3. **Response shapes.** The routes exist, but every response that is not a scalar still
+   says `open: shape of X not contracted yet`. Those are the legacy `@ObjectType` models in
+   `../gradido/backend/src/graphql/model/`. Along with them, the four request types the
+   vocabulary has no answer for yet: `Location`, `PublishNameType`,
+   `GmsPublishLocationType`, `CreaBatchContribution` — and legacy's `Float` return on
+   `gdt.getBalance`.
 4. **Media objects**, once the storage decision is settled (see `../Architecture.md`,
    *Media storage*). What will need contracting is not the backend but the behavior around
    it: the object key derived from a user, which rendition may be shown to whom, accepted

@@ -1,0 +1,245 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "ContributionMessage",
+  "description": "The dialogue between a member and a moderator on one contribution.",
+  "mount": "/",
+  "source": [
+    "../gradido/backend/src/graphql/resolver/ContributionMessageResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "contributionMessage.create",
+      "method": "POST",
+      "path": "/contribution-message/create",
+      "rights": [
+        "CREATE_CONTRIBUTION_MESSAGE"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "contributionId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          },
+          {
+            "name": "message",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "messageType",
+            "required": true,
+            "type": "enum",
+            "enum": "ContributionMessageType",
+            "legacyType": "ContributionMessageType"
+          },
+          {
+            "name": "resubmissionAt",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ContributionMessage",
+        "type": "object",
+        "model": "ContributionMessage",
+        "open": "shape of ContributionMessage not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionMessageResolver",
+        "operation": "mutation",
+        "field": "createContributionMessage",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionMessageResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contributionMessage.list",
+      "method": "GET",
+      "path": "/contribution-message/list",
+      "rights": [
+        "LIST_ALL_CONTRIBUTION_MESSAGES"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "currentPage",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int",
+            "default": "1"
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int",
+            "default": "5"
+          },
+          {
+            "name": "order",
+            "required": true,
+            "type": "enum",
+            "enum": "Order",
+            "legacyType": "Order",
+            "default": "DESC"
+          },
+          {
+            "name": "contributionId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ContributionMessageListResult",
+        "type": "object",
+        "model": "ContributionMessageListResult",
+        "open": "shape of ContributionMessageListResult not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionMessageResolver",
+        "operation": "query",
+        "field": "listContributionMessages",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionMessageResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contributionMessage.adminList",
+      "method": "GET",
+      "path": "/contribution-message/admin-list",
+      "rights": [
+        "ADMIN_LIST_ALL_CONTRIBUTION_MESSAGES"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "currentPage",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int",
+            "default": "1"
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "type": "uint32",
+            "legacyType": "Int",
+            "default": "5"
+          },
+          {
+            "name": "order",
+            "required": true,
+            "type": "enum",
+            "enum": "Order",
+            "legacyType": "Order",
+            "default": "DESC"
+          },
+          {
+            "name": "contributionId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ContributionMessageListResult",
+        "type": "object",
+        "model": "ContributionMessageListResult",
+        "open": "shape of ContributionMessageListResult not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionMessageResolver",
+        "operation": "query",
+        "field": "adminListContributionMessages",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionMessageResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "contributionMessage.adminCreate",
+      "method": "POST",
+      "path": "/contribution-message/admin-create",
+      "rights": [
+        "ADMIN_CREATE_CONTRIBUTION_MESSAGE"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "contributionId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          },
+          {
+            "name": "message",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "messageType",
+            "required": true,
+            "type": "enum",
+            "enum": "ContributionMessageType",
+            "legacyType": "ContributionMessageType"
+          },
+          {
+            "name": "resubmissionAt",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ContributionMessage",
+        "type": "object",
+        "model": "ContributionMessage",
+        "open": "shape of ContributionMessage not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ContributionMessageResolver",
+        "operation": "mutation",
+        "field": "adminCreateContributionMessage",
+        "file": "../gradido/backend/src/graphql/resolver/ContributionMessageResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    }
+  ]
+}

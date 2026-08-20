@@ -1,0 +1,228 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "ProjectBranding",
+  "description": "Per-project branding shown by frontend and admin.",
+  "mount": "/",
+  "source": [
+    "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "projectBranding.list",
+      "method": "GET",
+      "path": "/project-branding/list",
+      "rights": [
+        "PROJECT_BRANDING_VIEW"
+      ],
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "[ProjectBranding]",
+        "type": "object[]",
+        "model": "ProjectBranding",
+        "open": "shape of ProjectBranding not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ProjectBrandingResolver",
+        "operation": "query",
+        "field": "projectBrandings",
+        "file": "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "projectBranding.get",
+      "method": "GET",
+      "path": "/project-branding/get",
+      "rights": [
+        "PROJECT_BRANDING_VIEW"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "id",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ProjectBranding",
+        "type": "object",
+        "model": "ProjectBranding",
+        "open": "shape of ProjectBranding not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ProjectBrandingResolver",
+        "operation": "query",
+        "field": "projectBranding",
+        "file": "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "projectBranding.getBanner",
+      "method": "GET",
+      "path": "/project-branding/get-banner",
+      "rights": [
+        "PROJECT_BRANDING_BANNER"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "alias",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": true,
+        "legacyType": "String",
+        "type": "text"
+      },
+      "legacy": {
+        "resolver": "ProjectBrandingResolver",
+        "operation": "query",
+        "field": "projectBrandingBanner",
+        "file": "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
+      },
+      "auth": "public",
+      "roles": [
+        "unauthorized",
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "projectBranding.upsert",
+      "method": "POST",
+      "path": "/project-branding/upsert",
+      "rights": [
+        "PROJECT_BRANDING_MUTATE"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "id",
+            "required": false,
+            "type": "uint64",
+            "legacyType": "Int"
+          },
+          {
+            "name": "name",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "alias",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "description",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "spaceId",
+            "required": false,
+            "type": "uint32",
+            "legacyType": "Int",
+            "note": "HumHub space id, external to gradido"
+          },
+          {
+            "name": "spaceUrl",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "newUserToSpace",
+            "required": true,
+            "type": "bool",
+            "legacyType": "Boolean"
+          },
+          {
+            "name": "logoUrl",
+            "required": false,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": true,
+        "legacyType": "ProjectBranding",
+        "type": "object",
+        "model": "ProjectBranding",
+        "open": "shape of ProjectBranding not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ProjectBrandingResolver",
+        "operation": "mutation",
+        "field": "upsertProjectBranding",
+        "file": "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin"
+      ]
+    },
+    {
+      "name": "projectBranding.delete",
+      "method": "POST",
+      "path": "/project-branding/delete",
+      "rights": [
+        "PROJECT_BRANDING_MUTATE"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "id",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "ID"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "Boolean",
+        "type": "bool"
+      },
+      "legacy": {
+        "resolver": "ProjectBrandingResolver",
+        "operation": "mutation",
+        "field": "deleteProjectBranding",
+        "file": "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "admin"
+      ]
+    }
+  ]
+}

@@ -70,7 +70,7 @@ users, or sticky sessions — which this architecture rejects. A multithreaded f
 one session map across all cores. The session model of this document therefore works fully
 only on the fast path.
 
-## Three kinds of code
+## Four kinds of code
 
 Not everything is mirrored. Before writing anything, decide which of these it is.
 
@@ -78,35 +78,25 @@ Not everything is mirrored. Before writing anything, decide which of these it is
 |---|---|---|
 | **Determinism-critical** | once, in C, in `shared-native` | **never** |
 | **Single-implementation** | once, in C, in `blockchain-core` | **never** |
+| **Protocol-defined** | twice, on a conformant library per language | yes — by the protocol, not by us |
 | **Domain / business** | TypeScript reference | yes, C follows |
 | **Infrastructure** | each implementation its own | no |
 
-Three reasons can send code into C, and only two of them are good ones:
+Four reasons can send code into native land, and only three of them are good ones:
 
 ```text
 performance-motivated   -> no. The crossing costs more than it saves.
 determinism-motivated   -> always, whatever it costs.
 single-implementation   -> yes, when the alternative is writing a protocol or an
                            algorithm twice and hoping the two agree.
+protocol-defined        -> twice, when no one language has the library and the
+                           protocol itself is what keeps the halves together.
 ```
 
-The DHT node is the second `never`. Legacy runs `@hyperswarm/dht`, which exists only in
-JavaScript; gradido2 uses libp2p through `blockchain-core`, so both paths speak the same
-protocol because it is the same code — not because two implementations were kept in step.
-Two peer-discovery implementations that drift apart do not fail a test, they simply stop
-finding each other.
-
-The crossing cost that rules out the performance case does not apply here, and performance
-argues *for* this placement rather than against it: the sweep is O(communities) every 20
-seconds, which at a few thousand communities is real work rather than a poll. The native
-module keeps the state and reports only what changed, so the boundary scales with the number
-of changes rather than with the size of the network.
-
-**`blockchain-core` does not touch the database.** It discovers peers and reports them; the
-caller decides what to persist. Federation rows are written by an Interaction through a
-Repository, on whichever path is running — which keeps a network library out of the
-persistence layer and the persistence decisions in the domain, where the rest of this
-document puts them.
+Signing, hashing and transaction serialisation are the second `never`: one C++ library,
+`gradido-blockchain-core`, called from both paths. Writing them twice would mean two
+implementations of a wire format, and a wire format that two of our own processes disagree
+about is not a bug that shows up as a failing test.
 
 `shared-native` is not a performance device. Its purpose is that a computation produces the
 same result everywhere. `../gradido/shared-native/src/data/unit.c` carries the evidence: the
@@ -123,6 +113,103 @@ diverge.
 `contracts/` covers what remains: constants, schemas, test vectors and API interfaces, in
 JSON, tested against both implementations. Automated tests make the gap visible — a failing
 or skipped test on the fast path documents a feature that is not implemented there yet.
+
+## Peer discovery
+
+Peer discovery would be the **single-implementation** case above — one protocol, written
+once, called from both paths — if there were a language to write it in that both paths can
+reach. There is not.
+
+What is needed is not a Kademlia routing table on its own. It is the routing table plus the
+transports, the multiplexing, the NAT traversal, the peer store and the identify handshake
+that make a node reachable from behind a home router at all. That system exists in exactly
+two places: **`rust-libp2p`** and **`js-libp2p`**. A C or C++ implementation is not a binding
+one afternoon away — it is the project instead of Gradido.
+
+So peer discovery is mirrored, and it is the **protocol-defined** row of the table above:
+
+```text
+packages/dht-node       js-libp2p, TypeScript. The reference path.
+fast-servers/dht-node   rust-libp2p, built as a static library behind an
+                        extern "C" header and linked like any other native module.
+```
+
+Rust is a leaf language here in exactly the sense C++ already is on the fast path: one
+module, one `extern "C"` surface, no Rust type crossing the boundary, and no application
+logic on the other side of it. What crosses is a peer list and a change notification, not a
+libp2p object. The rules are in
+[fast-servers/dht-node/Architecture.md](fast-servers/dht-node/Architecture.md).
+
+**Each path runs its own node**, and that is what puts Rust in this repository at all — if
+the fast server could read rows a TypeScript process writes, neither this module nor the third
+toolchain would exist. It cannot, for the two cases the fast path is *for*. On the small
+server a second Node runtime beside the C one spends a whole process's worth of RAM on peer
+discovery, which is the figure that decides whether the thing runs beside its database. On the
+high-load server, a fast path that needs a TypeScript process to reach the network is not
+droppable, only rearranged.
+
+**Two implementations that drift apart do not fail a test — they simply stop finding each
+other**, which is why the shared-code answer was the one to prefer and why giving it up needs
+saying out loud. What replaces the shared code is that libp2p is a specification with two
+conformant implementations, and that both halves speak it because of the specification rather
+than because two codebases were kept aligned by hand.
+
+That changes what has to be tested. Contract vectors are the wrong tool: there is no value to
+compare, only a behavior between two running processes. The gate is an **interop test** — start
+the TypeScript node and the Rust node, have each discover the other and a third peer, and fail
+the build if either cannot. It lives in CI beside the contract tests, not in
+`contracts/test-vectors`.
+
+It also changes what a version bump means. Two libraries with their own release cycles can
+diverge on a protocol detail without either being wrong, so both are pinned, and neither is
+raised without the interop test being green on the pair.
+
+**The DHT node does not touch the database.** It discovers peers and reports them; the caller
+decides what to persist. Federation rows are written by an Interaction through a Repository,
+on whichever path is running — which keeps a network library out of the persistence layer and
+the persistence decisions in the domain, where the rest of this document puts them. This holds
+on both paths and is the reason the two nodes need no shared state: they hand out the same
+kind of answer, and everything that follows from it is domain code that already has a
+reference implementation.
+
+The sweep is O(communities) every 20 seconds, which at a few thousand communities is real work
+rather than a poll. Both nodes therefore keep the peer state inside the library and report only
+what changed — on the fast path so the FFI boundary scales with the number of changes rather
+than the size of the network, on the TypeScript path for the same reason at the process
+boundary.
+
+Two decisions are settled here rather than per implementation, because settling them
+separately is the failure mode.
+
+**Transports: TCP + QUIC, with circuit relay v2 as the fallback.** TCP is the floor and does
+not survive a home router without a forwarded port. QUIC does: it reaches an encrypted,
+multiplexed connection in one round trip instead of three, and its UDP bindings are what make
+hole punching work at all. WebRTC is deliberately not enabled — its two libp2p forms exist to
+make a *browser* a peer, and Gradido's peers are community servers; the frontend talks to its
+own backend over HTTP and never joins the DHT.
+
+**Bootstrap: one Gradido community URL, `gdd.gradido.net` by default.** libp2p, unlike
+legacy's hyperswarm, comes with no public network to join. A fresh community asks a running
+community over plain HTTP for a peer list, dials what comes back, and is in. Every community
+is a bootstrap node because every community already serves HTTP — no dedicated infrastructure,
+no hardcoded addresses to keep alive for a decade. The route is `peer.bootstrap` in
+[`contracts/server/backend/peer.json`](contracts/server/backend/peer.json), and it is public
+because bootstrapping happens before any handshake exists.
+
+What it returns is a *sample* of peers that are current in the DHT sense — a few different
+entry points, not the full set and not the same handful every time, because Kademlia fans out
+from wherever it starts. That also keeps the route from being an enumeration endpoint by
+construction rather than by promise.
+
+And what it returns is a **hint, not a trust decision**. A peer is verified when it is
+contacted, not when it is named: the federation handshake against `communities.public_key`
+does that, exactly as before, so a poisoned list costs time rather than trust. The default
+being a community we operate makes the ordinary case safe without pretending to be a protocol
+guarantee, and the planned hardening — handshake with the bootstrap community first, list
+signed — removes the impostor at a hijacked URL without changing that layering.
+
+The reasoning behind both, and what has to be verified before the libraries are pinned, is in
+[fast-servers/dht-node/Architecture.md](fast-servers/dht-node/Architecture.md).
 
 ## Amounts
 
@@ -163,15 +250,19 @@ packages/          TypeScript — reference implementation
                    (so Eden Treaty can derive types) and shared valibot schemas
   shared-native    determinism-critical C, called from TypeScript via N-API
                    and linked directly by the fast servers
+  dht-node         peer discovery on js-libp2p. Mirrored, not shared — see
+                   Peer discovery above
 
 fast-servers/      C — fast implementation, mirrors the domain structure
                    its own Architecture.md holds the C-specific design
+                   (plus one Rust module, dht-node, behind extern "C")
   backend
   backend-core
   federation
-  dht-node         a runner around the libp2p node in blockchain-core, not an
-                   implementation of it — the TypeScript path reaches the same
-                   code through shared-native
+  dht-node         peer discovery on rust-libp2p, built as a static library
+                   behind an extern "C" header. The one place Rust is used,
+                   and the one mirrored component with no shared code —
+                   its own Architecture.md holds the boundary rules
 
 contracts/         language-independent JSON contracts, see below
 ```
@@ -203,8 +294,12 @@ fast path is tested against.
 
 - TypeScript: `bun test`
 - C: google test
+- Rust: `cargo test`, for `fast-servers/dht-node` only
 - Contract tests read `contracts/` and run the same vectors against both implementations
 - Database tests run against both PostgreSQL and SQLite
+- One interop test, outside `contracts/`: the js-libp2p node and the rust-libp2p node
+  discover each other and a third peer. It is the only gate on the one mirrored component
+  that no contract vector can cover — see *Peer discovery*.
 
 A missing feature on the fast path should surface as a failing or explicitly skipped contract
 test, not as silence.
@@ -364,9 +459,17 @@ Not carried over: the restriction to JPEG. The accepted content types are an ope
 - zig as compiler for the shared-native module used from TypeScript
 - clang-format for linting C/C++ code
 - google test for testing C/C++ code
+- cargo for `fast-servers/dht-node`, and nowhere else
 
 Which language is used for what, and the sanitizer and fuzzing requirements that come with
 native code, are in [fast-servers/Architecture.md](fast-servers/Architecture.md).
+
+Rust is the third toolchain and it is worth being honest about the cost: the fast path now
+needs zig *and* cargo, where before it needed zig. What it does not do is reach the
+TypeScript path — `bun install` and `turbo backend#start` are unchanged, because
+`packages/dht-node` is js-libp2p and nothing in `packages/` links the Rust module. That is
+the droppability rule paying for itself: a toolchain the fast path needs is a toolchain the
+fallback must not.
 
 ### The self-provisioning build
 

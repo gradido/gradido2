@@ -1,0 +1,15 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "ContributionMessageType",
+  "representation": "string",
+  "source": "backend/src/graphql/enum/ContributionMessageType.ts",
+  "storedIn": "contribution_messages.type",
+  "unknownValuePolicy": "reject",
+  "description": "What kind of message sits on a contribution. MODERATOR is an access rule, not a display hint: a query serving a member must filter it out.",
+  "values": [
+    { "name": "HISTORY", "value": "HISTORY", "description": "Written by the system when the contribution changed, not by a person." },
+    { "name": "DIALOG", "value": "DIALOG", "description": "The exchange between member and moderator. Visible to both." },
+    { "name": "MODERATOR", "value": "MODERATOR", "description": "Moderator-to-moderator. Never leaves the moderator view." }
+  ]
+}

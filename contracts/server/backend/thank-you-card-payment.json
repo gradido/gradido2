@@ -1,0 +1,145 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "ThankYouCardPayment",
+  "description": "A till charging a thank-you card: target lookup, request, confirmation by PIN.",
+  "mount": "/",
+  "source": [
+    "../gradido/backend/src/graphql/resolver/ThankYouCardPaymentResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "thankYouCardPayment.getTarget",
+      "method": "GET",
+      "path": "/thank-you-card-payment/get-target",
+      "rights": [
+        "RECEIVE_THANK_YOU_CARD_PAYMENT"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "code",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ThankYouCardPaymentTarget",
+        "type": "object",
+        "model": "ThankYouCardPaymentTarget",
+        "open": "shape of ThankYouCardPaymentTarget not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ThankYouCardPaymentResolver",
+        "operation": "query",
+        "field": "thankYouCardPaymentTarget",
+        "file": "../gradido/backend/src/graphql/resolver/ThankYouCardPaymentResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "thankYouCardPayment.create",
+      "method": "POST",
+      "path": "/thank-you-card-payment/create",
+      "rights": [
+        "RECEIVE_THANK_YOU_CARD_PAYMENT"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "code",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "amount",
+            "required": true,
+            "type": "gradido_cent",
+            "legacyType": "GradidoUnit"
+          },
+          {
+            "name": "memo",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ThankYouCardPayment",
+        "type": "object",
+        "model": "ThankYouCardPayment",
+        "open": "shape of ThankYouCardPayment not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ThankYouCardPaymentResolver",
+        "operation": "mutation",
+        "field": "createThankYouCardPayment",
+        "file": "../gradido/backend/src/graphql/resolver/ThankYouCardPaymentResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    },
+    {
+      "name": "thankYouCardPayment.confirm",
+      "method": "POST",
+      "path": "/thank-you-card-payment/confirm",
+      "rights": [
+        "RECEIVE_THANK_YOU_CARD_PAYMENT"
+      ],
+      "request": {
+        "fields": [
+          {
+            "name": "paymentId",
+            "required": true,
+            "type": "uint64",
+            "legacyType": "Int"
+          },
+          {
+            "name": "pin",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "ThankYouCardPaymentResult",
+        "type": "object",
+        "model": "ThankYouCardPaymentResult",
+        "open": "shape of ThankYouCardPaymentResult not contracted yet"
+      },
+      "legacy": {
+        "resolver": "ThankYouCardPaymentResolver",
+        "operation": "mutation",
+        "field": "confirmThankYouCardPayment",
+        "file": "../gradido/backend/src/graphql/resolver/ThankYouCardPaymentResolver.ts"
+      },
+      "auth": "session",
+      "roles": [
+        "user",
+        "moderator",
+        "moderator-ai",
+        "admin"
+      ]
+    }
+  ]
+}

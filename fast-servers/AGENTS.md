@@ -45,7 +45,7 @@ that is still an open constraint rather than a solved one.
 
 ---
 
-## 2. C++ is for leaf modules only
+## 2. C++ and Rust are for leaf modules only
 
 Justified by a library without a C equivalent — `gradido-blockchain-core`, signing, hashing.
 **Not** by the convenience of a container: `std::unordered_map` allocates per insert and is
@@ -62,6 +62,22 @@ A C++ module:
 
 The reason is concrete: an exception propagating into h2o's C event loop is undefined
 behavior.
+
+**Rust follows the same rule, in one module: `dht-node`.** It is there because libp2p has no
+C equivalent, not because Rust is nicer, and the boundary is the same shape:
+
+```text
+- exports an extern "C" header and nothing else
+- lets no Rust type cross the module boundary
+- #![forbid(unsafe_code)] in the interior; the unsafe lives in one file
+- panics are caught at the boundary and become an error code
+```
+
+The last line is the Rust version of the exception rule: a panic unwinding into h2o's C
+event loop is undefined behavior for exactly the same reason a C++ exception is.
+
+Do not add a second Rust module. If one looks necessary, change `../Architecture.md` first —
+a third toolchain on the fast path is a design decision, not a dependency.
 
 ---
 

@@ -1,0 +1,47 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "federation",
+  "model": "PublicKey",
+  "description": "The community public key, read during the handshake.",
+  "mount": "/api/{apiVersion}",
+  "apiVersions": [
+    "1_0",
+    "1_1"
+  ],
+  "source": [
+    "../gradido/federation/src/graphql/api/1_0/resolver/PublicKeyResolver.ts",
+    "../gradido/federation/src/graphql/api/1_1/resolver/PublicKeyResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "publicKey.get",
+      "method": "GET",
+      "path": "/public-key/get",
+      "rights": null,
+      "request": null,
+      "response": {
+        "nullable": false,
+        "legacyType": "GetPublicKeyResult",
+        "type": "object",
+        "fields": [
+          {
+            "name": "publicKey",
+            "required": true,
+            "type": "bytes(32)",
+            "legacyType": "String",
+            "note": "legacy sends it hex-encoded as a string"
+          }
+        ]
+      },
+      "legacy": {
+        "resolver": "PublicKeyResolver",
+        "operation": "query",
+        "field": "getPublicKey",
+        "file": "../gradido/federation/src/graphql/api/1_0/resolver/PublicKeyResolver.ts",
+        "apiVersion": "1_0"
+      },
+      "auth": "federation-handshake"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "federation",
+  "model": "Disbursement",
+  "description": "Redeeming a transaction link whose sender lives in another community.",
+  "mount": "/api/{apiVersion}",
+  "apiVersions": [
+    "1_0"
+  ],
+  "source": [
+    "../gradido/federation/src/graphql/api/1_0/resolver/DisbursementResolver.ts"
+  ],
+  "routes": [
+    {
+      "name": "disbursement.processJwtOnSenderCommunity",
+      "method": "POST",
+      "path": "/disbursement/process-jwt-on-sender-community",
+      "rights": null,
+      "request": {
+        "fields": [
+          {
+            "name": "handshakeID",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          },
+          {
+            "name": "publicKey",
+            "required": true,
+            "type": "bytes(32)",
+            "legacyType": "String",
+            "note": "legacy sends it hex-encoded as a string"
+          },
+          {
+            "name": "jwt",
+            "required": true,
+            "type": "text",
+            "legacyType": "String"
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "legacyType": "String",
+        "type": "text"
+      },
+      "legacy": {
+        "resolver": "DisbursementResolver",
+        "operation": "mutation",
+        "field": "processDisburseJwtOnSenderCommunity",
+        "file": "../gradido/federation/src/graphql/api/1_0/resolver/DisbursementResolver.ts",
+        "apiVersion": "1_0"
+      },
+      "auth": "federation-handshake"
+    }
+  ]
+}
