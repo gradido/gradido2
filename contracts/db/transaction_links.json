@@ -1,0 +1,32 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "transaction_links",
+  "description": "A pre-funded link a member hands to someone else, who redeems it. The amount is held until it is redeemed or expires.",
+  "source": "database/src/entity/TransactionLink.ts plus database/migration/migrations",
+  "columns": [
+    { "name": "id", "type": "uint64", "nullable": false, "identity": true },
+    { "name": "user_id", "type": "uint64", "nullable": false, "references": { "table": "users", "column": "id" }, "legacyName": "userId" },
+    { "name": "amount_gdd4", "type": "gradido_cent", "nullable": false },
+    { "name": "hold_available_amount_gdd4", "type": "gradido_cent", "nullable": false, "description": "The part of the sender's balance withheld while the link is outstanding, so it cannot be spent twice." },
+    { "name": "memo", "type": "varchar(512)", "nullable": false, "maxChars": "MEMO_MAX_CHARS", "minChars": "MEMO_MIN_CHARS" },
+    { "name": "code", "type": "varchar(24)", "nullable": false, "description": "The redemption code carried in the link. Whoever holds it can redeem — treat it as a bearer secret.", "secret": true },
+    { "name": "created_at", "type": "timestamp_ms", "nullable": false, "legacyName": "createdAt" },
+    { "name": "valid_until", "type": "timestamp_ms", "nullable": false, "legacyName": "validUntil", "description": "created_at + CODE_VALID_DAYS_DURATION." },
+    { "name": "redeemed_at", "type": "timestamp_ms", "nullable": true, "legacyName": "redeemedAt" },
+    { "name": "redeemed_by", "type": "uint64", "nullable": true, "references": { "table": "users", "column": "id" }, "legacyName": "redeemedBy" },
+    { "name": "deleted_at", "type": "timestamp_ms", "nullable": true, "legacyName": "deletedAt", "description": "Soft delete: the sender withdrew the link before it was redeemed." }
+  ],
+  "primaryKey": ["id"],
+  "unique": [],
+  "indexes": [
+    { "name": "idx_user_id_valid_until", "columns": ["user_id", "valid_until", "id"] },
+    { "name": "idx_userId", "columns": ["user_id"], "note": "Redundant with the leading column of idx_user_id_valid_until. Do not recreate it in gradido2." }
+  ],
+  "notes": [
+    "Legacy names these columns in camelCase — userId, validUntil, redeemedBy — unlike every other table, and the migrations confirm it (idx_user_id_valid_until ON transaction_links(userId, validUntil, id)). gradido2 uses snake_case as its own rule requires; legacyName records what to read from a legacy database during migration.",
+    "The three states are distinguished by columns, not by a status enum: outstanding (redeemed_at and deleted_at null, valid_until in the future), redeemed (redeemed_at set), expired (valid_until passed), withdrawn (deleted_at set). Both implementations must derive the state the same way — an expired link that was also withdrawn is withdrawn.",
+    "code is a bearer secret: never logged, never returned for a link the caller does not own. See logging.json.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json. Legacy declares these as datetime without the precision(3) the other tables use — second precision. Verify before relying on sub-second ordering."
+  ]
+}

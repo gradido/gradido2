@@ -1,0 +1,14 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "ContributionType",
+  "representation": "string",
+  "source": "database/src/enum/ContributionType.ts",
+  "storedIn": "contributions.contribution_type",
+  "unknownValuePolicy": "reject",
+  "values": [
+    { "name": "ADMIN", "value": "ADMIN" },
+    { "name": "USER", "value": "USER" },
+    { "name": "LINK", "value": "LINK" }
+  ]
+}

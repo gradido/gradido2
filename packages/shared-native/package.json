@@ -1,0 +1,47 @@
+{
+  "name": "shared-native",
+  "description": "Determinism-critical C: GradidoUnit arithmetic, decay, signing, transaction types. Used by the TypeScript reference implementation through N-API and linked directly by fast-servers.",
+  "private": true,
+  "license": "Apache-2.0",
+  "author": "Gradido Academy - https://www.gradido.net",
+  "repository": "git@github.com:gradido/gradido2.git",
+  "main": "./index.cjs",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.cjs",
+      "require": "./index.cjs"
+    }
+  },
+  "files": [
+    "index.cjs",
+    "index.d.ts",
+    "build.zig",
+    "build.zig.zon",
+    "include",
+    "src",
+    "napi"
+  ],
+  "scripts": {
+    "build": "c-cpp-zig-build",
+    "build:debug": "c-cpp-zig-build --debug",
+    "info": "c-cpp-zig-build info",
+    "test": "bun test",
+    "test:node": "node --test",
+    "lint": "biome check --error-on-warnings .",
+    "lint:fix": "biome check --error-on-warnings . --write",
+    "build:clean": "c-cpp-zig-build clean"
+  },
+  "zigNative": {
+    "optimize": "small",
+    "napiVersion": 8
+  },
+  "devDependencies": {
+    "c-cpp-zig-build": "0.2.0"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18.17"
+  }
+}

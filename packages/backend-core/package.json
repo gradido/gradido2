@@ -1,5 +1,5 @@
 {
-  "name": "shared",
+  "name": "backend-core",
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",

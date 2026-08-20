@@ -1,0 +1,17 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "RoleNames",
+  "representation": "string",
+  "description": "Default roles. Defined in code, not in the database — a database role may inherit from one of these but cannot overwrite it.",
+  "source": "shared/src/enum/RoleNames.ts",
+  "unknownValuePolicy": "ignore_and_warn",
+  "values": [
+    { "name": "UNAUTHORIZED", "value": "UNAUTHORIZED" },
+    { "name": "USER", "value": "USER" },
+    { "name": "MODERATOR", "value": "MODERATOR" },
+    { "name": "MODERATOR_AI", "value": "MODERATOR_AI" },
+    { "name": "ADMIN", "value": "ADMIN" },
+    { "name": "DLT_CONNECTOR", "value": "DLT_CONNECTOR_ROLE", "note": "value differs from the name — legacy spelling, kept" }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "contractVersion": 1,
+  "kind": "convention",
+  "name": "Timestamp",
+  "description": "How an instant is stored, transported and compared. Time is the classic place for two implementations to disagree quietly, so every rule here is normative for both.",
+
+  "principle": "The database and the wire carry UTC only. A local time exists in exactly one place: the browser, at the moment of rendering. Nothing behind the frontend ever knows the user's zone.",
+
+  "storage": {
+    "type": "timestamp_ms",
+    "zone": "UTC",
+    "precision": "milliseconds",
+    "postgresql": "timestamptz(3)",
+    "sqlite": "INTEGER, milliseconds since the Unix epoch",
+    "rules": [
+      "PostgreSQL columns are timestamptz, never timestamp. A bare timestamp discards the zone on write and the two implementations then disagree about what they read back.",
+      "SQLite has no time type. The integer is milliseconds since 1970-01-01T00:00:00Z, signed, so instants before 1970 remain representable.",
+      "The session and the database connection run in UTC. Neither implementation may depend on the server's local zone, and neither may set a per-connection time zone."
+    ]
+  },
+
+  "wire": {
+    "type": "int64",
+    "unit": "unix_milliseconds",
+    "encoding": "decimal string",
+    "example": "1620927991000",
+    "rules": [
+      "A timestamp on the wire is a decimal string of milliseconds since the Unix epoch, like every other number in these contracts. Not ISO-8601, not a locale format, never an offset.",
+      "The API neither sends nor accepts a local time. A request carrying an offset is a client error, not something to convert.",
+      "NULL is JSON null. It is never 0 — 0 is a valid instant (1970-01-01T00:00:00Z), and an implementation that conflates the two produces records that claim to be older than Gradido.",
+      "Logs may render ISO-8601 with a trailing Z for humans. That is presentation, not the contract."
+    ],
+    "rationale": "C has no date type. Milliseconds parse and format identically in both languages with no calendar code, and they compare and sort as integers. ISO-8601 would need a parser in C whose edge cases (fractional digits, offsets, leap seconds) are exactly where two implementations drift apart."
+  },
+
+  "conversion": {
+    "rules": [
+      "Higher precision is truncated toward the past (floor), never rounded. Rounding up can place a created_at in the future, and a record that does not exist yet fails validation elsewhere.",
+      "Floor applies to negative values as well, so truncation stays monotonic across the epoch.",
+      "One request takes its 'now' once and reuses it. Rows written by the same interaction must carry the same created_at — a per-statement CURRENT_TIMESTAMP drifts between statements and makes a transaction's rows disagree about when it happened.",
+      "'now' is the UTC system clock. Neither implementation may derive it from a database function, so that both produce the same value under test."
+    ]
+  },
+
+  "presentation": {
+    "owner": "frontend",
+    "rules": [
+      "The frontend renders in the browser's zone and locale, from the millisecond value it received.",
+      "This is deliberately not contracted further: rendering concerns one implementation, and a disagreement about a date format is not a backend bug. See AGENTS.md, working rule 3."
+    ]
+  },
+
+  "open": [
+    {
+      "question": "In which zone does a calendar-based contribution cycle begin?",
+      "detail": "ContributionCycleType has DAILY implemented and MONTH, QUARTER, YEAR planned. A rolling window needs no zone — ALIAS_QUOTA_WINDOW_MS is simply a duration. A calendar boundary does: 'daily' has to start somewhere, and midnight UTC, midnight in the community's zone and midnight for the member are three different instants that pay out on different days.",
+      "why_it_matters": "This is the one place where UTC-everywhere is not automatically the answer, and where both implementations would otherwise each guess. It decides amounts, not display.",
+      "status": "unanswered — check what legacy does before the first cycle-based contribution is rebuilt"
+    }
+  ]
+}

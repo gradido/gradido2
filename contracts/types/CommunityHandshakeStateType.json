@@ -1,0 +1,16 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "CommunityHandshakeStateType",
+  "representation": "string",
+  "source": "database/src/enum/CommunityHandshakeStateType.ts",
+  "unknownValuePolicy": "reject",
+  "values": [
+    { "name": "START_COMMUNITY_AUTHENTICATION", "value": "START_COMMUNITY_AUTHENTICATION" },
+    { "name": "START_OPEN_CONNECTION_CALLBACK", "value": "START_OPEN_CONNECTION_CALLBACK" },
+    { "name": "START_AUTHENTICATION", "value": "START_AUTHENTICATION" },
+    { "name": "SUCCESS", "value": "SUCCESS" },
+    { "name": "FAILED", "value": "FAILED" },
+    { "name": "EXPIRED", "value": "EXPIRED" }
+  ]
+}

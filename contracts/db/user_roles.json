@@ -1,0 +1,68 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "user_roles",
+  "description": "Roles held by a user. One role per row.",
+  "source": "database/src/entity/UserRole.ts",
+  "columns": [
+    {
+      "name": "id",
+      "type": "uint64",
+      "nullable": false,
+      "identity": true
+    },
+    {
+      "name": "user_id",
+      "type": "uint64",
+      "nullable": false,
+      "references": {
+        "table": "users",
+        "column": "id"
+      }
+    },
+    {
+      "name": "role",
+      "type": "varchar(40)",
+      "nullable": false,
+      "enum": "RoleNames",
+      "description": "Stored as a string. An unrecognised value is ignored with a warning, never rejected — see types/RoleNames.json."
+    },
+    {
+      "name": "visible_creation_groups",
+      "type": "text",
+      "nullable": true,
+      "default": null,
+      "description": "A moderator's visibility scope: JSON array of creation-group strings plus the sentinels '*all' and '*untagged'. NULL means no restriction."
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp_ms",
+      "nullable": false,
+      "default": "now"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp_ms",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "primaryKey": [
+    "id"
+  ],
+  "unique": [],
+  "indexes": [
+    {
+      "name": "user_id",
+      "columns": [
+        "user_id"
+      ]
+    }
+  ],
+  "notes": [
+    "JSON inside a text column: both implementations must parse it the same way, including what an invalid document does. Currently unspecified — write the answer here before either implementation reads the column.",
+    "gradido2 adds roles and role_rights tables on top of this (see Architecture.md, Auth). Those are not yet contracted.",
+    "created_at and updated_at are UTC milliseconds; see types/Timestamp.json.",
+    "Identifiers are uint64 throughout. Legacy is inconsistent here — users.id is int unsigned while referrer_id, contribution_link_id and publisher_id, which point at it, are bigint unsigned. A foreign key narrower than its target truncates silently in C, so gradido2 uses one width everywhere."
+  ]
+}

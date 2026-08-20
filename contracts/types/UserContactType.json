@@ -1,0 +1,13 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "UserContactType",
+  "representation": "string",
+  "source": "shared/src/enum/UserContactType.ts",
+  "storedIn": "user_contacts.type",
+  "unknownValuePolicy": "ignore_and_warn",
+  "values": [
+    { "name": "USER_CONTACT_EMAIL", "value": "EMAIL" },
+    { "name": "USER_CONTACT_PHONE", "value": "PHONE" }
+  ]
+}

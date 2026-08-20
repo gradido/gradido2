@@ -1,0 +1,12 @@
+.{
+    .name = .shared_native,
+    .version = "0.1.0",
+    .fingerprint = 0xa3701f833801cf96,
+    .minimum_zig_version = "0.15.1",
+    .dependencies = .{
+        // The build template, kept in sync by `c-cpp-zig-build`.
+        // Add your own dependencies here with `zig fetch --save <url>`.
+        .c_cpp_zig_build = .{ .path = ".zig-native" },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "src", "napi", "include", "third_party" },
+}

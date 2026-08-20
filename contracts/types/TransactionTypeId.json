@@ -1,0 +1,16 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "TransactionTypeId",
+  "representation": "uint32",
+  "source": "database/src/enum/TransactionTypeId.ts",
+  "storedIn": "transactions.type_id",
+  "unknownValuePolicy": "reject",
+  "values": [
+    { "name": "CREATION", "value": "1" },
+    { "name": "SEND", "value": "2" },
+    { "name": "RECEIVE", "value": "3" },
+    { "name": "DECAY", "value": "4", "virtual": true, "description": "Never stored. Computed for display only — an implementation that writes it to the database is wrong." },
+    { "name": "LINK_SUMMARY", "value": "5", "virtual": true }
+  ]
+}
