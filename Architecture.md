@@ -35,7 +35,7 @@ There are two reasons, and they are different in kind.
 
 The TypeScript path is the answer to "who maintains this if the author is unavailable".
 TypeScript developers are easy to find; developers who will maintain an arena allocator and
-a sharded session map are not. If that situation ever occurs, the TypeScript path is fixed
+a lock-free-ish reference-counted session map are not. If that situation ever occurs, the TypeScript path is fixed
 and developed further, and the fast path either follows through AI-assisted translation or
 freezes without taking the product with it.
 
@@ -77,8 +77,36 @@ Not everything is mirrored. Before writing anything, decide which of these it is
 | Kind | Lives | Mirrored |
 |---|---|---|
 | **Determinism-critical** | once, in C, in `shared-native` | **never** |
+| **Single-implementation** | once, in C, in `blockchain-core` | **never** |
 | **Domain / business** | TypeScript reference | yes, C follows |
 | **Infrastructure** | each implementation its own | no |
+
+Three reasons can send code into C, and only two of them are good ones:
+
+```text
+performance-motivated   -> no. The crossing costs more than it saves.
+determinism-motivated   -> always, whatever it costs.
+single-implementation   -> yes, when the alternative is writing a protocol or an
+                           algorithm twice and hoping the two agree.
+```
+
+The DHT node is the second `never`. Legacy runs `@hyperswarm/dht`, which exists only in
+JavaScript; gradido2 uses libp2p through `blockchain-core`, so both paths speak the same
+protocol because it is the same code — not because two implementations were kept in step.
+Two peer-discovery implementations that drift apart do not fail a test, they simply stop
+finding each other.
+
+The crossing cost that rules out the performance case does not apply here, and performance
+argues *for* this placement rather than against it: the sweep is O(communities) every 20
+seconds, which at a few thousand communities is real work rather than a poll. The native
+module keeps the state and reports only what changed, so the boundary scales with the number
+of changes rather than with the size of the network.
+
+**`blockchain-core` does not touch the database.** It discovers peers and reports them; the
+caller decides what to persist. Federation rows are written by an Interaction through a
+Repository, on whichever path is running — which keeps a network library out of the
+persistence layer and the persistence decisions in the domain, where the rest of this
+document puts them.
 
 `shared-native` is not a performance device. Its purpose is that a computation produces the
 same result everywhere. `../gradido/shared-native/src/data/unit.c` carries the evidence: the
@@ -137,10 +165,13 @@ packages/          TypeScript — reference implementation
                    and linked directly by the fast servers
 
 fast-servers/      C — fast implementation, mirrors the domain structure
+                   its own Architecture.md holds the C-specific design
   backend
   backend-core
   federation
-  dht-node
+  dht-node         a runner around the libp2p node in blockchain-core, not an
+                   implementation of it — the TypeScript path reaches the same
+                   code through shared-native
 
 contracts/         language-independent JSON contracts, see below
 ```
@@ -199,6 +230,24 @@ The session stores its creation time and is dropped after 10 minutes (const). Th
 backstop against cache-invalidation bugs: even a session that missed an update cannot
 stay wrong for long.
 
+## Session cache
+
+TypeScript holds sessions in a `Map<id, Session>`; garbage collection ends them, so the hard
+timeout is the only lifetime rule that needs writing down. The C implementation manages its
+own memory and therefore has a good deal more to say — all of it in
+[fast-servers/Architecture.md](fast-servers/Architecture.md#session-cache).
+
+The rule that matters at this level is the same for both: **the working set must be
+bounded.** A session holds roughly two pages of a data set —
+`DEFAULT_PAGINATION_PAGE_SIZE` is 25, so about 50 — extends forward through its cursor, and
+reads older windows from the database when someone actually pages back.
+
+That bound is not tuning. Measured from `contracts/db`, a transaction row is about 288 bytes
+in packed form, so an unbounded ledger is the entire footprint of a session: at 500
+transactions everything else in it is under half a percent. On a small machine the same
+memory holds either 545 bounded sessions or 57 unbounded ones.
+
+
 ## AppContext
 
 - contain db connection
@@ -235,6 +284,11 @@ Sticky sessions, shared session state, Redis, or distributed cache infrastructur
 - structured, machine-readable logging with a message field for human readability
 - format: JSON, both implementations emit the same JSON output
 - as far as it makes sense, both implementations log the same events with the same structure and data; TypeScript is the reference
+- the envelope, levels, categories, event ids and redaction rules are contracted in
+  `contracts/logging.json`. A log line is a structured event with a human sentence attached,
+  not the reverse: tests compare the structure, never the sentence.
+- legacy's per-class log4js categories are not carried over — the category is a small closed
+  set naming a place in the system, not a place in the source tree
 
 ## DB
 
@@ -248,11 +302,52 @@ Table and column names use snake_case, plural for table names, singular for colu
 - PostgreSQL is the reference and the default for server mode, SQLite is for easy deployment of small setups
 - the server admin decides on first run which one to use; there is currently no migration between SQLite and PostgreSQL data sets
 - tests run against both database modes
+- **all timestamps are UTC**, stored as milliseconds since the Unix epoch. PostgreSQL uses
+  `timestamptz`, never bare `timestamp`; SQLite stores a signed integer. The API transports
+  the same milliseconds and never a local time — only the frontend converts, into the
+  browser's zone at render time. `contracts/types/Timestamp.json` is normative.
+
+## Media storage
+
+Images and other uploaded files live in **object storage, never in the database**. Legacy
+stores avatars as `mediumblob` rows; that design is not carried over. A blob in the database
+is in every backup, every replication stream and every `SELECT *` that forgets to name its
+columns, and it makes the row it sits next to expensive to read.
+
+The interface is the S3 API, with two backends chosen the same way the database is:
+
+```text
+local filesystem   the default. No extra service, no configuration — the single binary
+                   keeps its promise: download, start, done.
+Garage             for communities with an administrator.
+                   https://garagehq.deuxfleurs.fr/
+```
+
+This mirrors the SQLite/PostgreSQL decision exactly, and for the same reason: a small
+community should not have to run infrastructure to host itself, and a large one should not
+be limited by that. Garage fits the same profile as the rest of this architecture — small,
+self-hostable, no cluster required.
+
+The database stores a key, not bytes. What the application decides — how a key is derived
+from a user, which rendition may be shown to whom, which content types and sizes are
+accepted — is shared behavior and belongs in `contracts/`, not in either implementation.
+
+Two rules carried over from legacy because they are requirements rather than design:
+
+- **Renditions are produced by the browser, not by the server.** One upload, one crop, two
+  encodings. The server never decodes an image. This keeps an image library and its CPU out
+  of the request path — an argument that is stronger for the fast path than it was for
+  legacy, since it also keeps a decoder out of C.
+- **A full-size rendition is own-view only.** Only the member sees their own; everything
+  shown to anyone else reads the small one. That is an access rule, so it is contracted,
+  not left to each caller.
+
+Not carried over: the restriction to JPEG. The accepted content types are an open decision.
 
 ## HTTP server
 
 - ElysiaJS + Eden Treaty on the TypeScript side. Route definitions belong in `packages/shared` so that frontend-core, frontend and admin can import the types.
-- h2o on the fast path, configured to not allocate/free memory during operation: it starts with enough memory and reuses it.
+- h2o on the fast path, configured to not allocate/free memory during operation: it starts with enough memory and reuses it. See [fast-servers/Architecture.md](fast-servers/Architecture.md).
 - Routes are additionally described in `contracts/server` as JSON, so both implementations can be tested and compared.
 
 ## Config
@@ -270,40 +365,36 @@ Table and column names use snake_case, plural for table names, singular for colu
 - clang-format for linting C/C++ code
 - google test for testing C/C++ code
 
-### Language roles
-
-```text
-C      the fast server: h2o, request path, session, repositories.
-       Also shared-native. This is where most native code lives.
-C++    leaf modules only, behind an extern "C" header:
-       Justified by a library without a C equivalent
-zig    build system and cross compilation. No application code —
-       its API still moves between versions.
-```
+Which language is used for what, and the sanitizer and fuzzing requirements that come with
+native code, are in [fast-servers/Architecture.md](fast-servers/Architecture.md).
 
 ### The self-provisioning build
 
-`shared-native/build.ts` downloads a pinned Zig version for the current platform and builds
-the native module. A TypeScript developer runs `bun install` followed by
-`turbo backend#start` and needs to know nothing about the toolchain.
+The native module is built by [`c-cpp-zig-build`](https://www.npmjs.com/package/c-cpp-zig-build)
+(`github.com/gradido/c_cpp_zig_build`), which downloads the pinned Zig toolchain and the Node
+headers for the current platform. A TypeScript developer runs `bun install` followed by
+`turbo backend#start` and needs to know nothing about any of it.
 
 This is part of the continuity plan, not a convenience: the TypeScript fallback path is not
-C-free, so it stays viable exactly as long as it keeps building itself. Two properties
-therefore matter beyond ordinary tooling hygiene — the downloaded archive should be verified
-against a pinned checksum, and the documentation should state how to build if the download
-URL is ever unavailable (place any Zig of the pinned version in the expected directory).
+C-free, so it stays viable exactly as long as it keeps building itself. That the build lives
+in its own package rather than in a `build_helper/` directory helps — the Zig version is
+pinned in one place instead of drifting between repositories, which is where the version
+confusion came from.
 
-The pinned version belongs in AGENTS.md as well, so that agents stop guessing it.
+It also makes the build an external dependency of the fallback, which is worth naming: if
+the package cannot be resolved, `shared-native` cannot be built, and the path that is
+supposed to survive without its author stops building. The mitigations are ordinary — the
+package is under the gradido organisation, and the committed lockfile pins it — but it is a
+link in that chain now, not just tooling.
 
-### Safety net for native code
+The checksum gap that the in-repo version had is closed: the package verifies every archive
+against the SHA-256 published by ziglang.org and nodejs.org before unpacking it. What remains
+is offline building — `--offline` fails rather than downloading, and `--zig-exe` or
+`--system-zig` point at an existing toolchain, so the path exists; it just needs to be
+written down for whoever needs it in five years.
 
-Non-negotiable wherever C runs, and more so where it was AI-generated:
-
-- ASan, UBSan and TSan in CI, not only locally. TSan matters most — the shared session map
-  is the one defect class expert review does not catch.
-- Fuzzing for every parser that touches attacker-supplied bytes: JWT and JSON. The signature
-  is verified before anything else is read; everything after it is hostile input.
-- Contract vectors as a merge gate, green on both implementations.
+Downloads are cached in `~/.zig-build`, outside the project and shared across repositories,
+so a second checkout costs nothing.
 
 ## Business logic around the session
 

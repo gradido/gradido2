@@ -1,0 +1,17 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "DltTransactionType",
+  "representation": "uint32",
+  "source": "database/src/enum/DltTransactionType.ts",
+  "unknownValuePolicy": "reject",
+  "values": [
+    { "name": "UNKNOWN", "value": "0" },
+    { "name": "REGISTER_ADDRESS", "value": "1" },
+    { "name": "CREATION", "value": "2" },
+    { "name": "TRANSFER", "value": "3" },
+    { "name": "DEFERRED_TRANSFER", "value": "4" },
+    { "name": "REDEEM_DEFERRED_TRANSFER", "value": "5" },
+    { "name": "DELETE_DEFERRED_TRANSFER", "value": "6" }
+  ]
+}

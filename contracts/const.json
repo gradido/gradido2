@@ -1,0 +1,204 @@
+{
+  "contractVersion": 1,
+  "kind": "const",
+  "description": "Constants both implementations must agree on. All numeric values are decimal strings; see AGENTS.md.",
+  "constants": {
+    "GRADIDO_CENT_PER_GDD": {
+      "group": "amount",
+      "type": "uint64",
+      "value": "10000",
+      "description": "1 GDD = 10000 GradidoCent. The money unit has exactly 4 decimal places.",
+      "source": "shared/src/const/index.ts (MAX_CREATION_AMOUNT comment), shared-native toDecimalPlaces"
+    },
+    "MAX_CREATION_AMOUNT": {
+      "group": "amount",
+      "type": "gradido_cent",
+      "value": "10000000",
+      "description": "Upper bound for a creation (contribution) amount: 1000 GDD.",
+      "source": "shared/src/const/index.ts"
+    },
+    "CODE_VALID_DAYS_DURATION": {
+      "group": "transaction_link",
+      "type": "uint32",
+      "unit": "days",
+      "value": "14",
+      "description": "Lifetime of a transaction link code.",
+      "source": "shared/src/const/index.ts"
+    },
+    "MEMO_MIN_CHARS": {
+      "group": "validation",
+      "type": "uint32",
+      "unit": "characters",
+      "value": "5",
+      "description": "A memo travels with the transaction and is re-validated by the dlt-connector.",
+      "source": "shared/src/const/index.ts"
+    },
+    "MEMO_MAX_CHARS": {
+      "group": "validation",
+      "type": "uint32",
+      "unit": "characters",
+      "value": "512",
+      "description": "Bound by the varchar(512) column the memo is stored in. Must not be widened here alone.",
+      "source": "shared/src/const/index.ts"
+    },
+    "MESSAGE_MIN_CHARS": {
+      "group": "validation",
+      "type": "uint32",
+      "unit": "characters",
+      "value": "1",
+      "description": "A person-to-person message carries no amount; a short reply must pass.",
+      "source": "shared/src/const/index.ts"
+    },
+    "MESSAGE_MAX_CHARS": {
+      "group": "validation",
+      "type": "uint32",
+      "unit": "characters",
+      "value": "2000",
+      "source": "shared/src/const/index.ts"
+    },
+    "CONTRIBUTIONLINK_NAME_MIN_CHARS": {
+      "group": "validation",
+      "type": "uint32",
+      "unit": "characters",
+      "value": "5",
+      "source": "shared/src/const/index.ts"
+    },
+    "CONTRIBUTIONLINK_NAME_MAX_CHARS": {
+      "group": "validation",
+      "type": "uint32",
+      "unit": "characters",
+      "value": "100",
+      "source": "shared/src/const/index.ts"
+    },
+    "ABOUT_ME_MAX_CHARS": {
+      "group": "validation",
+      "type": "uint32",
+      "unit": "characters",
+      "value": "2000",
+      "description": "Stored in a text column. The limit is in characters, the column bound is in bytes — an emoji costs four.",
+      "source": "shared/src/const/index.ts"
+    },
+    "MATCHING_ENTRY_DETAILS_MAX_CHARS": {
+      "group": "validation",
+      "type": "uint32",
+      "unit": "characters",
+      "value": "2000",
+      "source": "shared/src/const/index.ts"
+    },
+    "SALUTATION_MAX_LENGTH": {
+      "group": "validation",
+      "type": "uint32",
+      "unit": "characters",
+      "value": "255",
+      "description": "Mirrors the users.salutation column.",
+      "source": "shared/src/const/index.ts"
+    },
+    "ALIAS_QUOTA_PER_WINDOW": {
+      "group": "alias",
+      "type": "uint32",
+      "value": "4",
+      "description": "Alias picks allowed per window. A brake against cycling through near-misses of a popular name to catch payments meant for its owner — not a tidiness rule. Counts picks, not renames: returning to a name already owned is free.",
+      "source": "shared/src/const/index.ts"
+    },
+    "ALIAS_QUOTA_WINDOW_MS": {
+      "group": "alias",
+      "type": "uint64",
+      "unit": "milliseconds",
+      "value": "31536000000",
+      "description": "365 days.",
+      "source": "shared/src/const/index.ts"
+    },
+    "GRADIDO_REALM": {
+      "group": "auth",
+      "type": "string",
+      "value": "gradido",
+      "source": "shared/src/const/index.ts"
+    },
+    "REDEEM_JWT_TOKEN_EXPIRATION_MS": {
+      "group": "auth",
+      "type": "uint64",
+      "unit": "milliseconds",
+      "value": "600000",
+      "description": "10 minutes. Legacy stored this as the string '10m'; expressed here as a number so both implementations parse nothing.",
+      "source": "shared/src/const/index.ts (REDEEM_JWT_TOKEN_EXPIRATION)"
+    },
+    "FEDERATION_AUTHENTICATION_TIMEOUT_MS": {
+      "group": "auth",
+      "type": "uint64",
+      "unit": "milliseconds",
+      "value": "600000",
+      "description": "10 minutes.",
+      "source": "shared/src/const/index.ts"
+    },
+    "DEFAULT_PAGINATION_PAGE_SIZE": {
+      "group": "api",
+      "type": "uint32",
+      "value": "25",
+      "source": "shared/src/const/index.ts"
+    },
+    "SESSION_HARD_TIMEOUT_MS": {
+      "group": "session",
+      "type": "uint64",
+      "unit": "milliseconds",
+      "value": "600000",
+      "description": "A SessionContext is dropped this long after creation regardless of activity. Backstop against cache-invalidation bugs, not a login timeout.",
+      "source": "gradido2 Architecture.md"
+    },
+    "ROLE_RIGHTS_CACHE_TTL_MS": {
+      "group": "session",
+      "type": "uint64",
+      "unit": "milliseconds",
+      "value": "600000",
+      "description": "Maximum age of the global role-rights cache. Invalidated early when an admin edits a role.",
+      "source": "gradido2 Architecture.md"
+    },
+    "GLOBAL_CONTRIBUTION_CACHE_SIZE": {
+      "group": "session",
+      "type": "uint32",
+      "value": "500",
+      "description": "Number of recent public contributions held in the AppContext.",
+      "source": "gradido2 Architecture.md"
+    },
+    "MAX_RIGHTS_PER_DOMAIN": {
+      "group": "auth",
+      "type": "uint32",
+      "value": "64",
+      "description": "Rights of one domain are held in the bits of a uint64, so a domain cannot exceed this.",
+      "source": "gradido2 Architecture.md"
+    },
+    "ARGON2ID_MEMORY_KIB": {
+      "group": "auth",
+      "type": "uint32",
+      "unit": "kibibytes",
+      "value": "32768",
+      "description": "Memory for new password hashes, 32 MiB. Carried over from legacy so nothing gets weaker by accident — not chosen for gradido2. See types/PasswordHash.json, open.",
+      "source": "backend/src/password/EncryptionWorker.js (memLimit)"
+    },
+    "ARGON2ID_PASSES": {
+      "group": "auth",
+      "type": "uint32",
+      "value": "10",
+      "description": "argon2id passes for new password hashes.",
+      "source": "backend/src/password/EncryptionWorker.js (opsLimit)"
+    },
+    "ARGON2ID_PARALLELISM": {
+      "group": "auth",
+      "type": "uint32",
+      "value": "1",
+      "description": "libsodium's crypto_pwhash fixes parallelism at 1; kept explicit so the PHC string is reproducible.",
+      "source": "libsodium crypto_pwhash"
+    },
+    "ARGON2ID_SALT_BYTES": {
+      "group": "auth",
+      "type": "uint32",
+      "unit": "bytes",
+      "value": "16"
+    },
+    "ARGON2ID_OUTPUT_BYTES": {
+      "group": "auth",
+      "type": "uint32",
+      "unit": "bytes",
+      "value": "32"
+    }
+  }
+}

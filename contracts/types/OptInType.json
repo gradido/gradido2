@@ -1,0 +1,14 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "OptInType",
+  "representation": "uint32",
+  "source": "shared/src/enum/OptInType.ts",
+  "storedIn": "user_contacts.email_opt_in_type_id",
+  "unknownValuePolicy": "reject",
+  "values": [
+    { "name": "EMAIL_OPT_IN_REGISTER", "value": "1" },
+    { "name": "EMAIL_OPT_IN_RESET_PASSWORD", "value": "2" }
+  ],
+  "note": "0 is not a member but is the column default; treat it as 'no opt-in pending'."
+}

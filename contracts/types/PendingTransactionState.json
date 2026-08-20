@@ -1,0 +1,14 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "PendingTransactionState",
+  "representation": "uint32",
+  "source": "shared/src/enum/PendingTransactionState.ts",
+  "unknownValuePolicy": "reject",
+  "values": [
+    { "name": "NEW", "value": "1" },
+    { "name": "PENDING", "value": "2" },
+    { "name": "SETTLED", "value": "3" },
+    { "name": "REVERTED", "value": "4" }
+  ]
+}

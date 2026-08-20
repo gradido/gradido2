@@ -1,0 +1,47 @@
+{
+  "contractVersion": 1,
+  "kind": "errors",
+  "domain": "domain",
+  "codeRange": [2000, 2999],
+  "description": "Errors from business logic and validation.",
+  "source": "shared/src/errorTypes.ts",
+  "errors": [
+    {
+      "code": 2001,
+      "name": "COMPARE_FAILED",
+      "legacyName": "CompareError",
+      "messageTemplate": "{message}, actual: {actual}, expected: {expected}",
+      "parameters": [
+        { "name": "message", "type": "string" },
+        { "name": "actual", "type": "string", "optional": true },
+        { "name": "expected", "type": "string", "optional": true }
+      ],
+      "httpStatus": 400,
+      "note": "Legacy appends each optional part only when present, so the message has three shapes. Both implementations must produce the same one: omit the clause entirely, do not print an empty value."
+    },
+    {
+      "code": 2002,
+      "name": "UNHANDLED_ENUM",
+      "legacyName": "UnhandledEnum",
+      "messageTemplate": "{message}, enum type: {enumName}, enum value: {enumValue}",
+      "parameters": [
+        { "name": "message", "type": "string" },
+        { "name": "enumName", "type": "string", "optional": true },
+        { "name": "enumValue", "type": "string", "optional": true }
+      ],
+      "httpStatus": 500,
+      "note": "Raised where unknownValuePolicy is 'reject'. Where the policy is 'ignore_and_warn' this must not be raised — see types/."
+    },
+    {
+      "code": 2003,
+      "name": "VALIDATION_FAILED",
+      "messageTemplate": "validation failed for {field}: {reason}",
+      "parameters": [
+        { "name": "field", "type": "string" },
+        { "name": "reason", "type": "string" }
+      ],
+      "httpStatus": 400,
+      "note": "New in gradido2. Legacy surfaced validation through MutationErrorType.VALIDATION_ERROR and through thrown strings; this replaces both."
+    }
+  ]
+}

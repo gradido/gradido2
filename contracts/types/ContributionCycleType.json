@@ -1,0 +1,13 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "ContributionCycleType",
+  "representation": "string",
+  "source": "database/src/enum/ContributionCycleType.ts",
+  "unknownValuePolicy": "reject",
+  "note": "Only the members marked implemented are honoured by legacy. The casing is inconsistent on purpose — these are stored values, so the mixed case is part of the contract and must not be normalised.",
+  "values": [
+    { "name": "ONCE", "value": "ONCE", "implemented": true },
+    { "name": "DAILY", "value": "DAILY", "implemented": true }
+  ]
+}

@@ -63,50 +63,14 @@ Two rules follow, and neither is negotiable:
 `fast-servers/` is C: h2o, request path, session, repositories. It is an independent
 implementation of the same business behavior and may lag behind TypeScript.
 
-When changing TypeScript:
+When changing TypeScript: identify whether business behavior changed, locate the
+corresponding domain path in `fast-servers/`, assess whether it is affected, update it only
+when required. Do **not** force artificial parity.
 
-1. identify whether business behavior changed;
-2. locate the corresponding domain path in `fast-servers/`;
-3. assess whether it is affected;
-4. update it only when required.
-
-Do **not** force artificial parity.
-
-Preserve TypeScript's business semantics, but write idiomatic C.
-
-House dialect, so that review stays uniform and generated code stays checkable:
-
-```text
-- no malloc in the request path, arena only
-- fixed buffer sizes with an explicit bounds check;
-  overflow answers 500, never truncates
-- one ownership convention, describable in one line
-- function pointers at registration only, not in the data flow
-```
-
-### C++ is for leaf modules only
-
-C++ is justified by a library without a C equivalent — `gradido-blockchain-core`, signing,
-hashing. Not by the convenience of a container: `std::unordered_map` allocates per insert
-and is the wrong structure for a server with no allocation per request. Use open addressing
-with a preallocated table, or a sorted array for ordered access.
-
-A C++ module:
-
-```text
-- exports an extern "C" header and nothing else
-- lets no C++ type cross the module boundary
-- is compiled with -fno-exceptions -fno-rtti
-```
-
-The reason is concrete: an exception propagating into h2o's C event loop is undefined
-behavior.
-
-### zig builds, it does not implement
-
-zig is the build system and cross compiler. No application code — its API still moves
-between versions. Pinned versions belong in this file, see *Toolchain*.
-
+> **Working in `fast-servers/`? Read `fast-servers/AGENTS.md` and
+> `fast-servers/Architecture.md`.** The house dialect for C, the `extern "C"` rule for C++
+> leaf modules, the sanitizer requirements and the session cache invariants live there.
+> They are not repeated here.
 ---
 
 ## 2. Where code goes
@@ -123,7 +87,10 @@ packages/          TypeScript, reference implementation
   shared-native    determinism-critical C, called via N-API and linked by fast-servers
 
 fast-servers/      C, mirrors the domain structure of packages/
+                   has its own AGENTS.md and Architecture.md — read them before
+                   writing C, they are not summarised here
 contracts/         language-independent JSON contracts, see section 5
+                   has its own AGENTS.md for the file formats
 ```
 
 Business logic belongs in the `-core` packages. The packages next to them are the
@@ -170,6 +137,7 @@ Before writing anything, decide which of these it is:
 | Kind | Lives | Mirrored |
 |---|---|---|
 | **determinism-critical** | once, in C, in `shared-native` | **never** |
+| **single-implementation** | once, in C, in `blockchain-core` | **never** |
 | **domain / business** | TypeScript reference | yes, C follows |
 | **infrastructure** | each implementation its own | no |
 
@@ -177,9 +145,24 @@ Before writing anything, decide which of these it is:
 the performance one:
 
 ```text
-performance-motivated native call  -> no. The crossing costs more than it saves.
-determinism-motivated native call  -> always, whatever it costs.
+performance-motivated   -> no. The crossing costs more than it saves.
+determinism-motivated   -> always, whatever it costs.
+single-implementation   -> yes, when the alternative is writing a protocol or an
+                           algorithm twice and hoping the two agree.
 ```
+
+The third case is why the DHT node lives in `blockchain-core` rather than being built twice:
+both paths then speak the same protocol because it is the same code, not because two
+implementations were kept in step.
+
+The crossing cost that rules out the first case does not apply, and performance is a reason
+here rather than a counter-argument: the sweep is O(communities) every 20 seconds, so at a
+few thousand of them it is real work, and the native module holds the state and hands out
+only what changed. The boundary then scales with the number of changes, not with the number
+of communities.
+
+`blockchain-core` does not touch the database. It reports what it discovers; persisting that
+is an Interaction's job, through a Repository, on whichever path is running.
 
 Anything moved into `shared-native` needs no mirror and cannot diverge. Prefer it whenever a
 differing result would be a *wrong* result rather than a slower one.
@@ -198,6 +181,11 @@ parse, format             never reimplemented in either
 
 `contracts/` describes behavior both implementations must satisfy: constants, types,
 db definitions, routes, error codes, and test vectors.
+
+**Read `contracts/AGENTS.md` before adding or changing anything there** — the file formats
+are designed so that a C parser and a JavaScript parser read every value identically, and
+the rules that achieve that are not guessable (all numbers are decimal strings, every value
+carries its type, names and codes are permanent).
 
 When you change behavior that both implementations share — a route signature, an error
 code, a constant, a schema — update the contract in the same change. The contract is
@@ -350,36 +338,70 @@ Prefer the smallest structure that expresses the actual business requirement.
 
 ---
 
-## 12. Safety net for native code
-
-Not optional, and less so where the code was AI-generated:
-
-```text
-ASan + UBSan + TSan in CI, not only locally.
-    TSan matters most — the shared session map is the one
-    defect class that expert review does not catch.
-Fuzzing for every parser touching attacker-supplied bytes: JWT, JSON.
-Contract vectors as a merge gate, green on both implementations.
-```
-
----
-
-## 13. Toolchain
+## 12. Toolchain
 
 Pinned versions, so they are not guessed:
 
 ```text
-zig    0.15.2 in ../gradido/shared-native (build_helper/const.ts)
-       0.15.1 in ../h20Test
-       -> the repositories disagree; verify before assuming, and
-          record known API confusions here as they are found
+zig    pinned by c-cpp-zig-build, which builds shared-native.
+       One place, not three — legacy pinned 0.15.2 in
+       build_helper/const.ts while ../h20Test asked for 0.15.1.
+       Read the version out of the package; do not guess it and do
+       not carry a number from an older repository into this one.
 ```
 
-`shared-native/build.ts` downloads the pinned Zig for the current platform and builds the
-native module. `bun install` followed by `turbo backend#start` is enough — do not install a
-toolchain manually and do not add one to the instructions.
+`bun install` followed by `turbo backend#start` is enough — do not install a toolchain
+manually and do not add one to the instructions.
 
-Record h2o and Elysia idioms that keep being reinvented here as well.
+Record Elysia idioms that keep being reinvented here as well; h2o belongs in
+`fast-servers/AGENTS.md`.
+
+---
+
+## 13. Dependencies
+
+Gradido moves money. Every package added here runs with the same rights as the code that
+handles balances, and the npm registry has seen a steady run of compromised releases —
+usually a maintainer account taken over and a malicious patch version published, caught
+within days but shipped to everyone who resolved a range in the meantime.
+
+**Pin the exact version.** No `^`, no `~`, no ranges — in `package.json` and in
+`build.zig.zon` alike.
+
+```json
+"jose": "5.10.0"      not  "^5.10.0"
+```
+
+**Commit the lockfile.** Pinning direct dependencies without one leaves every transitive
+dependency floating, and that is where these attacks usually land. CI installs with
+`--frozen-lockfile` so a drifted tree fails the build instead of being installed.
+
+> Note for whoever sets this up: the root `.gitignore` currently lists `bun.lockb`. That
+> line is correct for a library and wrong for an application — it needs to go.
+
+**Do not take the newest version.** A malicious release is typically pulled within days of
+publication, so age is a cheap filter that costs nothing but patience. Prefer a version that
+has been available for about a month unless a security fix says otherwise. Being one minor
+version behind is not a risk; being first to install a compromised patch is.
+
+The exception is a package published by this project — `c-cpp-zig-build` and anything that
+follows it. Waiting a month on your own release protects against nothing, because the risk
+the waiting period covers is a stranger's compromised account, not your own publish. Pin it
+exactly all the same.
+
+**Check before adding.** Who publishes it, when it was last released, whether the repository
+matches the package, how many dependencies it drags in, whether it runs install scripts.
+Install scripts are the execution vector — `--ignore-scripts` should be the default, with
+exceptions listed and justified.
+
+**The strongest measure is not adding it.** This repository already has the example:
+dropping `jose` for the built-in `node:crypto` gave +54 % throughput at half the CPU per
+request, in forty lines, and removed a dependency from the authentication path rather than
+adding one. Fewer packages is better security and, here, better performance.
+
+For zig, dependencies in `build.zig.zon` are pinned to fixed commits and carry a hash, and
+`c-cpp-zig-build` verifies the Zig and Node archives it downloads against the SHA-256 the
+upstream projects publish. Same policy, already in place on that side.
 
 ---
 
@@ -423,6 +445,7 @@ Does any behavior now exist only in the fast path?
 Did the fast path preserve semantics while remaining independently optimized?
 Does contracts/ still describe the actual shared behavior?
 Did money arithmetic go through shared-native?
+Is every new dependency pinned, aged, and in the committed lockfile?
 ```
 
 If not, reconsider the design.

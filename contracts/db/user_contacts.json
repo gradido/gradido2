@@ -1,0 +1,129 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "user_contacts",
+  "description": "Email and phone contacts of a user. The login email is the row referenced by users.email_id.",
+  "source": "database/src/entity/UserContact.ts",
+  "columns": [
+    {
+      "name": "id",
+      "type": "uint64",
+      "nullable": false,
+      "identity": true
+    },
+    {
+      "name": "user_id",
+      "type": "uint64",
+      "nullable": false,
+      "references": {
+        "table": "users",
+        "column": "id"
+      }
+    },
+    {
+      "name": "type",
+      "type": "varchar(100)",
+      "nullable": true,
+      "default": null,
+      "enum": "UserContactType"
+    },
+    {
+      "name": "email",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "email_checked",
+      "type": "bool",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "email_verification_code",
+      "type": "uint64",
+      "nullable": false,
+      "description": "Secret. Never logged, never returned in a response."
+    },
+    {
+      "name": "email_opt_in_type_id",
+      "type": "uint32",
+      "nullable": false,
+      "default": "0",
+      "enum": "OptInType",
+      "note": "Not an identifier despite the name — it holds an OptInType value."
+    },
+    {
+      "name": "email_resend_count",
+      "type": "uint32",
+      "nullable": false,
+      "default": "0"
+    },
+    {
+      "name": "gms_publish_email",
+      "type": "bool",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "phone",
+      "type": "varchar(255)",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "country_code",
+      "type": "varchar(255)",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "gms_publish_phone",
+      "type": "uint32",
+      "nullable": false,
+      "default": "0"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp_ms",
+      "nullable": false,
+      "default": "now"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp_ms",
+      "nullable": true,
+      "default": null,
+      "onUpdate": "now"
+    },
+    {
+      "name": "deleted_at",
+      "type": "timestamp_ms",
+      "nullable": true,
+      "default": null
+    }
+  ],
+  "primaryKey": [
+    "id"
+  ],
+  "unique": [
+    {
+      "name": "email_key",
+      "columns": [
+        "email"
+      ]
+    },
+    {
+      "name": "email_verification_code_key",
+      "columns": [
+        "email_verification_code"
+      ]
+    }
+  ],
+  "indexes": [],
+  "notes": [
+    "email is globally unique, unlike users.gradido_id which is unique per community. Two communities cannot share an email address.",
+    "updated_at is maintained by the database in legacy (ON UPDATE CURRENT_TIMESTAMP). PostgreSQL needs a trigger and SQLite needs the application to set it — so the fast path and the reference path must both write it explicitly rather than rely on the dialect.",
+    "created_at, updated_at and deleted_at are UTC milliseconds; see types/Timestamp.json.",
+    "Identifiers are uint64 throughout. Legacy is inconsistent here — users.id is int unsigned while referrer_id, contribution_link_id and publisher_id, which point at it, are bigint unsigned. A foreign key narrower than its target truncates silently in C, so gradido2 uses one width everywhere."
+  ]
+}

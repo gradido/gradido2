@@ -1,25 +1,11 @@
 {
   "name": "backend",
-  "version": "0.0.1",
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",
   "scripts": {
-    "start": "bun run src/index.ts",
-    "dev": "NODE_ENV=development bun run --watch src/index.ts",
-    "build": "bun build src/index.ts"
+    "lint": "biome check --error-on-warnings .",
+    "lint:fix": "biome check --error-on-warnings . --write"
   },
-  "dependencies": {
-    "@elysiajs/cors": "^1.2.0",
-    "@elysiajs/jwt": "^1.2.0",
-    "@elysiajs/swagger": "^1.2.2",
-    "@elysiajs/trpc": "^1.1.0",
-    "@elysiajs/websocket": "^0.2.8",
-    "@trpc/server": "^10.45.2",
-    "database": "workspace:*",
-    "drizzle-zod": "^0.7.0",
-    "elysia": "^1.2.19",
-    "shared": "workspace:*",
-    "user": "workspace:*"
-  }
+  "dependencies": {}
 }

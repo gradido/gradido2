@@ -3,14 +3,16 @@
 *.log
 *.bak
 /node_modules/*
+node_modules
 dist
+build
+.turbo
 messages.pot
 .metadata
 .env
 .env.bak
 .env.development.local
 .env.production.local
-bun.lockb
 
 # Apple macOS folder attribute file
 .DS_Store

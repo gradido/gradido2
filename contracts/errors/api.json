@@ -1,0 +1,17 @@
+{
+  "contractVersion": 1,
+  "kind": "errors",
+  "domain": "api",
+  "codeRange": [3000, 3999],
+  "description": "Errors returned to a client. Legacy carried these as MutationErrorType on a GraphQL mutation result; gradido2 has no GraphQL, so they become ordinary error codes.",
+  "source": "core/src/graphql/enum/MutationErrorType.ts",
+  "errors": [
+    { "code": 3001, "name": "UNKNOWN", "legacyName": "UNKNOWN", "messageTemplate": "unknown error", "parameters": [], "httpStatus": 500 },
+    { "code": 3002, "name": "HTTP_ERROR", "legacyName": "HTTP_ERROR", "messageTemplate": "http error: {status} from {target}", "parameters": [ { "name": "status", "type": "uint32" }, { "name": "target", "type": "string" } ], "httpStatus": 502 },
+    { "code": 3003, "name": "DLT_CONNECTOR_ERROR", "legacyName": "DLT_CONNECTOR_ERROR", "messageTemplate": "dlt connector error: {reason}", "parameters": [ { "name": "reason", "type": "string" } ], "httpStatus": 502 },
+    { "code": 3004, "name": "DB_ENTRY_NOT_FOUND", "legacyName": "DB_ENTRY_NOT_FOUND", "messageTemplate": "entry not found", "parameters": [], "httpStatus": 404, "note": "The client-facing counterpart of 1001. Deliberately says less: which table was searched is not the client's business." },
+    { "code": 3005, "name": "PROTOBUF_DECODE_ERROR", "legacyName": "PROTOBUF_DECODE_ERROR", "messageTemplate": "protobuf decode error: {reason}", "parameters": [ { "name": "reason", "type": "string" } ], "httpStatus": 400 },
+    { "code": 3006, "name": "VALIDATION_ERROR", "legacyName": "VALIDATION_ERROR", "messageTemplate": "validation error", "parameters": [], "httpStatus": 400 },
+    { "code": 3007, "name": "UNKNOWN_COMMUNITY", "legacyName": "UNKNOWN_COMMUNITY", "messageTemplate": "unknown community: {communityUuid}", "parameters": [ { "name": "communityUuid", "type": "string" } ], "httpStatus": 404 }
+  ]
+}

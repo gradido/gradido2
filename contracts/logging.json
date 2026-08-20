@@ -1,0 +1,325 @@
+{
+  "contractVersion": 1,
+  "kind": "logging",
+  "description": "The shape of a log line. Pino on the reference path, spdlog on the fast path, one JSON format. A disagreement between the two is a bug, which is why this is a contract and not a per-implementation setting.",
+  "principle": "A log line is a structured event with a human sentence attached, not a sentence with fields attached. Tests compare the structure. The sentence is never compared — contracting English prose in two languages achieves nothing and cannot be kept green.",
+  "notCopiedFromLegacy": "Legacy derives a log4js category per class and per method — 'backend.auth.jwt.JWT.verifyAndDecrypt' is a category. That taxonomy restates the file tree and grows with it. Here the category is a small closed set and the identity of a line is its event id.",
+  "envelope": {
+    "description": "Fields every line carries. time, level and msg keep Pino's default names so the reference path needs no custom serializer and the fast path has a fixed target to match.",
+    "fields": [
+      {
+        "name": "time",
+        "type": "int64",
+        "unit": "unix_milliseconds",
+        "required": true,
+        "description": "UTC, see types/Timestamp.json. Pino's default already emits exactly this."
+      },
+      {
+        "name": "level",
+        "type": "uint32",
+        "required": true,
+        "enumeration": "levels below"
+      },
+      {
+        "name": "cat",
+        "type": "string",
+        "required": true,
+        "enumeration": "categories below"
+      },
+      {
+        "name": "event",
+        "type": "string",
+        "required": true,
+        "description": "Stable dotted id. This is what tests assert on."
+      },
+      {
+        "name": "msg",
+        "type": "string",
+        "required": true,
+        "description": "One human sentence, present tense, no trailing period. Never compared between implementations, never parsed by anything."
+      },
+      {
+        "name": "req",
+        "type": "string",
+        "required": false,
+        "description": "Request correlation id. Present on every line emitted while serving a request."
+      },
+      {
+        "name": "usr",
+        "type": "uint64",
+        "required": false,
+        "description": "users.id, never the email and never the gradido_id."
+      },
+      {
+        "name": "err",
+        "type": "object",
+        "required": false,
+        "description": "Present when the line reports a failure: { code, name } from contracts/errors.",
+        "shape": [
+          {
+            "name": "code",
+            "type": "uint32"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "data",
+        "type": "object",
+        "required": false,
+        "description": "Event-specific fields, flat, no nesting beyond one level."
+      }
+    ],
+    "rules": [
+      "No other top-level fields. Anything event-specific goes inside data.",
+      "Pino's default base fields pid and hostname must be disabled (base: null). They differ per process and would make two identical runs compare unequal.",
+      "No field is ever omitted for being empty except the ones marked optional, and an optional field is absent rather than null."
+    ]
+  },
+  "levels": {
+    "description": "Pino's numeric values. spdlog maps its own levels onto these numbers on output — the number is the contract, the spelling is not.",
+    "values": [
+      {
+        "name": "trace",
+        "value": "10",
+        "use": "not in production"
+      },
+      {
+        "name": "debug",
+        "value": "20",
+        "use": "development detail"
+      },
+      {
+        "name": "info",
+        "value": "30",
+        "use": "a business event happened"
+      },
+      {
+        "name": "warn",
+        "value": "40",
+        "use": "recovered, but someone should know — e.g. an unknown role string from the database"
+      },
+      {
+        "name": "error",
+        "value": "50",
+        "use": "a request failed"
+      },
+      {
+        "name": "fatal",
+        "value": "60",
+        "use": "the process cannot continue"
+      }
+    ]
+  },
+  "categories": {
+    "description": "Closed set. It reuses the domain vocabulary from AGENTS.md rather than inventing a second taxonomy, so a category is a place in the system, not a place in the source tree. Adding one is a contract change.",
+    "values": [
+      {
+        "name": "auth",
+        "description": "login, tokens, rights"
+      },
+      {
+        "name": "user",
+        "description": "accounts, contacts, aliases"
+      },
+      {
+        "name": "transaction"
+      },
+      {
+        "name": "contribution"
+      },
+      {
+        "name": "community"
+      },
+      {
+        "name": "federation"
+      },
+      {
+        "name": "http",
+        "description": "request lifecycle"
+      },
+      {
+        "name": "db",
+        "description": "connection, migration, query failures"
+      },
+      {
+        "name": "session",
+        "description": "SessionContext lifecycle and refreshes"
+      },
+      {
+        "name": "startup",
+        "description": "configuration and boot"
+      }
+    ]
+  },
+  "eventNaming": {
+    "pattern": "<category>.<subject>.<outcome>",
+    "rules": [
+      "Lowercase, dot separated, no verbs in the past tense beyond the outcome.",
+      "The outcome is the last segment: created, failed, denied, expired, refreshed, started, stopped.",
+      "An event id never changes once it exists — see AGENTS.md, names are stable forever. To retire one, stop emitting it; do not rename it.",
+      "One event id means one shape: the same keys in data every time it is emitted, on both paths."
+    ],
+    "examples": [
+      "auth.login.failed",
+      "transaction.created",
+      "session.context.expired"
+    ]
+  },
+  "events": {
+    "description": "Seed set. This grows with the rebuild — an event is contracted when the code that emits it is written, not before.",
+    "values": [
+      {
+        "event": "startup.server.started",
+        "cat": "startup",
+        "level": "info",
+        "data": [
+          {
+            "name": "impl",
+            "type": "string",
+            "description": "reference | fast"
+          },
+          {
+            "name": "db",
+            "type": "string",
+            "description": "postgresql | sqlite"
+          },
+          {
+            "name": "port",
+            "type": "uint32"
+          }
+        ],
+        "note": "The one line where the two implementations may legitimately differ in content: impl says which one is speaking."
+      },
+      {
+        "event": "auth.login.succeeded",
+        "cat": "auth",
+        "level": "info",
+        "data": []
+      },
+      {
+        "event": "auth.login.failed",
+        "cat": "auth",
+        "level": "warn",
+        "data": [
+          {
+            "name": "reason",
+            "type": "string",
+            "description": "closed vocabulary: unknown_contact, wrong_password, not_verified, deleted"
+          }
+        ],
+        "note": "Never log which of these it was to the client — the response says only that the login failed. The log may be specific; the response may not."
+      },
+      {
+        "event": "auth.rights.unknown_role",
+        "cat": "auth",
+        "level": "warn",
+        "data": [
+          {
+            "name": "role",
+            "type": "string"
+          }
+        ],
+        "note": "The ignore_and_warn policy of types/RoleNames.json is this line. Both implementations must emit it for the same input."
+      },
+      {
+        "event": "session.context.created",
+        "cat": "session",
+        "level": "debug",
+        "data": []
+      },
+      {
+        "event": "session.context.expired",
+        "cat": "session",
+        "level": "debug",
+        "data": [
+          {
+            "name": "ageMs",
+            "type": "uint64"
+          }
+        ],
+        "note": "Hard timeout, SESSION_HARD_TIMEOUT_MS."
+      },
+      {
+        "event": "http.request.failed",
+        "cat": "http",
+        "level": "error",
+        "data": [
+          {
+            "name": "method",
+            "type": "string"
+          },
+          {
+            "name": "path",
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "type": "uint32"
+          }
+        ],
+        "note": "Carries err. The path is the route pattern, not the concrete URL — a concrete one leaks ids into the log."
+      },
+      {
+        "event": "db.query.failed",
+        "cat": "db",
+        "level": "error",
+        "data": [
+          {
+            "name": "table",
+            "type": "string"
+          }
+        ],
+        "note": "Carries err. Never the statement text and never the parameters."
+      }
+    ]
+  },
+  "redaction": {
+    "description": "Never logged, at any level, in either implementation. Not a policy that can be relaxed by configuration.",
+    "never": [
+      {
+        "what": "users.password",
+        "why": "a hash is a credential"
+      },
+      {
+        "what": "users.password_hash",
+        "why": "the PHC string carries the salt and the full hash"
+      },
+      {
+        "what": "user_contacts.email_verification_code",
+        "why": "possession of it is proof of the email"
+      },
+      {
+        "what": "JWTs, in whole or in part",
+        "why": "a token in a log is a token in every backup of that log"
+      },
+      {
+        "what": "email addresses and phone numbers",
+        "why": "use usr with users.id — the account is identifiable without carrying personal data into log storage"
+      },
+      {
+        "what": "avatar bytes and any other blob",
+        "why": "size, not secrecy"
+      },
+      {
+        "what": "the value parameter of DB_DUPLICATE_ENTRY (error 1002)",
+        "why": "it is user input and frequently an email"
+      },
+      {
+        "what": "concrete request URLs with ids in the path",
+        "why": "log the route pattern; the id belongs in data if it is needed at all"
+      }
+    ]
+  },
+  "comparison": {
+    "description": "How a contract test decides that both implementations logged the same thing.",
+    "rules": [
+      "Compare: level, cat, event, presence and value of every data key, and err.code when present.",
+      "Ignore: msg, time, req, and field order.",
+      "A missing event on the fast path is a documented gap, the same as a skipped contract test — not a failure to hide by loosening the comparison."
+    ]
+  }
+}

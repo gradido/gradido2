@@ -1,18 +1,12 @@
 {
   "name": "shared",
-  "version": "0.0.1",
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",
-  "dependencies": {
-    "@trpc/client": "^10.45.2",
-    "@trpc/server": "^10.45.2",
-    "bootstrap": "^5.3.3",
-    "jose": "^5.10.0",
-    "log4js": "^6.9.1",
-    "mithril": "^2.2.14",
-    "user": "workspace:*",
-    "zod": "^3.24.2"
-  },
-  "devDependencies": {}
+  "dependencies": {},
+  "devDependencies": {},
+  "scripts": {
+    "lint": "biome check --error-on-warnings .",
+    "lint:fix": "biome check --error-on-warnings . --write"
+  }
 }

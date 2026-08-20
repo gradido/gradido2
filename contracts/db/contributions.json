@@ -1,0 +1,44 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "contributions",
+  "description": "A member's claim for creation, and the moderation trail that decides it. A confirmed contribution produces a transaction.",
+  "source": "database/src/entity/Contribution.ts plus database/migration/migrations",
+  "columns": [
+    { "name": "id", "type": "uint64", "nullable": false, "identity": true },
+    { "name": "user_id", "type": "uint64", "nullable": false, "references": { "table": "users", "column": "id" } },
+    { "name": "contribution_date", "type": "timestamp_ms", "nullable": false, "description": "The period the work was done in — what the creation is claimed for, not when it was submitted." },
+    { "name": "memo", "type": "varchar(512)", "nullable": false, "maxChars": "MEMO_MAX_CHARS", "minChars": "MEMO_MIN_CHARS" },
+    { "name": "amount_gdd4", "type": "gradido_cent", "nullable": false, "max": "MAX_CREATION_AMOUNT" },
+    { "name": "contribution_type", "type": "varchar(12)", "nullable": false, "enum": "ContributionType" },
+    { "name": "contribution_status", "type": "varchar(12)", "nullable": false, "enum": "ContributionStatus" },
+    { "name": "contribution_link_id", "type": "uint64", "nullable": true, "description": "Set when the contribution came from a contribution link rather than being written by hand." },
+    { "name": "transaction_id", "type": "uint64", "nullable": true, "references": { "table": "transactions", "column": "id" }, "description": "The CREATION row this produced. Null until confirmed." },
+    { "name": "moderator_id", "type": "uint64", "nullable": true, "references": { "table": "users", "column": "id" } },
+    { "name": "confirmed_by", "type": "uint64", "nullable": true, "references": { "table": "users", "column": "id" } },
+    { "name": "confirmed_at", "type": "timestamp_ms", "nullable": true },
+    { "name": "denied_by", "type": "uint64", "nullable": true, "references": { "table": "users", "column": "id" } },
+    { "name": "denied_at", "type": "timestamp_ms", "nullable": true },
+    { "name": "resubmission_at", "type": "timestamp_ms", "nullable": true, "description": "A moderator asked for changes and set a date to look again." },
+    { "name": "creation_groups_set_at", "type": "timestamp_ms", "nullable": true, "description": "When the creation group was last set through the group field. NULL is the only case in which a legacy inline '#tag' in the memo still counts — once this carries a timestamp, hashtags in the text are free text." },
+    { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" },
+    { "name": "updated_at", "type": "timestamp_ms", "nullable": true },
+    { "name": "updated_by", "type": "uint64", "nullable": true, "references": { "table": "users", "column": "id" } },
+    { "name": "deleted_at", "type": "timestamp_ms", "nullable": true },
+    { "name": "deleted_by", "type": "uint64", "nullable": true, "references": { "table": "users", "column": "id" } }
+  ],
+  "primaryKey": ["id"],
+  "unique": [],
+  "indexes": [
+    { "name": "idx_contributions_user_created", "columns": ["user_id", "created_at"] },
+    { "name": "idx_contributions_transaction_id", "columns": ["transaction_id"] },
+    { "name": "idx_contributions_feed", "columns": ["contribution_status", "contribution_link_id", "confirmed_at", "transaction_id"] }
+  ],
+  "notes": [
+    "Unlike transactions this table is mutable: status moves PENDING -> IN_PROGRESS -> CONFIRMED or DENIED, and a moderator may ask for resubmission. It is therefore not a cursor table — a session caching contributions needs a version or generation, not a highest-id watermark. See Architecture.md, Consistency model.",
+    "Five separate actor columns (moderator_id, confirmed_by, denied_by, updated_by, deleted_by) with matching timestamps. Only one path may be taken: confirmed and denied are mutually exclusive, and both implementations must reject a row that carries both.",
+    "The transaction is created on confirmation, so transaction_id null with status CONFIRMED is an inconsistency, not a state.",
+    "Legacy declares deleted_by with TypeORM's @DeleteDateColumn although it holds a user id, not a date. Carried here as uint64, which is what the column actually is.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json. Legacy uses datetime without precision(3) on this table — second precision."
+  ]
+}

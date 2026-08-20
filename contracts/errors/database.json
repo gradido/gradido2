@@ -1,0 +1,57 @@
+{
+  "contractVersion": 1,
+  "kind": "errors",
+  "domain": "database",
+  "codeRange": [1000, 1999],
+  "description": "Errors raised at the repository boundary. Legacy threw classes without codes; the codes here are assigned by gradido2 and are permanent.",
+  "source": "database/src/errorTypes.ts",
+  "errors": [
+    {
+      "code": 1001,
+      "name": "DB_NOT_FOUND",
+      "legacyName": "DBNotFoundError",
+      "messageTemplate": "DB_NOT_FOUND in {table} where: {where}",
+      "parameters": [
+        { "name": "table", "type": "string" },
+        { "name": "where", "type": "string" }
+      ],
+      "httpStatus": 404
+    },
+    {
+      "code": 1002,
+      "name": "DB_DUPLICATE_ENTRY",
+      "legacyName": "DBDuplicateEntryError",
+      "messageTemplate": "DB_DUPLICATE_ENTRY in {table}, unique row: {row}, existing value: {value}",
+      "parameters": [
+        { "name": "table", "type": "string" },
+        { "name": "row", "type": "string" },
+        { "name": "value", "type": "string" }
+      ],
+      "httpStatus": 409,
+      "note": "value may carry user input. Do not log it at a level that leaves the machine."
+    },
+    {
+      "code": 1003,
+      "name": "DB_MISSING_JOIN",
+      "legacyName": "DBMissingJoin",
+      "messageTemplate": "DB_MISSING_JOIN in {table}, join with {joinTable}, where {where}",
+      "parameters": [
+        { "name": "table", "type": "string" },
+        { "name": "joinTable", "type": "string" },
+        { "name": "where", "type": "string" }
+      ],
+      "httpStatus": 500,
+      "note": "A programming error, not a data error: the caller asked for a relation it did not load."
+    },
+    {
+      "code": 1004,
+      "name": "DB_INSERT_FAILED",
+      "legacyName": "DBInsertFailed",
+      "messageTemplate": "DB_INSERT_FAILED in {table}",
+      "parameters": [
+        { "name": "table", "type": "string" }
+      ],
+      "httpStatus": 500
+    }
+  ]
+}

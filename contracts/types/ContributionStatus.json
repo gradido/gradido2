@@ -1,0 +1,16 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "ContributionStatus",
+  "representation": "string",
+  "source": "database/src/enum/ContributionStatus.ts",
+  "storedIn": "contributions.contribution_status",
+  "unknownValuePolicy": "reject",
+  "values": [
+    { "name": "PENDING", "value": "PENDING" },
+    { "name": "IN_PROGRESS", "value": "IN_PROGRESS" },
+    { "name": "CONFIRMED", "value": "CONFIRMED" },
+    { "name": "DENIED", "value": "DENIED" },
+    { "name": "DELETED", "value": "DELETED" }
+  ]
+}
