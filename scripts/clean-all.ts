@@ -7,7 +7,14 @@ type PackageJson = {
 
 const ROOT = resolve(import.meta.dirname, '..')
 
-const TARGETS = ['node_modules', '.turbo', 'build', '.zig-cache', '.zig-native', 'compile_commands.json']
+const TARGETS = [
+  'node_modules',
+  '.turbo',
+  'build',
+  '.zig-cache',
+  '.zig-native',
+  'compile_commands.json',
+]
 
 async function readWorkspaces(): Promise<string[]> {
   const packageJsonPath = join(ROOT, 'package.json')
@@ -26,7 +33,9 @@ async function readWorkspaces(): Promise<string[]> {
  * cleaned looks exactly like a workspace that was already clean.
  */
 async function expand(pattern: string): Promise<string[]> {
-  if (!pattern.includes('*')) { return [pattern] }
+  if (!pattern.includes('*')) {
+    return [pattern]
+  }
 
   if (!pattern.endsWith('/*') || pattern.slice(0, -2).includes('*')) {
     throw new Error(`Unsupported workspace pattern: ${pattern}`)
@@ -47,7 +56,9 @@ async function removeIfExists(path: string): Promise<void> {
 
     console.log(`✓ ${path}`)
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') { return }
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return
+    }
     console.error(`✗ Failed to remove ${path}`)
     throw error
   }
