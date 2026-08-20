@@ -6,7 +6,9 @@ import { EMAIL_MAX_LENGTH, emailPrevalidateSchema, emailSchema, loginPasswordSch
 
 const prevalidate = (value: string) => v.safeParse(emailPrevalidateSchema, value)
 const validate = (value: string) => v.safeParse(emailSchema, value)
-const messageOf = (result: ReturnType<typeof prevalidate>) =>
+// Widened to either schema's result: the two pipes produce different issue unions, so a
+// helper typed against one of them cannot be handed the other's.
+const messageOf = (result: ReturnType<typeof prevalidate> | ReturnType<typeof validate>) =>
   result.success ? undefined : result.issues[0].message
 
 describe('email prevalidation — what is wrong the moment it is typed', () => {

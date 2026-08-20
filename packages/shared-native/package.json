@@ -19,9 +19,8 @@
     "index.d.ts",
     "build.zig",
     "build.zig.zon",
-    "include",
-    "src",
-    "napi"
+    "napi",
+    "types"
   ],
   "scripts": {
     "build": "c-cpp-zig-build",
@@ -38,7 +37,8 @@
     "napiVersion": 8
   },
   "devDependencies": {
-    "c-cpp-zig-build": "0.2.0"
+    "c-cpp-zig-build": "0.2.0",
+    "decimal.js-light": "2.5.1"
   },
   "dependencies": {},
   "engines": {

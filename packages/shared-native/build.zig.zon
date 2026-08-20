@@ -11,6 +11,12 @@
             .url = "git+https://github.com/gradido/gradido-blockchain-core.git#bc29d8085e370387c613cdf2abc9f308222a0675",
             .hash = "blockchain_core-0.16.0-r94upiqdDgAd3AayQflFxBXLb74T-tHRofauCPLWv0rs",
         },
+        // Must stay the version blockchain_core builds against, or the two would compile
+        // against different layouts of the same structs.
+        .hostmem = .{
+            .url = "https://github.com/einhornimmond/hostmem/archive/refs/tags/v0.4.0.tar.gz",
+            .hash = "hostmem-0.4.0-frufwr8zCQDmE7Jc572PQLPwh4rGot8U0qNud9Tqyv3u",
+        },
     },
-    .paths = .{ "build.zig", "build.zig.zon", "src", "napi", "include", "third_party" },
+    .paths = .{ "build.zig", "build.zig.zon", "napi" },
 }
