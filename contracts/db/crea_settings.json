@@ -5,10 +5,34 @@
   "description": "The model and effort level an admin picks for the AI moderation assistant, applied to every moderator. A single-row singleton with id = 1.",
   "source": "database/src/entity/CreaSetting.ts plus database/migration/migrations 0106 and 0107",
   "columns": [
-    { "name": "id", "type": "uint32", "nullable": false, "identity": false, "description": "Always 1. Not generated — the row is created by the migration, and there is never a second one." },
-    { "name": "model", "type": "varchar(64)", "nullable": true, "default": null, "description": "NULL means fall back to the model the environment names." },
-    { "name": "effort", "type": "varchar(12)", "nullable": true, "default": null, "description": "NULL means disabled — no adaptive thinking. That is a value, not a missing setting." },
-    { "name": "fast_mode", "type": "bool", "nullable": false, "default": "false", "description": "The same model with faster output at premium pricing. Not every model supports it, so a rejected request is retried without it rather than failing." },
+    {
+      "name": "id",
+      "type": "uint32",
+      "nullable": false,
+      "identity": false,
+      "description": "Always 1. Not generated — the row is created by the migration, and there is never a second one."
+    },
+    {
+      "name": "model",
+      "type": "varchar(64)",
+      "nullable": true,
+      "default": null,
+      "description": "NULL means fall back to the model the environment names."
+    },
+    {
+      "name": "effort",
+      "type": "varchar(12)",
+      "nullable": true,
+      "default": null,
+      "description": "NULL means disabled — no adaptive thinking. That is a value, not a missing setting."
+    },
+    {
+      "name": "fast_mode",
+      "type": "bool",
+      "nullable": false,
+      "default": "false",
+      "description": "The same model with faster output at premium pricing. Not every model supports it, so a rejected request is retried without it rather than failing."
+    },
     { "name": "updated_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
   ],
   "primaryKey": ["id"],

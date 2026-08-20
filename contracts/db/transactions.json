@@ -6,32 +6,118 @@
   "source": "database/src/entity/Transaction.ts plus database/migration/migrations",
   "columns": [
     { "name": "id", "type": "uint64", "nullable": false, "identity": true },
-    { "name": "previous", "type": "uint64", "nullable": true, "default": null, "description": "The preceding transaction of the same account, forming a chain. Unique: no two rows may claim the same predecessor." },
-    { "name": "type_id", "type": "uint32", "nullable": false, "enum": "TransactionTypeId", "note": "Only CREATION, SEND and RECEIVE occur here. DECAY and LINK_SUMMARY are virtual — a row carrying them is a bug." },
+    {
+      "name": "previous",
+      "type": "uint64",
+      "nullable": true,
+      "default": null,
+      "description": "The preceding transaction of the same account, forming a chain. Unique: no two rows may claim the same predecessor."
+    },
+    {
+      "name": "type_id",
+      "type": "uint32",
+      "nullable": false,
+      "enum": "TransactionTypeId",
+      "note": "Only CREATION, SEND and RECEIVE occur here. DECAY and LINK_SUMMARY are virtual — a row carrying them is a bug."
+    },
     { "name": "amount_gdd4", "type": "gradido_cent", "nullable": false },
-    { "name": "balance_gdd4", "type": "gradido_cent", "nullable": false, "description": "Account balance after this transaction, at balance_date." },
-    { "name": "balance_date", "type": "timestamp_ms", "nullable": false, "default": "now", "description": "The instant balance_gdd4 is valid for. Decay from here forward is computed, not stored." },
-    { "name": "decay_gdd4", "type": "gradido_cent", "nullable": false, "description": "Decay applied between decay_start and balance_date." },
+    {
+      "name": "balance_gdd4",
+      "type": "gradido_cent",
+      "nullable": false,
+      "description": "Account balance after this transaction, at balance_date."
+    },
+    {
+      "name": "balance_date",
+      "type": "timestamp_ms",
+      "nullable": false,
+      "default": "now",
+      "description": "The instant balance_gdd4 is valid for. Decay from here forward is computed, not stored."
+    },
+    {
+      "name": "decay_gdd4",
+      "type": "gradido_cent",
+      "nullable": false,
+      "description": "Decay applied between decay_start and balance_date."
+    },
     { "name": "decay_start", "type": "timestamp_ms", "nullable": true, "default": null },
-    { "name": "decay_calculation_type", "type": "uint32", "nullable": false, "default": "0", "enum": "DecayCalculationType", "description": "Which algorithm produced decay_gdd4. Required to reproduce a historical amount — the Decimal.js and fixed-point factors differ in the last unit." },
-    { "name": "memo", "type": "varchar(512)", "nullable": false, "maxChars": "MEMO_MAX_CHARS", "minChars": "MEMO_MIN_CHARS" },
-    { "name": "creation_date", "type": "timestamp_ms", "nullable": true, "default": null, "description": "For CREATION rows: the month the contribution was credited for, which is not when it was booked." },
-    { "name": "user_id", "type": "uint64", "nullable": false, "references": { "table": "users", "column": "id" } },
+    {
+      "name": "decay_calculation_type",
+      "type": "uint32",
+      "nullable": false,
+      "default": "0",
+      "enum": "DecayCalculationType",
+      "description": "Which algorithm produced decay_gdd4. Required to reproduce a historical amount — the Decimal.js and fixed-point factors differ in the last unit."
+    },
+    {
+      "name": "memo",
+      "type": "varchar(512)",
+      "nullable": false,
+      "maxChars": "MEMO_MAX_CHARS",
+      "minChars": "MEMO_MIN_CHARS"
+    },
+    {
+      "name": "creation_date",
+      "type": "timestamp_ms",
+      "nullable": true,
+      "default": null,
+      "description": "For CREATION rows: the month the contribution was credited for, which is not when it was booked."
+    },
+    {
+      "name": "user_id",
+      "type": "uint64",
+      "nullable": false,
+      "references": { "table": "users", "column": "id" }
+    },
     { "name": "user_community_uuid", "type": "uuid", "nullable": true },
     { "name": "user_gradido_id", "type": "uuid", "nullable": false },
-    { "name": "user_name", "type": "varchar(512)", "nullable": true, "default": null, "denormalized": true },
-    { "name": "linked_user_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "users", "column": "id" } },
+    {
+      "name": "user_name",
+      "type": "varchar(512)",
+      "nullable": true,
+      "default": null,
+      "denormalized": true
+    },
+    {
+      "name": "linked_user_id",
+      "type": "uint64",
+      "nullable": true,
+      "default": null,
+      "references": { "table": "users", "column": "id" }
+    },
     { "name": "linked_user_community_uuid", "type": "uuid", "nullable": true, "default": null },
     { "name": "linked_user_gradido_id", "type": "uuid", "nullable": true, "default": null },
-    { "name": "linked_user_name", "type": "varchar(512)", "nullable": true, "default": null, "denormalized": true },
-    { "name": "linked_transaction_id", "type": "uint64", "nullable": true, "default": null, "description": "The matching row on the other side: a SEND points at its RECEIVE and back." },
-    { "name": "transaction_link_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "transaction_links", "column": "id" } },
-    { "name": "thank_you_card_id", "type": "uint64", "nullable": true, "default": null, "description": "The card this booking was made with, on both rows. The card, not its name — the name is looked up where it is shown." }
+    {
+      "name": "linked_user_name",
+      "type": "varchar(512)",
+      "nullable": true,
+      "default": null,
+      "denormalized": true
+    },
+    {
+      "name": "linked_transaction_id",
+      "type": "uint64",
+      "nullable": true,
+      "default": null,
+      "description": "The matching row on the other side: a SEND points at its RECEIVE and back."
+    },
+    {
+      "name": "transaction_link_id",
+      "type": "uint64",
+      "nullable": true,
+      "default": null,
+      "references": { "table": "transaction_links", "column": "id" }
+    },
+    {
+      "name": "thank_you_card_id",
+      "type": "uint64",
+      "nullable": true,
+      "default": null,
+      "description": "The card this booking was made with, on both rows. The card, not its name — the name is looked up where it is shown."
+    }
   ],
   "primaryKey": ["id"],
-  "unique": [
-    { "name": "previous", "columns": ["previous"] }
-  ],
+  "unique": [{ "name": "previous", "columns": ["previous"] }],
   "indexes": [
     { "name": "user_id", "columns": ["user_id"] },
     { "name": "idx_transactions_balance_date_id", "columns": ["balance_date", "id"] },

@@ -163,11 +163,7 @@
       "An event id never changes once it exists — see AGENTS.md, names are stable forever. To retire one, stop emitting it; do not rename it.",
       "One event id means one shape: the same keys in data every time it is emitted, on both paths."
     ],
-    "examples": [
-      "auth.login.failed",
-      "transaction.created",
-      "session.context.expired"
-    ]
+    "examples": ["auth.login.failed", "transaction.created", "session.context.expired"]
   },
   "events": {
     "description": "Seed set. This grows with the rebuild — an event is contracted when the code that emits it is written, not before.",

@@ -102,21 +102,15 @@
       "default": null
     }
   ],
-  "primaryKey": [
-    "id"
-  ],
+  "primaryKey": ["id"],
   "unique": [
     {
       "name": "email_key",
-      "columns": [
-        "email"
-      ]
+      "columns": ["email"]
     },
     {
       "name": "email_verification_code_key",
-      "columns": [
-        "email_verification_code"
-      ]
+      "columns": ["email_verification_code"]
     }
   ],
   "indexes": [],

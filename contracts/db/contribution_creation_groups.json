@@ -6,16 +6,34 @@
   "source": "database/src/entity/ContributionCreationGroup.ts plus database/migration/migrations 0108 and 0110",
   "columns": [
     { "name": "id", "type": "uint64", "nullable": false, "identity": true },
-    { "name": "contribution_id", "type": "uint64", "nullable": false, "references": { "table": "contributions", "column": "id" } },
-    { "name": "creation_group_id", "type": "uint64", "nullable": false, "references": { "table": "creation_groups", "column": "id" }, "legacyName": "group_tag_id" },
+    {
+      "name": "contribution_id",
+      "type": "uint64",
+      "nullable": false,
+      "references": { "table": "contributions", "column": "id" }
+    },
+    {
+      "name": "creation_group_id",
+      "type": "uint64",
+      "nullable": false,
+      "references": { "table": "creation_groups", "column": "id" },
+      "legacyName": "group_tag_id"
+    },
     { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
   ],
   "primaryKey": ["id"],
   "unique": [
-    { "name": "uniq_contribution_creation_group", "columns": ["contribution_id", "creation_group_id"] }
+    {
+      "name": "uniq_contribution_creation_group",
+      "columns": ["contribution_id", "creation_group_id"]
+    }
   ],
   "indexes": [
-    { "name": "idx_ccg_contribution_id", "columns": ["contribution_id"], "note": "Redundant with the leading column of uniq_contribution_creation_group. Do not recreate it in gradido2." },
+    {
+      "name": "idx_ccg_contribution_id",
+      "columns": ["contribution_id"],
+      "note": "Redundant with the leading column of uniq_contribution_creation_group. Do not recreate it in gradido2."
+    },
     { "name": "idx_ccg_creation_group_id", "columns": ["creation_group_id"] }
   ],
   "notes": [

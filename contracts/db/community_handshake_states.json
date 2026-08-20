@@ -6,20 +6,52 @@
   "source": "database/src/entity/CommunityHandshakeState.ts plus database/migration/migrations",
   "columns": [
     { "name": "id", "type": "uint64", "nullable": false, "identity": true },
-    { "name": "handshake_id", "type": "uint32", "nullable": false, "description": "The identifier both sides carry through the exchange. Not this row's id — the other community chose it." },
-    { "name": "one_time_code", "type": "uint32", "nullable": true, "default": null, "description": "The code sent back over the callback to prove the caller is who it claimed. Single use.", "secret": true },
-    { "name": "public_key", "type": "bytes(32)", "nullable": false, "description": "The key of the community on the other end." },
-    { "name": "api_version", "type": "varchar(255)", "nullable": false, "note": "Legacy declares 255 here and 10 on federated_communities.api_version for the same values. gradido2 should use one width; 10 is the one that fits." },
-    { "name": "status", "type": "varchar(255)", "nullable": false, "default": "START_COMMUNITY_AUTHENTICATION", "enum": "CommunityHandshakeStateType" },
+    {
+      "name": "handshake_id",
+      "type": "uint32",
+      "nullable": false,
+      "description": "The identifier both sides carry through the exchange. Not this row's id — the other community chose it."
+    },
+    {
+      "name": "one_time_code",
+      "type": "uint32",
+      "nullable": true,
+      "default": null,
+      "description": "The code sent back over the callback to prove the caller is who it claimed. Single use.",
+      "secret": true
+    },
+    {
+      "name": "public_key",
+      "type": "bytes(32)",
+      "nullable": false,
+      "description": "The key of the community on the other end."
+    },
+    {
+      "name": "api_version",
+      "type": "varchar(255)",
+      "nullable": false,
+      "note": "Legacy declares 255 here and 10 on federated_communities.api_version for the same values. gradido2 should use one width; 10 is the one that fits."
+    },
+    {
+      "name": "status",
+      "type": "varchar(255)",
+      "nullable": false,
+      "default": "START_COMMUNITY_AUTHENTICATION",
+      "enum": "CommunityHandshakeStateType"
+    },
     { "name": "last_error", "type": "text", "nullable": true, "default": null },
     { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" },
-    { "name": "updated_at", "type": "timestamp_ms", "nullable": false, "default": "now", "description": "Touched on every state change. A row whose updated_at is older than FEDERATION_AUTHENTICATION_TIMEOUT_MS is EXPIRED whatever its status says." }
+    {
+      "name": "updated_at",
+      "type": "timestamp_ms",
+      "nullable": false,
+      "default": "now",
+      "description": "Touched on every state change. A row whose updated_at is older than FEDERATION_AUTHENTICATION_TIMEOUT_MS is EXPIRED whatever its status says."
+    }
   ],
   "primaryKey": ["id"],
   "unique": [],
-  "indexes": [
-    { "name": "idx_public_key", "columns": ["public_key"] }
-  ],
+  "indexes": [{ "name": "idx_public_key", "columns": ["public_key"] }],
   "notes": [
     "The status column has no name in legacy's @Column decorator, so TypeORM's default applies and the column is literally `status`. Confirmed against migration 0095.",
     "EXPIRED is derived, not written by a timer: an implementation that only reads the status and never compares updated_at against FEDERATION_AUTHENTICATION_TIMEOUT_MS will keep answering a handshake that timed out ten minutes ago. Both implementations must apply the timeout on read.",

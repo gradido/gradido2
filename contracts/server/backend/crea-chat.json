@@ -5,17 +5,13 @@
   "model": "CreaChat",
   "description": "The AI assistant chat thread of one member.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/CreaChatResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/CreaChatResolver.ts"],
   "routes": [
     {
       "name": "creaChat.resume",
       "method": "GET",
       "path": "/crea-chat/resume",
-      "rights": [
-        "AI_SEND_MESSAGE"
-      ],
+      "rights": ["AI_SEND_MESSAGE"],
       "request": null,
       "response": {
         "nullable": false,
@@ -31,18 +27,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreaChatResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator-ai", "admin"]
     },
     {
       "name": "creaChat.deleteThread",
       "method": "POST",
       "path": "/crea-chat/delete-thread",
-      "rights": [
-        "AI_SEND_MESSAGE"
-      ],
+      "rights": ["AI_SEND_MESSAGE"],
       "request": {
         "fields": [
           {
@@ -65,18 +56,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreaChatResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator-ai", "admin"]
     },
     {
       "name": "creaChat.sendMessage",
       "method": "POST",
       "path": "/crea-chat/send-message",
-      "rights": [
-        "AI_SEND_MESSAGE"
-      ],
+      "rights": ["AI_SEND_MESSAGE"],
       "request": null,
       "response": {
         "nullable": false,
@@ -92,10 +78,7 @@
         "file": "../gradido/backend/src/graphql/resolver/CreaChatResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator-ai", "admin"]
     }
   ]
 }

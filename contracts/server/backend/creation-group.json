@@ -14,9 +14,7 @@
       "name": "creationGroup.list",
       "method": "GET",
       "path": "/creation-group/list",
-      "rights": [
-        "LIST_CREATION_GROUPS"
-      ],
+      "rights": ["LIST_CREATION_GROUPS"],
       "request": null,
       "response": {
         "nullable": false,
@@ -32,20 +30,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreationGroupResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "creationGroup.listCommunity",
       "method": "GET",
       "path": "/creation-group/list-community",
-      "rights": [
-        "LIST_CREATION_GROUPS"
-      ],
+      "rights": ["LIST_CREATION_GROUPS"],
       "request": null,
       "response": {
         "nullable": false,
@@ -61,20 +52,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreationGroupResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "creationGroup.listMyContribution",
       "method": "GET",
       "path": "/creation-group/list-my-contribution",
-      "rights": [
-        "LIST_CREATION_GROUPS"
-      ],
+      "rights": ["LIST_CREATION_GROUPS"],
       "request": null,
       "response": {
         "nullable": false,
@@ -90,20 +74,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreationGroupResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "creationGroup.add",
       "method": "POST",
       "path": "/creation-group/add",
-      "rights": [
-        "MANAGE_CREATION_GROUPS"
-      ],
+      "rights": ["MANAGE_CREATION_GROUPS"],
       "request": {
         "fields": [
           {
@@ -134,17 +111,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreationGroupResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     },
     {
       "name": "creationGroup.edit",
       "method": "POST",
       "path": "/creation-group/edit",
-      "rights": [
-        "MANAGE_CREATION_GROUPS"
-      ],
+      "rights": ["MANAGE_CREATION_GROUPS"],
       "request": {
         "fields": [
           {
@@ -181,17 +154,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreationGroupResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     },
     {
       "name": "creationGroup.legacyHashtagCounts",
       "method": "GET",
       "path": "/creation-group/legacy-hashtag-counts",
-      "rights": [
-        "ADOPT_LEGACY_HASHTAGS"
-      ],
+      "rights": ["ADOPT_LEGACY_HASHTAGS"],
       "request": {
         "fields": [
           {
@@ -216,17 +185,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreationGroupResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     },
     {
       "name": "creationGroup.adoptLegacyHashtags",
       "method": "POST",
       "path": "/creation-group/adopt-legacy-hashtags",
-      "rights": [
-        "ADOPT_LEGACY_HASHTAGS"
-      ],
+      "rights": ["ADOPT_LEGACY_HASHTAGS"],
       "request": {
         "fields": [
           {
@@ -257,17 +222,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreationGroupResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     },
     {
       "name": "creationGroup.listMine",
       "method": "GET",
       "path": "/creation-group/list-mine",
-      "rights": [
-        "MANAGE_OWN_CREATION_GROUPS"
-      ],
+      "rights": ["MANAGE_OWN_CREATION_GROUPS"],
       "request": null,
       "response": {
         "nullable": false,
@@ -283,20 +244,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserCreationGroupResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "creationGroup.getSuggested",
       "method": "GET",
       "path": "/creation-group/get-suggested",
-      "rights": [
-        "MANAGE_OWN_CREATION_GROUPS"
-      ],
+      "rights": ["MANAGE_OWN_CREATION_GROUPS"],
       "request": null,
       "response": {
         "nullable": true,
@@ -312,20 +266,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserCreationGroupResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "creationGroup.setMine",
       "method": "POST",
       "path": "/creation-group/set-mine",
-      "rights": [
-        "MANAGE_OWN_CREATION_GROUPS"
-      ],
+      "rights": ["MANAGE_OWN_CREATION_GROUPS"],
       "request": {
         "fields": [
           {
@@ -350,20 +297,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserCreationGroupResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "creationGroup.listForUser",
       "method": "GET",
       "path": "/creation-group/list-for-user",
-      "rights": [
-        "MANAGE_USER_CREATION_GROUPS"
-      ],
+      "rights": ["MANAGE_USER_CREATION_GROUPS"],
       "request": {
         "fields": [
           {
@@ -388,19 +328,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserCreationGroupResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     },
     {
       "name": "creationGroup.setForUser",
       "method": "POST",
       "path": "/creation-group/set-for-user",
-      "rights": [
-        "MANAGE_USER_CREATION_GROUPS"
-      ],
+      "rights": ["MANAGE_USER_CREATION_GROUPS"],
       "request": {
         "fields": [
           {
@@ -431,19 +365,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserCreationGroupResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     },
     {
       "name": "creationGroup.getModeratorScope",
       "method": "GET",
       "path": "/creation-group/get-moderator-scope",
-      "rights": [
-        "SET_MODERATOR_CREATION_GROUP_SCOPE"
-      ],
+      "rights": ["SET_MODERATOR_CREATION_GROUP_SCOPE"],
       "request": {
         "fields": [
           {
@@ -466,17 +394,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserCreationGroupResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     },
     {
       "name": "creationGroup.setModeratorScope",
       "method": "POST",
       "path": "/creation-group/set-moderator-scope",
-      "rights": [
-        "SET_MODERATOR_CREATION_GROUP_SCOPE"
-      ],
+      "rights": ["SET_MODERATOR_CREATION_GROUP_SCOPE"],
       "request": {
         "fields": [
           {
@@ -505,9 +429,7 @@
         "file": "../gradido/backend/src/graphql/resolver/UserCreationGroupResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     }
   ]
 }

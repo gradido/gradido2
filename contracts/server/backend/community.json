@@ -5,17 +5,13 @@
   "model": "Community",
   "description": "Home community, the communities reachable through federation, and their admin view.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/CommunityResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/CommunityResolver.ts"],
   "routes": [
     {
       "name": "community.adminList",
       "method": "GET",
       "path": "/community/admin-list",
-      "rights": [
-        "COMMUNITY_WITH_API_KEYS"
-      ],
+      "rights": ["COMMUNITY_WITH_API_KEYS"],
       "request": {
         "fields": [
           {
@@ -53,17 +49,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CommunityResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     },
     {
       "name": "community.listReachable",
       "method": "GET",
       "path": "/community/list-reachable",
-      "rights": [
-        "COMMUNITIES"
-      ],
+      "rights": ["COMMUNITIES"],
       "request": null,
       "response": {
         "nullable": false,
@@ -79,22 +71,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CommunityResolver.ts"
       },
       "auth": "public",
-      "roles": [
-        "unauthorized",
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin",
-        "dlt-connector"
-      ]
+      "roles": ["unauthorized", "user", "moderator", "moderator-ai", "admin", "dlt-connector"]
     },
     {
       "name": "community.listAuthorized",
       "method": "GET",
       "path": "/community/list-authorized",
-      "rights": [
-        "COMMUNITIES"
-      ],
+      "rights": ["COMMUNITIES"],
       "request": null,
       "response": {
         "nullable": false,
@@ -110,22 +93,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CommunityResolver.ts"
       },
       "auth": "public",
-      "roles": [
-        "unauthorized",
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin",
-        "dlt-connector"
-      ]
+      "roles": ["unauthorized", "user", "moderator", "moderator-ai", "admin", "dlt-connector"]
     },
     {
       "name": "community.getByIdentifier",
       "method": "GET",
       "path": "/community/get-by-identifier",
-      "rights": [
-        "COMMUNITIES"
-      ],
+      "rights": ["COMMUNITIES"],
       "request": {
         "fields": [
           {
@@ -150,22 +124,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CommunityResolver.ts"
       },
       "auth": "public",
-      "roles": [
-        "unauthorized",
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin",
-        "dlt-connector"
-      ]
+      "roles": ["unauthorized", "user", "moderator", "moderator-ai", "admin", "dlt-connector"]
     },
     {
       "name": "community.getHome",
       "method": "GET",
       "path": "/community/get-home",
-      "rights": [
-        "COMMUNITIES"
-      ],
+      "rights": ["COMMUNITIES"],
       "request": null,
       "response": {
         "nullable": false,
@@ -181,22 +146,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CommunityResolver.ts"
       },
       "auth": "public",
-      "roles": [
-        "unauthorized",
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin",
-        "dlt-connector"
-      ]
+      "roles": ["unauthorized", "user", "moderator", "moderator-ai", "admin", "dlt-connector"]
     },
     {
       "name": "community.updateHome",
       "method": "POST",
       "path": "/community/update-home",
-      "rights": [
-        "COMMUNITY_UPDATE"
-      ],
+      "rights": ["COMMUNITY_UPDATE"],
       "request": {
         "fields": [
           {
@@ -240,10 +196,7 @@
         "file": "../gradido/backend/src/graphql/resolver/CommunityResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin",
-        "dlt-connector"
-      ]
+      "roles": ["admin", "dlt-connector"]
     }
   ]
 }

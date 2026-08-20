@@ -6,19 +6,66 @@
   "source": "database/src/entity/DltTransaction.ts and database/src/schemas/drizzle.schema.ts plus database/migration/migrations 0070, 0101 and 0103",
   "columns": [
     { "name": "id", "type": "uint64", "nullable": false, "identity": true },
-    { "name": "transaction_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "transactions", "column": "id" } },
-    { "name": "user_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "users", "column": "id" } },
-    { "name": "transaction_link_id", "type": "uint64", "nullable": true, "default": null, "references": { "table": "transaction_links", "column": "id" } },
-    { "name": "type_id", "type": "uint32", "nullable": false, "enum": "DltTransactionType", "description": "Which of the three reference columns is the meaningful one." },
-    { "name": "hiero_transaction_id", "type": "varchar(255)", "nullable": true, "default": null, "description": "The network's own identifier for the submitted transaction. NULL until it has been sent.", "legacyName": "message_id" },
-    { "name": "verified", "type": "bool", "nullable": false, "default": "false", "description": "Whether the network confirmed it. Redundant with verified_at — see the note." },
+    {
+      "name": "transaction_id",
+      "type": "uint64",
+      "nullable": true,
+      "default": null,
+      "references": { "table": "transactions", "column": "id" }
+    },
+    {
+      "name": "user_id",
+      "type": "uint64",
+      "nullable": true,
+      "default": null,
+      "references": { "table": "users", "column": "id" }
+    },
+    {
+      "name": "transaction_link_id",
+      "type": "uint64",
+      "nullable": true,
+      "default": null,
+      "references": { "table": "transaction_links", "column": "id" }
+    },
+    {
+      "name": "type_id",
+      "type": "uint32",
+      "nullable": false,
+      "enum": "DltTransactionType",
+      "description": "Which of the three reference columns is the meaningful one."
+    },
+    {
+      "name": "hiero_transaction_id",
+      "type": "varchar(255)",
+      "nullable": true,
+      "default": null,
+      "description": "The network's own identifier for the submitted transaction. NULL until it has been sent.",
+      "legacyName": "message_id"
+    },
+    {
+      "name": "verified",
+      "type": "bool",
+      "nullable": false,
+      "default": "false",
+      "description": "Whether the network confirmed it. Redundant with verified_at — see the note."
+    },
     { "name": "verified_at", "type": "timestamp_ms", "nullable": true, "default": null },
-    { "name": "error", "type": "text", "nullable": true, "default": null, "description": "Why the network rejected it. Set by the rejectedTx notification, see server/federation/blockchain-notification.json." },
+    {
+      "name": "error",
+      "type": "text",
+      "nullable": true,
+      "default": null,
+      "description": "Why the network rejected it. Set by the rejectedTx notification, see server/federation/blockchain-notification.json."
+    },
     { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
   ],
   "primaryKey": ["id"],
   "unique": [
-    { "name": "dlt_transactions_hiero_transacion_id_unique", "columns": ["hiero_transaction_id"], "note": "The name is misspelled in legacy ('transacion'). Names are stable forever — see contracts/AGENTS.md — so it is written here as it is, not as it should have been." }
+    {
+      "name": "dlt_transactions_hiero_transacion_id_unique",
+      "columns": ["hiero_transaction_id"],
+      "note": "The name is misspelled in legacy ('transacion'). Names are stable forever — see contracts/AGENTS.md — so it is written here as it is, not as it should have been."
+    }
   ],
   "indexes": [
     { "name": "idx_dlt_transaction_id", "columns": ["transaction_id"] },

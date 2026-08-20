@@ -5,17 +5,13 @@
   "model": "User",
   "description": "Registration, login, session, profile, search and the admin user actions.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/UserResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/UserResolver.ts"],
   "routes": [
     {
       "name": "user.verifyLogin",
       "method": "GET",
       "path": "/user/verify-login",
-      "rights": [
-        "VERIFY_LOGIN"
-      ],
+      "rights": ["VERIFY_LOGIN"],
       "request": null,
       "response": {
         "nullable": false,
@@ -31,20 +27,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.login",
       "method": "POST",
       "path": "/user/login",
-      "rights": [
-        "LOGIN"
-      ],
+      "rights": ["LOGIN"],
       "request": {
         "fields": [
           {
@@ -88,21 +77,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "public",
-      "roles": [
-        "unauthorized",
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["unauthorized", "user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.logout",
       "method": "POST",
       "path": "/user/logout",
-      "rights": [
-        "LOGOUT"
-      ],
+      "rights": ["LOGOUT"],
       "request": null,
       "response": {
         "nullable": false,
@@ -116,20 +97,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.create",
       "method": "POST",
       "path": "/user/create",
-      "rights": [
-        "CREATE_USER"
-      ],
+      "rights": ["CREATE_USER"],
       "request": {
         "fields": [
           {
@@ -197,21 +171,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "public",
-      "roles": [
-        "unauthorized",
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["unauthorized", "user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.forgotPassword",
       "method": "POST",
       "path": "/user/forgot-password",
-      "rights": [
-        "SEND_RESET_PASSWORD_EMAIL"
-      ],
+      "rights": ["SEND_RESET_PASSWORD_EMAIL"],
       "request": {
         "fields": [
           {
@@ -234,21 +200,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "public",
-      "roles": [
-        "unauthorized",
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["unauthorized", "user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.setPassword",
       "method": "POST",
       "path": "/user/set-password",
-      "rights": [
-        "SET_PASSWORD"
-      ],
+      "rights": ["SET_PASSWORD"],
       "request": {
         "fields": [
           {
@@ -277,21 +235,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "public",
-      "roles": [
-        "unauthorized",
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["unauthorized", "user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.queryOptIn",
       "method": "GET",
       "path": "/user/query-opt-in",
-      "rights": [
-        "QUERY_OPT_IN"
-      ],
+      "rights": ["QUERY_OPT_IN"],
       "request": {
         "fields": [
           {
@@ -314,21 +264,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "public",
-      "roles": [
-        "unauthorized",
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["unauthorized", "user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.checkUsername",
       "method": "GET",
       "path": "/user/check-username",
-      "rights": [
-        "CHECK_USERNAME"
-      ],
+      "rights": ["CHECK_USERNAME"],
       "request": {
         "fields": [
           {
@@ -351,20 +293,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.updateInfos",
       "method": "POST",
       "path": "/user/update-infos",
-      "rights": [
-        "UPDATE_USER_INFOS"
-      ],
+      "rights": ["UPDATE_USER_INFOS"],
       "request": {
         "fields": [
           {
@@ -488,20 +423,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.setAvatar",
       "method": "POST",
       "path": "/user/set-avatar",
-      "rights": [
-        "UPDATE_USER_INFOS"
-      ],
+      "rights": ["UPDATE_USER_INFOS"],
       "request": {
         "fields": [
           {
@@ -530,20 +458,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.getAvatarFull",
       "method": "GET",
       "path": "/user/get-avatar-full",
-      "rights": [
-        "VERIFY_LOGIN"
-      ],
+      "rights": ["VERIFY_LOGIN"],
       "request": null,
       "response": {
         "nullable": true,
@@ -557,20 +478,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.removeAvatar",
       "method": "POST",
       "path": "/user/remove-avatar",
-      "rights": [
-        "UPDATE_USER_INFOS"
-      ],
+      "rights": ["UPDATE_USER_INFOS"],
       "request": null,
       "response": {
         "nullable": false,
@@ -584,20 +498,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.hasElopage",
       "method": "GET",
       "path": "/user/has-elopage",
-      "rights": [
-        "HAS_ELOPAGE"
-      ],
+      "rights": ["HAS_ELOPAGE"],
       "request": null,
       "response": {
         "nullable": false,
@@ -611,20 +518,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.getAliasStatus",
       "method": "GET",
       "path": "/user/get-alias-status",
-      "rights": [
-        "UPDATE_USER_INFOS"
-      ],
+      "rights": ["UPDATE_USER_INFOS"],
       "request": null,
       "response": {
         "nullable": false,
@@ -640,20 +540,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.adoptAlias",
       "method": "POST",
       "path": "/user/adopt-alias",
-      "rights": [
-        "UPDATE_USER_INFOS"
-      ],
+      "rights": ["UPDATE_USER_INFOS"],
       "request": null,
       "response": {
         "nullable": false,
@@ -667,20 +560,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.authenticateGmsUserSearch",
       "method": "GET",
       "path": "/user/authenticate-gms-user-search",
-      "rights": [
-        "GMS_USER_PLAYGROUND"
-      ],
+      "rights": ["GMS_USER_PLAYGROUND"],
       "request": null,
       "response": {
         "nullable": false,
@@ -696,20 +582,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.getLocation",
       "method": "GET",
       "path": "/user/get-location",
-      "rights": [
-        "GMS_USER_PLAYGROUND"
-      ],
+      "rights": ["GMS_USER_PLAYGROUND"],
       "request": null,
       "response": {
         "nullable": false,
@@ -725,20 +604,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.authenticateHumhubAutoLogin",
       "method": "POST",
       "path": "/user/authenticate-humhub-auto-login",
-      "rights": [
-        "HUMHUB_AUTO_LOGIN"
-      ],
+      "rights": ["HUMHUB_AUTO_LOGIN"],
       "request": {
         "fields": [
           {
@@ -761,20 +633,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.adminSearch",
       "method": "GET",
       "path": "/user/admin-search",
-      "rights": [
-        "SEARCH_ADMIN_USERS"
-      ],
+      "rights": ["SEARCH_ADMIN_USERS"],
       "request": {
         "fields": [
           {
@@ -815,20 +680,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.search",
       "method": "GET",
       "path": "/user/search",
-      "rights": [
-        "SEARCH_USERS"
-      ],
+      "rights": ["SEARCH_USERS"],
       "request": {
         "fields": [
           {
@@ -887,19 +745,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.setRole",
       "method": "POST",
       "path": "/user/set-role",
-      "rights": [
-        "SET_USER_ROLE"
-      ],
+      "rights": ["SET_USER_ROLE"],
       "request": {
         "fields": [
           {
@@ -929,17 +781,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     },
     {
       "name": "user.delete",
       "method": "POST",
       "path": "/user/delete",
-      "rights": [
-        "DELETE_USER"
-      ],
+      "rights": ["DELETE_USER"],
       "request": {
         "fields": [
           {
@@ -962,17 +810,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     },
     {
       "name": "user.unDelete",
       "method": "POST",
       "path": "/user/un-delete",
-      "rights": [
-        "UNDELETE_USER"
-      ],
+      "rights": ["UNDELETE_USER"],
       "request": {
         "fields": [
           {
@@ -995,17 +839,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     },
     {
       "name": "user.sendActivationEmail",
       "method": "POST",
       "path": "/user/send-activation-email",
-      "rights": [
-        "SEND_ACTIVATION_EMAIL"
-      ],
+      "rights": ["SEND_ACTIVATION_EMAIL"],
       "request": {
         "fields": [
           {
@@ -1028,19 +868,13 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     },
     {
       "name": "user.get",
       "method": "GET",
       "path": "/user/get",
-      "rights": [
-        "USER"
-      ],
+      "rights": ["USER"],
       "request": {
         "fields": [
           {
@@ -1071,12 +905,7 @@
         "file": "../gradido/backend/src/graphql/resolver/UserResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     }
   ]
 }

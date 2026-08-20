@@ -5,13 +5,8 @@
   "model": "PublicCommunityInfo",
   "description": "What a community publishes about itself without authentication.",
   "mount": "/api/{apiVersion}",
-  "apiVersions": [
-    "1_0",
-    "1_1"
-  ],
-  "source": [
-    "../gradido/federation/src/graphql/api/1_0/resolver/PublicCommunityInfoResolver.ts"
-  ],
+  "apiVersions": ["1_0", "1_1"],
+  "source": ["../gradido/federation/src/graphql/api/1_0/resolver/PublicCommunityInfoResolver.ts"],
   "routes": [
     {
       "name": "publicCommunityInfo.get",

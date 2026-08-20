@@ -5,17 +5,13 @@
   "model": "Balance",
   "description": "The wallet balance shown to a member, including GDT and open transaction links.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/BalanceResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/BalanceResolver.ts"],
   "routes": [
     {
       "name": "balance.get",
       "method": "GET",
       "path": "/balance/get",
-      "rights": [
-        "BALANCE"
-      ],
+      "rights": ["BALANCE"],
       "request": null,
       "response": {
         "nullable": false,
@@ -31,12 +27,7 @@
         "file": "../gradido/backend/src/graphql/resolver/BalanceResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     }
   ]
 }

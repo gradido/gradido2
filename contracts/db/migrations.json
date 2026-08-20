@@ -5,9 +5,28 @@
   "description": "Which schema version the database is at. Both implementations read the same database, so both need the same answer to 'is this schema new enough for me'.",
   "source": "database/src/entity/Migration.ts",
   "columns": [
-    { "name": "version", "type": "uint32", "nullable": false, "description": "The migration number. The highest row is the current schema version.", "note": "Legacy declares it with @PrimaryGeneratedColumn and says in a comment that it is not actually a primary column — the value comes from the migration file name, not from the database." },
-    { "name": "file_name", "type": "varchar(256)", "nullable": true, "default": null, "legacyName": "fileName", "note": "Legacy declares no explicit column name, so TypeORM's default applies and the column is fileName in camelCase — unlike every other table here. Confirm against the live schema before generating DDL." },
-    { "name": "date", "type": "timestamp_ms", "nullable": false, "default": "now", "description": "When the migration ran." }
+    {
+      "name": "version",
+      "type": "uint32",
+      "nullable": false,
+      "description": "The migration number. The highest row is the current schema version.",
+      "note": "Legacy declares it with @PrimaryGeneratedColumn and says in a comment that it is not actually a primary column — the value comes from the migration file name, not from the database."
+    },
+    {
+      "name": "file_name",
+      "type": "varchar(256)",
+      "nullable": true,
+      "default": null,
+      "legacyName": "fileName",
+      "note": "Legacy declares no explicit column name, so TypeORM's default applies and the column is fileName in camelCase — unlike every other table here. Confirm against the live schema before generating DDL."
+    },
+    {
+      "name": "date",
+      "type": "timestamp_ms",
+      "nullable": false,
+      "default": "now",
+      "description": "When the migration ran."
+    }
   ],
   "primaryKey": ["version"],
   "unique": [],

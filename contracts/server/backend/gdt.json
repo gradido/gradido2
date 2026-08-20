@@ -5,17 +5,13 @@
   "model": "Gdt",
   "description": "The GDT server: entries, balance and PID lookup. Read through an external service.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/GdtResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/GdtResolver.ts"],
   "routes": [
     {
       "name": "gdt.listEntries",
       "method": "GET",
       "path": "/gdt/list-entries",
-      "rights": [
-        "LIST_GDT_ENTRIES"
-      ],
+      "rights": ["LIST_GDT_ENTRIES"],
       "request": {
         "fields": [
           {
@@ -56,20 +52,13 @@
         "file": "../gradido/backend/src/graphql/resolver/GdtResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "gdt.getBalance",
       "method": "GET",
       "path": "/gdt/get-balance",
-      "rights": [
-        "GDT_BALANCE"
-      ],
+      "rights": ["GDT_BALANCE"],
       "request": null,
       "response": {
         "nullable": true,
@@ -84,20 +73,13 @@
         "file": "../gradido/backend/src/graphql/resolver/GdtResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "gdt.existPid",
       "method": "GET",
       "path": "/gdt/exist-pid",
-      "rights": [
-        "EXIST_PID"
-      ],
+      "rights": ["EXIST_PID"],
       "request": {
         "fields": [
           {
@@ -121,12 +103,7 @@
         "file": "../gradido/backend/src/graphql/resolver/GdtResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     }
   ]
 }

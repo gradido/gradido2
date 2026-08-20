@@ -6,20 +6,65 @@
   "source": "database/src/entity/ContributionMessage.ts plus database/migration/migrations",
   "columns": [
     { "name": "id", "type": "uint64", "nullable": false, "identity": true },
-    { "name": "contribution_id", "type": "uint64", "nullable": false, "references": { "table": "contributions", "column": "id" } },
-    { "name": "user_id", "type": "uint64", "nullable": false, "references": { "table": "users", "column": "id" }, "description": "Who wrote it — member or moderator. is_moderator says which." },
-    { "name": "message", "type": "varchar(2000)", "nullable": false, "maxChars": "MESSAGE_MAX_CHARS", "minChars": "MESSAGE_MIN_CHARS" },
-    { "name": "type", "type": "varchar(12)", "nullable": false, "default": "DIALOG", "enum": "ContributionMessageType" },
-    { "name": "is_moderator", "type": "bool", "nullable": false, "default": "false", "description": "Whether the author acted as a moderator when writing this. Not the same as the author holding the moderator role today — a role can be taken away, the message stays what it was." },
+    {
+      "name": "contribution_id",
+      "type": "uint64",
+      "nullable": false,
+      "references": { "table": "contributions", "column": "id" }
+    },
+    {
+      "name": "user_id",
+      "type": "uint64",
+      "nullable": false,
+      "references": { "table": "users", "column": "id" },
+      "description": "Who wrote it — member or moderator. is_moderator says which."
+    },
+    {
+      "name": "message",
+      "type": "varchar(2000)",
+      "nullable": false,
+      "maxChars": "MESSAGE_MAX_CHARS",
+      "minChars": "MESSAGE_MIN_CHARS"
+    },
+    {
+      "name": "type",
+      "type": "varchar(12)",
+      "nullable": false,
+      "default": "DIALOG",
+      "enum": "ContributionMessageType"
+    },
+    {
+      "name": "is_moderator",
+      "type": "bool",
+      "nullable": false,
+      "default": "false",
+      "description": "Whether the author acted as a moderator when writing this. Not the same as the author holding the moderator role today — a role can be taken away, the message stays what it was."
+    },
     { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" },
     { "name": "updated_at", "type": "timestamp_ms", "nullable": true, "default": null },
-    { "name": "deleted_at", "type": "timestamp_ms", "nullable": true, "default": null, "description": "Soft delete." },
-    { "name": "deleted_by", "type": "uint64", "nullable": true, "default": null, "references": { "table": "users", "column": "id" } }
+    {
+      "name": "deleted_at",
+      "type": "timestamp_ms",
+      "nullable": true,
+      "default": null,
+      "description": "Soft delete."
+    },
+    {
+      "name": "deleted_by",
+      "type": "uint64",
+      "nullable": true,
+      "default": null,
+      "references": { "table": "users", "column": "id" }
+    }
   ],
   "primaryKey": ["id"],
   "unique": [],
   "indexes": [
-    { "name": "idx_contribution_messages_contribution_id", "columns": ["contribution_id"], "note": "Legacy declares it with a bare @Index() on the column, so TypeORM names it. Migration 0075 added it; the generated name in a legacy database is not this one." }
+    {
+      "name": "idx_contribution_messages_contribution_id",
+      "columns": ["contribution_id"],
+      "note": "Legacy declares it with a bare @Index() on the column, so TypeORM names it. Migration 0075 added it; the generated name in a legacy database is not this one."
+    }
   ],
   "notes": [
     "MODERATOR messages are visible to moderators only. That is an access rule, not a display preference: a query serving a member must filter the type, not the frontend. See types/ContributionMessageType.json.",

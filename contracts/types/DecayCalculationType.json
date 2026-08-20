@@ -7,7 +7,12 @@
   "unknownValuePolicy": "reject",
   "description": "Which decay algorithm produced a value. Historical: the Decimal.js and the fixed-point factor differ in the last unit, so a stored amount is only reproducible if it is known which one computed it.",
   "values": [
-    { "name": "DECIMAL_JS_FIXED_FACTOR", "value": "0", "deprecated": true, "note": "legacy TypeScript path; kept to reproduce historical amounts" },
+    {
+      "name": "DECIMAL_JS_FIXED_FACTOR",
+      "value": "0",
+      "deprecated": true,
+      "note": "legacy TypeScript path; kept to reproduce historical amounts"
+    },
     { "name": "NATIVE_C_DYNAMIC_FACTOR", "value": "1" },
     { "name": "NATIVE_C_FIXED_FACTOR_INTEGER", "value": "2", "note": "current" }
   ]

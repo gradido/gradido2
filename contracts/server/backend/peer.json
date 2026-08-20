@@ -26,8 +26,18 @@
             "type": "object",
             "description": "The answering community's own node. Always present, so one URL yields at least one dialable peer even from a community that knows nobody yet.",
             "fields": [
-              { "name": "peerId", "required": true, "type": "text", "description": "The libp2p peer id, derived from the community key pair. See contracts/test-vectors — the derivation is contracted because the two implementations must agree on it." },
-              { "name": "addresses", "required": true, "type": "text[]", "description": "Multiaddrs the node listens on, most reachable first. TCP and QUIC entries for the same node are separate addresses, not one address with two transports." }
+              {
+                "name": "peerId",
+                "required": true,
+                "type": "text",
+                "description": "The libp2p peer id, derived from the community key pair. See contracts/test-vectors — the derivation is contracted because the two implementations must agree on it."
+              },
+              {
+                "name": "addresses",
+                "required": true,
+                "type": "text[]",
+                "description": "Multiaddrs the node listens on, most reachable first. TCP and QUIC entries for the same node are separate addresses, not one address with two transports."
+              }
             ]
           },
           {
@@ -38,7 +48,12 @@
             "fields": [
               { "name": "peerId", "required": true, "type": "text" },
               { "name": "addresses", "required": true, "type": "text[]" },
-              { "name": "lastSeenAt", "required": true, "type": "timestamp_ms", "description": "When this community last had contact with that node. A caller uses it to order its dialing, not to decide trust." }
+              {
+                "name": "lastSeenAt",
+                "required": true,
+                "type": "timestamp_ms",
+                "description": "When this community last had contact with that node. A caller uses it to order its dialing, not to decide trust."
+              }
             ]
           }
         ]

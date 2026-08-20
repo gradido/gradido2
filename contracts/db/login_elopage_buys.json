@@ -6,17 +6,68 @@
   "source": "database/src/entity/LoginElopageBuys.ts plus database/migration/migrations 0003 and 0021",
   "columns": [
     { "name": "id", "type": "uint64", "nullable": false, "identity": true },
-    { "name": "elopage_user_id", "type": "uint32", "nullable": true, "default": null, "note": "An Elopage number, external to gradido — not a gradido row identifier." },
-    { "name": "affiliate_program_id", "type": "uint32", "nullable": true, "default": null, "note": "External Elopage number." },
-    { "name": "publisher_id", "type": "uint32", "nullable": true, "default": null, "note": "External Elopage number. The same publisher id users.publisher_id carries." },
-    { "name": "order_id", "type": "uint32", "nullable": true, "default": null, "note": "External Elopage number." },
-    { "name": "product_id", "type": "uint32", "nullable": true, "default": null, "note": "External Elopage number." },
-    { "name": "product_price", "type": "uint32", "nullable": false, "open": "Legacy stores a price as a bare int with no unit and no currency. It is not a gradido amount and must not be read as one. What it counts has to be established from the Elopage side before anything computes with it." },
-    { "name": "payer_email", "type": "varchar(255)", "nullable": false, "description": "The only column anything reads: hasElopage counts rows matching a member's email.", "secret": true },
+    {
+      "name": "elopage_user_id",
+      "type": "uint32",
+      "nullable": true,
+      "default": null,
+      "note": "An Elopage number, external to gradido — not a gradido row identifier."
+    },
+    {
+      "name": "affiliate_program_id",
+      "type": "uint32",
+      "nullable": true,
+      "default": null,
+      "note": "External Elopage number."
+    },
+    {
+      "name": "publisher_id",
+      "type": "uint32",
+      "nullable": true,
+      "default": null,
+      "note": "External Elopage number. The same publisher id users.publisher_id carries."
+    },
+    {
+      "name": "order_id",
+      "type": "uint32",
+      "nullable": true,
+      "default": null,
+      "note": "External Elopage number."
+    },
+    {
+      "name": "product_id",
+      "type": "uint32",
+      "nullable": true,
+      "default": null,
+      "note": "External Elopage number."
+    },
+    {
+      "name": "product_price",
+      "type": "uint32",
+      "nullable": false,
+      "open": "Legacy stores a price as a bare int with no unit and no currency. It is not a gradido amount and must not be read as one. What it counts has to be established from the Elopage side before anything computes with it."
+    },
+    {
+      "name": "payer_email",
+      "type": "varchar(255)",
+      "nullable": false,
+      "description": "The only column anything reads: hasElopage counts rows matching a member's email.",
+      "secret": true
+    },
     { "name": "publisher_email", "type": "varchar(255)", "nullable": false, "secret": true },
-    { "name": "payed", "type": "bool", "nullable": false, "note": "Spelled 'payed' in legacy. Names are stable forever — see contracts/AGENTS.md — so it stays as it is." },
+    {
+      "name": "payed",
+      "type": "bool",
+      "nullable": false,
+      "note": "Spelled 'payed' in legacy. Names are stable forever — see contracts/AGENTS.md — so it stays as it is."
+    },
     { "name": "success_date", "type": "timestamp_ms", "nullable": false },
-    { "name": "event", "type": "varchar(255)", "nullable": false, "description": "The webhook event name as Elopage sent it." }
+    {
+      "name": "event",
+      "type": "varchar(255)",
+      "nullable": false,
+      "description": "The webhook event name as Elopage sent it."
+    }
   ],
   "primaryKey": ["id"],
   "unique": [],

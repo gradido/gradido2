@@ -222,33 +222,21 @@
       "description": "Soft delete. Every query on this table must exclude non-null unless it deliberately includes deleted rows."
     }
   ],
-  "primaryKey": [
-    "id"
-  ],
+  "primaryKey": ["id"],
   "unique": [
     {
       "name": "uuid_key",
-      "columns": [
-        "gradido_id",
-        "community_uuid"
-      ]
+      "columns": ["gradido_id", "community_uuid"]
     },
     {
       "name": "alias_key",
-      "columns": [
-        "alias",
-        "community_uuid"
-      ]
+      "columns": ["alias", "community_uuid"]
     }
   ],
   "indexes": [
     {
       "name": "idx_users_created_id_uuid",
-      "columns": [
-        "created_at",
-        "id",
-        "community_uuid"
-      ]
+      "columns": ["created_at", "id", "community_uuid"]
     }
   ],
   "notes": [

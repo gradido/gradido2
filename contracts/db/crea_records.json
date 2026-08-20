@@ -6,34 +6,120 @@
   "source": "database/src/entity/CreaRecord.ts plus database/migration/migrations 0105",
   "columns": [
     { "name": "id", "type": "uint64", "nullable": false, "identity": true },
-    { "name": "record_uuid", "type": "uuid", "nullable": false, "description": "The identifier the record is known by outside this database. Unique." },
-    { "name": "contribution_ref", "type": "varchar(64)", "nullable": false, "description": "Which contribution this is about, as a reference rather than a foreign key — the record outlives the row it describes." },
-    { "name": "community_uuid", "type": "uuid", "nullable": true, "default": null, "references": { "table": "communities", "column": "community_uuid" } },
-    { "name": "person_pseudonym", "type": "varchar(64)", "nullable": true, "default": null, "description": "Stands in for the member. Never a user id and never a name — that is what makes the table shareable as study data.", "secret": true },
-    { "name": "activity", "type": "varchar(255)", "nullable": false, "description": "What was done, in the member's own words, shortened." },
-    { "name": "category_key", "type": "varchar(48)", "nullable": false, "description": "The taxonomy entry the activity was sorted into. Meaning depends on taxonomy_version." },
+    {
+      "name": "record_uuid",
+      "type": "uuid",
+      "nullable": false,
+      "description": "The identifier the record is known by outside this database. Unique."
+    },
+    {
+      "name": "contribution_ref",
+      "type": "varchar(64)",
+      "nullable": false,
+      "description": "Which contribution this is about, as a reference rather than a foreign key — the record outlives the row it describes."
+    },
+    {
+      "name": "community_uuid",
+      "type": "uuid",
+      "nullable": true,
+      "default": null,
+      "references": { "table": "communities", "column": "community_uuid" }
+    },
+    {
+      "name": "person_pseudonym",
+      "type": "varchar(64)",
+      "nullable": true,
+      "default": null,
+      "description": "Stands in for the member. Never a user id and never a name — that is what makes the table shareable as study data.",
+      "secret": true
+    },
+    {
+      "name": "activity",
+      "type": "varchar(255)",
+      "nullable": false,
+      "description": "What was done, in the member's own words, shortened."
+    },
+    {
+      "name": "category_key",
+      "type": "varchar(48)",
+      "nullable": false,
+      "description": "The taxonomy entry the activity was sorted into. Meaning depends on taxonomy_version."
+    },
     { "name": "output_type", "type": "varchar(24)", "nullable": false },
-    { "name": "hours", "type": "double", "nullable": true, "default": null, "open": "The type vocabulary has no floating point entry, on purpose — nothing else in the schema needs one. Hours could be an integer count of minutes and the question goes away. Decide before the Crea domain is rebuilt." },
-    { "name": "hours_estimated", "type": "bool", "nullable": false, "default": "false", "description": "Whether the assistant estimated the hours or the member stated them." },
-    { "name": "crea_verdict", "type": "varchar(12)", "nullable": false, "description": "What the assistant concluded.", "open": "An open string set in legacy. Contract it as an enum once the Crea domain is rebuilt — the same question events.type raises." },
-    { "name": "confidence", "type": "varchar(8)", "nullable": false, "open": "same as crea_verdict" },
-    { "name": "applied_rule", "type": "varchar(48)", "nullable": true, "default": null, "description": "Which rule of ruleset_version produced the verdict." },
-    { "name": "discrepancy", "type": "varchar(24)", "nullable": false, "default": "none", "description": "Where the assistant and the moderator disagreed." },
+    {
+      "name": "hours",
+      "type": "double",
+      "nullable": true,
+      "default": null,
+      "open": "The type vocabulary has no floating point entry, on purpose — nothing else in the schema needs one. Hours could be an integer count of minutes and the question goes away. Decide before the Crea domain is rebuilt."
+    },
+    {
+      "name": "hours_estimated",
+      "type": "bool",
+      "nullable": false,
+      "default": "false",
+      "description": "Whether the assistant estimated the hours or the member stated them."
+    },
+    {
+      "name": "crea_verdict",
+      "type": "varchar(12)",
+      "nullable": false,
+      "description": "What the assistant concluded.",
+      "open": "An open string set in legacy. Contract it as an enum once the Crea domain is rebuilt — the same question events.type raises."
+    },
+    {
+      "name": "confidence",
+      "type": "varchar(8)",
+      "nullable": false,
+      "open": "same as crea_verdict"
+    },
+    {
+      "name": "applied_rule",
+      "type": "varchar(48)",
+      "nullable": true,
+      "default": null,
+      "description": "Which rule of ruleset_version produced the verdict."
+    },
+    {
+      "name": "discrepancy",
+      "type": "varchar(24)",
+      "nullable": false,
+      "default": "none",
+      "description": "Where the assistant and the moderator disagreed."
+    },
     { "name": "overall_verdict", "type": "varchar(12)", "nullable": true, "default": null },
-    { "name": "moderator_final", "type": "varchar(24)", "nullable": true, "default": null, "description": "What the moderator decided in the end. NULL while nobody has looked." },
+    {
+      "name": "moderator_final",
+      "type": "varchar(24)",
+      "nullable": true,
+      "default": null,
+      "description": "What the moderator decided in the end. NULL while nobody has looked."
+    },
     { "name": "moderator_comment", "type": "text", "nullable": true, "default": null },
-    { "name": "raw_text", "type": "text", "nullable": true, "default": null, "description": "The submitted text as it was.", "secret": true, "note": "This is the one column that can carry something identifying, since a member may name themselves in their own text. It is not study data in the sense the rest of the row is." },
+    {
+      "name": "raw_text",
+      "type": "text",
+      "nullable": true,
+      "default": null,
+      "description": "The submitted text as it was.",
+      "secret": true,
+      "note": "This is the one column that can carry something identifying, since a member may name themselves in their own text. It is not study data in the sense the rest of the row is."
+    },
     { "name": "taxonomy_version", "type": "uint32", "nullable": false, "default": "1" },
     { "name": "ruleset_version", "type": "uint32", "nullable": false, "default": "1" },
     { "name": "behavior_version", "type": "uint32", "nullable": false, "default": "1" },
-    { "name": "model", "type": "varchar(48)", "nullable": true, "default": null, "description": "Which model produced the evaluation. NULL for a row written before the setting existed." },
+    {
+      "name": "model",
+      "type": "varchar(48)",
+      "nullable": true,
+      "default": null,
+      "description": "Which model produced the evaluation. NULL for a row written before the setting existed."
+    },
     { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" },
     { "name": "updated_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
   ],
   "primaryKey": ["id"],
-  "unique": [
-    { "name": "uniq_crea_records_record_uuid", "columns": ["record_uuid"] }
-  ],
+  "unique": [{ "name": "uniq_crea_records_record_uuid", "columns": ["record_uuid"] }],
   "indexes": [
     { "name": "idx_crea_records_contribution_ref", "columns": ["contribution_ref"] },
     { "name": "idx_crea_records_community_uuid", "columns": ["community_uuid"] },

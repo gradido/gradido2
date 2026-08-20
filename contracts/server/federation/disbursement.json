@@ -5,12 +5,8 @@
   "model": "Disbursement",
   "description": "Redeeming a transaction link whose sender lives in another community.",
   "mount": "/api/{apiVersion}",
-  "apiVersions": [
-    "1_0"
-  ],
-  "source": [
-    "../gradido/federation/src/graphql/api/1_0/resolver/DisbursementResolver.ts"
-  ],
+  "apiVersions": ["1_0"],
+  "source": ["../gradido/federation/src/graphql/api/1_0/resolver/DisbursementResolver.ts"],
   "routes": [
     {
       "name": "disbursement.processJwtOnSenderCommunity",

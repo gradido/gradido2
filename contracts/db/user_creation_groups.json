@@ -6,18 +6,37 @@
   "source": "database/src/entity/UserCreationGroup.ts plus database/migration/migrations 0108 and 0110",
   "columns": [
     { "name": "id", "type": "uint64", "nullable": false, "identity": true },
-    { "name": "user_id", "type": "uint64", "nullable": false, "references": { "table": "users", "column": "id" } },
-    { "name": "creation_group_id", "type": "uint64", "nullable": false, "references": { "table": "creation_groups", "column": "id" }, "legacyName": "group_tag_id" },
-    { "name": "sort_order", "type": "uint32", "nullable": false, "default": "0", "description": "Lowest wins. Ties are not resolved by the schema — see the note." },
+    {
+      "name": "user_id",
+      "type": "uint64",
+      "nullable": false,
+      "references": { "table": "users", "column": "id" }
+    },
+    {
+      "name": "creation_group_id",
+      "type": "uint64",
+      "nullable": false,
+      "references": { "table": "creation_groups", "column": "id" },
+      "legacyName": "group_tag_id"
+    },
+    {
+      "name": "sort_order",
+      "type": "uint32",
+      "nullable": false,
+      "default": "0",
+      "description": "Lowest wins. Ties are not resolved by the schema — see the note."
+    },
     { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" },
     { "name": "updated_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
   ],
   "primaryKey": ["id"],
-  "unique": [
-    { "name": "uniq_user_creation_group", "columns": ["user_id", "creation_group_id"] }
-  ],
+  "unique": [{ "name": "uniq_user_creation_group", "columns": ["user_id", "creation_group_id"] }],
   "indexes": [
-    { "name": "idx_ucg_user_id", "columns": ["user_id"], "note": "Redundant with the leading column of uniq_user_creation_group. Do not recreate it in gradido2." },
+    {
+      "name": "idx_ucg_user_id",
+      "columns": ["user_id"],
+      "note": "Redundant with the leading column of uniq_user_creation_group. Do not recreate it in gradido2."
+    },
     { "name": "idx_ucg_creation_group_id", "columns": ["creation_group_id"] }
   ],
   "notes": [

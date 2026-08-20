@@ -5,13 +5,8 @@
   "model": "Authentication",
   "description": "The handshake that establishes a trusted channel between two communities.",
   "mount": "/api/{apiVersion}",
-  "apiVersions": [
-    "1_0",
-    "1_1"
-  ],
-  "source": [
-    "../gradido/federation/src/graphql/api/1_0/resolver/AuthenticationResolver.ts"
-  ],
+  "apiVersions": ["1_0", "1_1"],
+  "source": ["../gradido/federation/src/graphql/api/1_0/resolver/AuthenticationResolver.ts"],
   "routes": [
     {
       "name": "authentication.openConnection",

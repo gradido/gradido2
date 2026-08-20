@@ -5,17 +5,13 @@
   "model": "ContributionLink",
   "description": "Links a community publishes so members can claim a recurring contribution.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/ContributionLinkResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/ContributionLinkResolver.ts"],
   "routes": [
     {
       "name": "contributionLink.create",
       "method": "POST",
       "path": "/contribution-link/create",
-      "rights": [
-        "CREATE_CONTRIBUTION_LINK"
-      ],
+      "rights": ["CREATE_CONTRIBUTION_LINK"],
       "request": {
         "fields": [
           {
@@ -82,17 +78,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionLinkResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     },
     {
       "name": "contributionLink.list",
       "method": "GET",
       "path": "/contribution-link/list",
-      "rights": [
-        "LIST_CONTRIBUTION_LINKS"
-      ],
+      "rights": ["LIST_CONTRIBUTION_LINKS"],
       "request": {
         "fields": [
           {
@@ -133,20 +125,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionLinkResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contributionLink.delete",
       "method": "POST",
       "path": "/contribution-link/delete",
-      "rights": [
-        "DELETE_CONTRIBUTION_LINK"
-      ],
+      "rights": ["DELETE_CONTRIBUTION_LINK"],
       "request": {
         "fields": [
           {
@@ -169,17 +154,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionLinkResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     },
     {
       "name": "contributionLink.update",
       "method": "POST",
       "path": "/contribution-link/update",
-      "rights": [
-        "UPDATE_CONTRIBUTION_LINK"
-      ],
+      "rights": ["UPDATE_CONTRIBUTION_LINK"],
       "request": {
         "fields": [
           {
@@ -252,9 +233,7 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionLinkResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     }
   ]
 }

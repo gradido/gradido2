@@ -5,17 +5,13 @@
   "model": "ThankYouCard",
   "description": "A member’s printed cards and the settings (PIN, limits) behind them.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"],
   "routes": [
     {
       "name": "thankYouCard.getSettings",
       "method": "GET",
       "path": "/thank-you-card/get-settings",
-      "rights": [
-        "MANAGE_OWN_THANK_YOU_CARD"
-      ],
+      "rights": ["MANAGE_OWN_THANK_YOU_CARD"],
       "request": null,
       "response": {
         "nullable": true,
@@ -31,20 +27,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "thankYouCard.list",
       "method": "GET",
       "path": "/thank-you-card/list",
-      "rights": [
-        "MANAGE_OWN_THANK_YOU_CARD"
-      ],
+      "rights": ["MANAGE_OWN_THANK_YOU_CARD"],
       "request": null,
       "response": {
         "nullable": false,
@@ -60,20 +49,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "thankYouCard.setSettings",
       "method": "POST",
       "path": "/thank-you-card/set-settings",
-      "rights": [
-        "MANAGE_OWN_THANK_YOU_CARD"
-      ],
+      "rights": ["MANAGE_OWN_THANK_YOU_CARD"],
       "request": {
         "fields": [
           {
@@ -110,20 +92,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "thankYouCard.setLimits",
       "method": "POST",
       "path": "/thank-you-card/set-limits",
-      "rights": [
-        "MANAGE_OWN_THANK_YOU_CARD"
-      ],
+      "rights": ["MANAGE_OWN_THANK_YOU_CARD"],
       "request": {
         "fields": [
           {
@@ -154,20 +129,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "thankYouCard.deleteSettings",
       "method": "POST",
       "path": "/thank-you-card/delete-settings",
-      "rights": [
-        "MANAGE_OWN_THANK_YOU_CARD"
-      ],
+      "rights": ["MANAGE_OWN_THANK_YOU_CARD"],
       "request": null,
       "response": {
         "nullable": false,
@@ -181,20 +149,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "thankYouCard.create",
       "method": "POST",
       "path": "/thank-you-card/create",
-      "rights": [
-        "MANAGE_OWN_THANK_YOU_CARD"
-      ],
+      "rights": ["MANAGE_OWN_THANK_YOU_CARD"],
       "request": {
         "fields": [
           {
@@ -219,20 +180,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "thankYouCard.block",
       "method": "POST",
       "path": "/thank-you-card/block",
-      "rights": [
-        "MANAGE_OWN_THANK_YOU_CARD"
-      ],
+      "rights": ["MANAGE_OWN_THANK_YOU_CARD"],
       "request": {
         "fields": [
           {
@@ -257,20 +211,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "thankYouCard.unblock",
       "method": "POST",
       "path": "/thank-you-card/unblock",
-      "rights": [
-        "MANAGE_OWN_THANK_YOU_CARD"
-      ],
+      "rights": ["MANAGE_OWN_THANK_YOU_CARD"],
       "request": {
         "fields": [
           {
@@ -295,12 +242,7 @@
         "file": "../gradido/backend/src/graphql/resolver/ThankYouCardResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     }
   ]
 }

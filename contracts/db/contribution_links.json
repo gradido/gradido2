@@ -6,21 +6,102 @@
   "source": "database/src/entity/ContributionLink.ts plus database/migration/migrations",
   "columns": [
     { "name": "id", "type": "uint64", "nullable": false, "identity": true },
-    { "name": "name", "type": "varchar(100)", "nullable": false, "maxChars": "CONTRIBUTIONLINK_NAME_MAX_CHARS", "minChars": "CONTRIBUTIONLINK_NAME_MIN_CHARS" },
-    { "name": "memo", "type": "varchar(512)", "nullable": false, "maxChars": "MEMO_MAX_CHARS", "minChars": "MEMO_MIN_CHARS", "description": "Becomes the memo of every contribution claimed through this link." },
-    { "name": "code", "type": "varchar(24)", "nullable": false, "description": "The code carried in the published link. Unlike a transaction link this one is meant to be handed out widely — it is not a bearer secret." },
-    { "name": "amount_gdd4", "type": "gradido_cent", "nullable": false, "max": "MAX_CREATION_AMOUNT", "description": "What one claim is worth.", "legacyName": "amount" },
-    { "name": "cycle", "type": "varchar(12)", "nullable": false, "default": "ONCE", "enum": "ContributionCycleType", "description": "How often the same member may claim it." },
-    { "name": "max_per_cycle", "type": "uint32", "nullable": false, "default": "1", "description": "Claims per member per cycle." },
-    { "name": "max_amount_per_month_gdd4", "type": "gradido_cent", "nullable": true, "default": null, "legacyName": "max_amount_per_month" },
-    { "name": "total_max_count_of_contribution", "type": "uint32", "nullable": true, "default": null, "description": "Cap across all members, not per member. NULL means uncapped." },
-    { "name": "max_account_balance_gdd4", "type": "gradido_cent", "nullable": true, "default": null, "description": "Refuse the claim if the member's balance is already above this. NULL means no such check.", "legacyName": "max_account_balance" },
-    { "name": "min_gap_hours", "type": "uint32", "nullable": true, "default": null, "description": "Minimum distance between two claims by the same member, on top of the cycle." },
+    {
+      "name": "name",
+      "type": "varchar(100)",
+      "nullable": false,
+      "maxChars": "CONTRIBUTIONLINK_NAME_MAX_CHARS",
+      "minChars": "CONTRIBUTIONLINK_NAME_MIN_CHARS"
+    },
+    {
+      "name": "memo",
+      "type": "varchar(512)",
+      "nullable": false,
+      "maxChars": "MEMO_MAX_CHARS",
+      "minChars": "MEMO_MIN_CHARS",
+      "description": "Becomes the memo of every contribution claimed through this link."
+    },
+    {
+      "name": "code",
+      "type": "varchar(24)",
+      "nullable": false,
+      "description": "The code carried in the published link. Unlike a transaction link this one is meant to be handed out widely — it is not a bearer secret."
+    },
+    {
+      "name": "amount_gdd4",
+      "type": "gradido_cent",
+      "nullable": false,
+      "max": "MAX_CREATION_AMOUNT",
+      "description": "What one claim is worth.",
+      "legacyName": "amount"
+    },
+    {
+      "name": "cycle",
+      "type": "varchar(12)",
+      "nullable": false,
+      "default": "ONCE",
+      "enum": "ContributionCycleType",
+      "description": "How often the same member may claim it."
+    },
+    {
+      "name": "max_per_cycle",
+      "type": "uint32",
+      "nullable": false,
+      "default": "1",
+      "description": "Claims per member per cycle."
+    },
+    {
+      "name": "max_amount_per_month_gdd4",
+      "type": "gradido_cent",
+      "nullable": true,
+      "default": null,
+      "legacyName": "max_amount_per_month"
+    },
+    {
+      "name": "total_max_count_of_contribution",
+      "type": "uint32",
+      "nullable": true,
+      "default": null,
+      "description": "Cap across all members, not per member. NULL means uncapped."
+    },
+    {
+      "name": "max_account_balance_gdd4",
+      "type": "gradido_cent",
+      "nullable": true,
+      "default": null,
+      "description": "Refuse the claim if the member's balance is already above this. NULL means no such check.",
+      "legacyName": "max_account_balance"
+    },
+    {
+      "name": "min_gap_hours",
+      "type": "uint32",
+      "nullable": true,
+      "default": null,
+      "description": "Minimum distance between two claims by the same member, on top of the cycle."
+    },
     { "name": "valid_from", "type": "timestamp_ms", "nullable": false },
-    { "name": "valid_to", "type": "timestamp_ms", "nullable": true, "default": null, "description": "NULL means open ended." },
-    { "name": "link_enabled", "type": "bool", "nullable": false, "default": "true", "description": "An admin switch that is independent of the validity window. Disabled inside the window is a normal state." },
+    {
+      "name": "valid_to",
+      "type": "timestamp_ms",
+      "nullable": true,
+      "default": null,
+      "description": "NULL means open ended."
+    },
+    {
+      "name": "link_enabled",
+      "type": "bool",
+      "nullable": false,
+      "default": "true",
+      "description": "An admin switch that is independent of the validity window. Disabled inside the window is a normal state."
+    },
     { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" },
-    { "name": "deleted_at", "type": "timestamp_ms", "nullable": true, "default": null, "description": "Soft delete. The contributions that were claimed through the link keep pointing at it." }
+    {
+      "name": "deleted_at",
+      "type": "timestamp_ms",
+      "nullable": true,
+      "default": null,
+      "description": "Soft delete. The contributions that were claimed through the link keep pointing at it."
+    }
   ],
   "primaryKey": ["id"],
   "unique": [],

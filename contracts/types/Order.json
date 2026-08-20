@@ -7,8 +7,5 @@
   "storedIn": null,
   "description": "Sort direction on a paginated list route. Request-only — no column holds it.",
   "unknownValuePolicy": "reject",
-  "values": [
-    { "name": "ORDER_ASC", "value": "ASC" },
-    { "name": "ORDER_DESC", "value": "DESC" }
-  ]
+  "values": [{ "name": "ORDER_ASC", "value": "ASC" }, { "name": "ORDER_DESC", "value": "DESC" }]
 }

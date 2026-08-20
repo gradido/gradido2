@@ -5,17 +5,13 @@
   "model": "MatchingEntry",
   "description": "Offers and requests a member publishes for matching.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/MatchingEntryResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/MatchingEntryResolver.ts"],
   "routes": [
     {
       "name": "matchingEntry.list",
       "method": "GET",
       "path": "/matching-entry/list",
-      "rights": [
-        "LIST_MATCHING_ENTRY"
-      ],
+      "rights": ["LIST_MATCHING_ENTRY"],
       "request": null,
       "response": {
         "nullable": false,
@@ -31,20 +27,13 @@
         "file": "../gradido/backend/src/graphql/resolver/MatchingEntryResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "matchingEntry.create",
       "method": "POST",
       "path": "/matching-entry/create",
-      "rights": [
-        "CREATE_MATCHING_ENTRY"
-      ],
+      "rights": ["CREATE_MATCHING_ENTRY"],
       "request": {
         "fields": [
           {
@@ -87,20 +76,13 @@
         "file": "../gradido/backend/src/graphql/resolver/MatchingEntryResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "matchingEntry.update",
       "method": "POST",
       "path": "/matching-entry/update",
-      "rights": [
-        "UPDATE_MATCHING_ENTRY"
-      ],
+      "rights": ["UPDATE_MATCHING_ENTRY"],
       "request": {
         "fields": [
           {
@@ -149,20 +131,13 @@
         "file": "../gradido/backend/src/graphql/resolver/MatchingEntryResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "matchingEntry.setActive",
       "method": "POST",
       "path": "/matching-entry/set-active",
-      "rights": [
-        "UPDATE_MATCHING_ENTRY"
-      ],
+      "rights": ["UPDATE_MATCHING_ENTRY"],
       "request": {
         "fields": [
           {
@@ -193,20 +168,13 @@
         "file": "../gradido/backend/src/graphql/resolver/MatchingEntryResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "matchingEntry.delete",
       "method": "POST",
       "path": "/matching-entry/delete",
-      "rights": [
-        "DELETE_MATCHING_ENTRY"
-      ],
+      "rights": ["DELETE_MATCHING_ENTRY"],
       "request": {
         "fields": [
           {
@@ -229,12 +197,7 @@
         "file": "../gradido/backend/src/graphql/resolver/MatchingEntryResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     }
   ]
 }

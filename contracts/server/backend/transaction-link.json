@@ -5,17 +5,13 @@
   "model": "TransactionLink",
   "description": "Redeemable links a member creates to hand out an amount.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"],
   "routes": [
     {
       "name": "transactionLink.create",
       "method": "POST",
       "path": "/transaction-link/create",
-      "rights": [
-        "CREATE_TRANSACTION_LINK"
-      ],
+      "rights": ["CREATE_TRANSACTION_LINK"],
       "request": {
         "fields": [
           {
@@ -46,20 +42,13 @@
         "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "transactionLink.delete",
       "method": "POST",
       "path": "/transaction-link/delete",
-      "rights": [
-        "DELETE_TRANSACTION_LINK"
-      ],
+      "rights": ["DELETE_TRANSACTION_LINK"],
       "request": {
         "fields": [
           {
@@ -82,20 +71,13 @@
         "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "transactionLink.query",
       "method": "GET",
       "path": "/transaction-link/query",
-      "rights": [
-        "QUERY_TRANSACTION_LINK"
-      ],
+      "rights": ["QUERY_TRANSACTION_LINK"],
       "request": {
         "fields": [
           {
@@ -120,21 +102,13 @@
         "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
       },
       "auth": "public",
-      "roles": [
-        "unauthorized",
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["unauthorized", "user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "transactionLink.redeem",
       "method": "POST",
       "path": "/transaction-link/redeem",
-      "rights": [
-        "REDEEM_TRANSACTION_LINK"
-      ],
+      "rights": ["REDEEM_TRANSACTION_LINK"],
       "request": {
         "fields": [
           {
@@ -157,20 +131,13 @@
         "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "transactionLink.createRedeemJwt",
       "method": "POST",
       "path": "/transaction-link/create-redeem-jwt",
-      "rights": [
-        "QUERY_REDEEM_JWT"
-      ],
+      "rights": ["QUERY_REDEEM_JWT"],
       "request": {
         "fields": [
           {
@@ -249,21 +216,13 @@
         "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
       },
       "auth": "public",
-      "roles": [
-        "unauthorized",
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["unauthorized", "user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "transactionLink.disburse",
       "method": "POST",
       "path": "/transaction-link/disburse",
-      "rights": [
-        "DISBURSE_TRANSACTION_LINK"
-      ],
+      "rights": ["DISBURSE_TRANSACTION_LINK"],
       "request": {
         "fields": [
           {
@@ -348,20 +307,13 @@
         "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "transactionLink.list",
       "method": "GET",
       "path": "/transaction-link/list",
-      "rights": [
-        "LIST_TRANSACTION_LINKS"
-      ],
+      "rights": ["LIST_TRANSACTION_LINKS"],
       "request": {
         "fields": [
           {
@@ -399,20 +351,13 @@
         "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "transactionLink.adminList",
       "method": "GET",
       "path": "/transaction-link/admin-list",
-      "rights": [
-        "LIST_TRANSACTION_LINKS_ADMIN"
-      ],
+      "rights": ["LIST_TRANSACTION_LINKS_ADMIN"],
       "request": {
         "fields": [
           {
@@ -474,11 +419,7 @@
         "file": "../gradido/backend/src/graphql/resolver/TransactionLinkResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     }
   ]
 }

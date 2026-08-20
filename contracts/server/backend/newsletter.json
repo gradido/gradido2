@@ -5,17 +5,13 @@
   "model": "Newsletter",
   "description": "Newsletter subscription, backed by the Klicktipp service.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/KlicktippResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/KlicktippResolver.ts"],
   "routes": [
     {
       "name": "newsletter.unsubscribe",
       "method": "POST",
       "path": "/newsletter/unsubscribe",
-      "rights": [
-        "UNSUBSCRIBE_NEWSLETTER"
-      ],
+      "rights": ["UNSUBSCRIBE_NEWSLETTER"],
       "request": null,
       "response": {
         "nullable": false,
@@ -29,20 +25,13 @@
         "file": "../gradido/backend/src/graphql/resolver/KlicktippResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "newsletter.subscribe",
       "method": "POST",
       "path": "/newsletter/subscribe",
-      "rights": [
-        "SUBSCRIBE_NEWSLETTER"
-      ],
+      "rights": ["SUBSCRIBE_NEWSLETTER"],
       "request": null,
       "response": {
         "nullable": false,
@@ -56,12 +45,7 @@
         "file": "../gradido/backend/src/graphql/resolver/KlicktippResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     }
   ]
 }

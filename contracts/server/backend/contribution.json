@@ -5,17 +5,13 @@
   "model": "Contribution",
   "description": "Member contributions: submission, the member and moderator lists, and the admin creation path.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/ContributionResolver.ts"],
   "routes": [
     {
       "name": "contribution.get",
       "method": "GET",
       "path": "/contribution/get",
-      "rights": [
-        "ADMIN_LIST_CONTRIBUTIONS"
-      ],
+      "rights": ["ADMIN_LIST_CONTRIBUTIONS"],
       "request": {
         "fields": [
           {
@@ -40,19 +36,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contribution.create",
       "method": "POST",
       "path": "/contribution/create",
-      "rights": [
-        "CREATE_CONTRIBUTION"
-      ],
+      "rights": ["CREATE_CONTRIBUTION"],
       "request": {
         "fields": [
           {
@@ -96,20 +86,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contribution.assignCreationGroups",
       "method": "POST",
       "path": "/contribution/assign-creation-groups",
-      "rights": [
-        "ADMIN_UPDATE_CONTRIBUTION"
-      ],
+      "rights": ["ADMIN_UPDATE_CONTRIBUTION"],
       "request": {
         "fields": [
           {
@@ -138,19 +121,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contribution.delete",
       "method": "POST",
       "path": "/contribution/delete",
-      "rights": [
-        "DELETE_CONTRIBUTION"
-      ],
+      "rights": ["DELETE_CONTRIBUTION"],
       "request": {
         "fields": [
           {
@@ -173,20 +150,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contribution.list",
       "method": "GET",
       "path": "/contribution/list",
-      "rights": [
-        "LIST_CONTRIBUTIONS"
-      ],
+      "rights": ["LIST_CONTRIBUTIONS"],
       "request": {
         "fields": [
           {
@@ -236,20 +206,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contribution.countInProgress",
       "method": "GET",
       "path": "/contribution/count-in-progress",
-      "rights": [
-        "LIST_CONTRIBUTIONS"
-      ],
+      "rights": ["LIST_CONTRIBUTIONS"],
       "request": null,
       "response": {
         "nullable": false,
@@ -263,20 +226,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contribution.listAll",
       "method": "GET",
       "path": "/contribution/list-all",
-      "rights": [
-        "LIST_ALL_CONTRIBUTIONS"
-      ],
+      "rights": ["LIST_ALL_CONTRIBUTIONS"],
       "request": {
         "fields": [
           {
@@ -326,20 +282,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contribution.update",
       "method": "POST",
       "path": "/contribution/update",
-      "rights": [
-        "UPDATE_CONTRIBUTION"
-      ],
+      "rights": ["UPDATE_CONTRIBUTION"],
       "request": {
         "fields": [
           {
@@ -389,20 +338,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contribution.adminCreate",
       "method": "POST",
       "path": "/contribution/admin-create",
-      "rights": [
-        "ADMIN_CREATE_CONTRIBUTION"
-      ],
+      "rights": ["ADMIN_CREATE_CONTRIBUTION"],
       "request": {
         "fields": [
           {
@@ -444,19 +386,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contribution.adminUpdate",
       "method": "POST",
       "path": "/contribution/admin-update",
-      "rights": [
-        "ADMIN_UPDATE_CONTRIBUTION"
-      ],
+      "rights": ["ADMIN_UPDATE_CONTRIBUTION"],
       "request": {
         "fields": [
           {
@@ -506,19 +442,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contribution.adminList",
       "method": "GET",
       "path": "/contribution/admin-list",
-      "rights": [
-        "ADMIN_LIST_CONTRIBUTIONS"
-      ],
+      "rights": ["ADMIN_LIST_CONTRIBUTIONS"],
       "request": {
         "fields": [
           {
@@ -587,19 +517,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contribution.adminDelete",
       "method": "POST",
       "path": "/contribution/admin-delete",
-      "rights": [
-        "ADMIN_DELETE_CONTRIBUTION"
-      ],
+      "rights": ["ADMIN_DELETE_CONTRIBUTION"],
       "request": {
         "fields": [
           {
@@ -622,19 +546,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contribution.confirm",
       "method": "POST",
       "path": "/contribution/confirm",
-      "rights": [
-        "CONFIRM_CONTRIBUTION"
-      ],
+      "rights": ["CONFIRM_CONTRIBUTION"],
       "request": {
         "fields": [
           {
@@ -657,19 +575,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contribution.openCreations",
       "method": "GET",
       "path": "/contribution/open-creations",
-      "rights": [
-        "OPEN_CREATIONS"
-      ],
+      "rights": ["OPEN_CREATIONS"],
       "request": null,
       "response": {
         "nullable": false,
@@ -685,20 +597,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contribution.adminOpenCreations",
       "method": "GET",
       "path": "/contribution/admin-open-creations",
-      "rights": [
-        "ADMIN_OPEN_CREATIONS"
-      ],
+      "rights": ["ADMIN_OPEN_CREATIONS"],
       "request": {
         "fields": [
           {
@@ -723,19 +628,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contribution.deny",
       "method": "POST",
       "path": "/contribution/deny",
-      "rights": [
-        "DENY_CONTRIBUTION"
-      ],
+      "rights": ["DENY_CONTRIBUTION"],
       "request": {
         "fields": [
           {
@@ -758,11 +657,7 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     }
   ]
 }

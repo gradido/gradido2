@@ -5,17 +5,13 @@
   "model": "ProjectBranding",
   "description": "Per-project branding shown by frontend and admin.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"],
   "routes": [
     {
       "name": "projectBranding.list",
       "method": "GET",
       "path": "/project-branding/list",
-      "rights": [
-        "PROJECT_BRANDING_VIEW"
-      ],
+      "rights": ["PROJECT_BRANDING_VIEW"],
       "request": null,
       "response": {
         "nullable": false,
@@ -31,20 +27,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "projectBranding.get",
       "method": "GET",
       "path": "/project-branding/get",
-      "rights": [
-        "PROJECT_BRANDING_VIEW"
-      ],
+      "rights": ["PROJECT_BRANDING_VIEW"],
       "request": {
         "fields": [
           {
@@ -69,20 +58,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "projectBranding.getBanner",
       "method": "GET",
       "path": "/project-branding/get-banner",
-      "rights": [
-        "PROJECT_BRANDING_BANNER"
-      ],
+      "rights": ["PROJECT_BRANDING_BANNER"],
       "request": {
         "fields": [
           {
@@ -105,21 +87,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
       },
       "auth": "public",
-      "roles": [
-        "unauthorized",
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["unauthorized", "user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "projectBranding.upsert",
       "method": "POST",
       "path": "/project-branding/upsert",
-      "rights": [
-        "PROJECT_BRANDING_MUTATE"
-      ],
+      "rights": ["PROJECT_BRANDING_MUTATE"],
       "request": {
         "fields": [
           {
@@ -187,17 +161,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     },
     {
       "name": "projectBranding.delete",
       "method": "POST",
       "path": "/project-branding/delete",
-      "rights": [
-        "PROJECT_BRANDING_MUTATE"
-      ],
+      "rights": ["PROJECT_BRANDING_MUTATE"],
       "request": {
         "fields": [
           {
@@ -220,9 +190,7 @@
         "file": "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     }
   ]
 }

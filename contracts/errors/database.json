@@ -11,10 +11,7 @@
       "name": "DB_NOT_FOUND",
       "legacyName": "DBNotFoundError",
       "messageTemplate": "DB_NOT_FOUND in {table} where: {where}",
-      "parameters": [
-        { "name": "table", "type": "string" },
-        { "name": "where", "type": "string" }
-      ],
+      "parameters": [{ "name": "table", "type": "string" }, { "name": "where", "type": "string" }],
       "httpStatus": 404
     },
     {
@@ -48,9 +45,7 @@
       "name": "DB_INSERT_FAILED",
       "legacyName": "DBInsertFailed",
       "messageTemplate": "DB_INSERT_FAILED in {table}",
-      "parameters": [
-        { "name": "table", "type": "string" }
-      ],
+      "parameters": [{ "name": "table", "type": "string" }],
       "httpStatus": 500
     }
   ]

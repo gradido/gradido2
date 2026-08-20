@@ -6,19 +6,39 @@
   "source": "database/src/entity/UserAlias.ts plus database/migration/migrations 0116 and 0117",
   "columns": [
     { "name": "id", "type": "uint64", "nullable": false, "identity": true },
-    { "name": "user_id", "type": "uint64", "nullable": false, "references": { "table": "users", "column": "id" } },
+    {
+      "name": "user_id",
+      "type": "uint64",
+      "nullable": false,
+      "references": { "table": "users", "column": "id" }
+    },
     { "name": "alias", "type": "varchar(20)", "nullable": false },
-    { "name": "community_uuid", "type": "uuid", "nullable": false, "references": { "table": "communities", "column": "community_uuid" }, "description": "Names are unique per community, not globally — the same reason users.uuid_key is a pair." },
-    { "name": "origin", "type": "varchar(8)", "nullable": false, "default": "chosen", "enum": "AliasOrigin", "description": "Where the name came from. It answers two questions that do not move together: whether the member has answered the naming question at all, and whether the name cost one of their four picks." },
-    { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now", "description": "When the name was taken. The quota counts rows in the last ALIAS_QUOTA_WINDOW_MS." }
+    {
+      "name": "community_uuid",
+      "type": "uuid",
+      "nullable": false,
+      "references": { "table": "communities", "column": "community_uuid" },
+      "description": "Names are unique per community, not globally — the same reason users.uuid_key is a pair."
+    },
+    {
+      "name": "origin",
+      "type": "varchar(8)",
+      "nullable": false,
+      "default": "chosen",
+      "enum": "AliasOrigin",
+      "description": "Where the name came from. It answers two questions that do not move together: whether the member has answered the naming question at all, and whether the name cost one of their four picks."
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp_ms",
+      "nullable": false,
+      "default": "now",
+      "description": "When the name was taken. The quota counts rows in the last ALIAS_QUOTA_WINDOW_MS."
+    }
   ],
   "primaryKey": ["id"],
-  "unique": [
-    { "name": "alias", "columns": ["alias", "community_uuid"] }
-  ],
-  "indexes": [
-    { "name": "user_id", "columns": ["user_id"] }
-  ],
+  "unique": [{ "name": "alias", "columns": ["alias", "community_uuid"] }],
+  "indexes": [{ "name": "user_id", "columns": ["user_id"] }],
   "notes": [
     "Only origin = 'chosen' counts against ALIAS_QUOTA_PER_WINDOW. Keeping the name the system built is an answer, not a pick, and costs nothing. An implementation that counts rows instead of counting chosen rows charges a member a quarter of their yearly quota for a name nobody chose.",
     "'chosen' and 'adopted' mean the member has answered the question the window at first login asks; 'assigned' and 'migrated' mean they have not. That is the only thing the first-login window may test.",

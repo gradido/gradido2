@@ -5,17 +5,13 @@
   "model": "Crea",
   "description": "The AI moderation assistant: evaluating and rewriting contributions, and its settings.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/CreaResolver.ts"],
   "routes": [
     {
       "name": "crea.evaluateContribution",
       "method": "POST",
       "path": "/crea/evaluate-contribution",
-      "rights": [
-        "AI_SEND_MESSAGE"
-      ],
+      "rights": ["AI_SEND_MESSAGE"],
       "request": {
         "fields": [
           {
@@ -136,18 +132,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator-ai", "admin"]
     },
     {
       "name": "crea.rewriteResponse",
       "method": "POST",
       "path": "/crea/rewrite-response",
-      "rights": [
-        "AI_SEND_MESSAGE"
-      ],
+      "rights": ["AI_SEND_MESSAGE"],
       "request": {
         "fields": [
           {
@@ -268,18 +259,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator-ai", "admin"]
     },
     {
       "name": "crea.evaluateBatch",
       "method": "POST",
       "path": "/crea/evaluate-batch",
-      "rights": [
-        "AI_SEND_MESSAGE"
-      ],
+      "rights": ["AI_SEND_MESSAGE"],
       "request": {
         "fields": [
           {
@@ -335,18 +321,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator-ai", "admin"]
     },
     {
       "name": "crea.rewriteBatch",
       "method": "POST",
       "path": "/crea/rewrite-batch",
-      "rights": [
-        "AI_SEND_MESSAGE"
-      ],
+      "rights": ["AI_SEND_MESSAGE"],
       "request": {
         "fields": [
           {
@@ -402,18 +383,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator-ai", "admin"]
     },
     {
       "name": "crea.setSalutation",
       "method": "POST",
       "path": "/crea/set-salutation",
-      "rights": [
-        "SET_USER_SALUTATION"
-      ],
+      "rights": ["SET_USER_SALUTATION"],
       "request": {
         "fields": [
           {
@@ -442,18 +418,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator-ai", "admin"]
     },
     {
       "name": "crea.getSettings",
       "method": "GET",
       "path": "/crea/get-settings",
-      "rights": [
-        "AI_SETTINGS"
-      ],
+      "rights": ["AI_SETTINGS"],
       "request": null,
       "response": {
         "nullable": false,
@@ -469,17 +440,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     },
     {
       "name": "crea.setSettings",
       "method": "POST",
       "path": "/crea/set-settings",
-      "rights": [
-        "AI_SETTINGS"
-      ],
+      "rights": ["AI_SETTINGS"],
       "request": {
         "fields": [
           {
@@ -516,17 +483,13 @@
         "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     },
     {
       "name": "crea.testModel",
       "method": "POST",
       "path": "/crea/test-model",
-      "rights": [
-        "AI_SETTINGS"
-      ],
+      "rights": ["AI_SETTINGS"],
       "request": {
         "fields": [
           {
@@ -563,9 +526,7 @@
         "file": "../gradido/backend/src/graphql/resolver/CreaResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "admin"
-      ]
+      "roles": ["admin"]
     }
   ]
 }

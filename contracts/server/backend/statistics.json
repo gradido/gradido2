@@ -5,17 +5,13 @@
   "model": "Statistics",
   "description": "Aggregated numbers over the home community.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/StatisticsResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/StatisticsResolver.ts"],
   "routes": [
     {
       "name": "statistics.community",
       "method": "GET",
       "path": "/statistics/community",
-      "rights": [
-        "COMMUNITY_STATISTICS"
-      ],
+      "rights": ["COMMUNITY_STATISTICS"],
       "request": null,
       "response": {
         "nullable": false,
@@ -31,12 +27,7 @@
         "file": "../gradido/backend/src/graphql/resolver/StatisticsResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     }
   ]
 }

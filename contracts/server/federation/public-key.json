@@ -5,10 +5,7 @@
   "model": "PublicKey",
   "description": "The community public key, read during the handshake.",
   "mount": "/api/{apiVersion}",
-  "apiVersions": [
-    "1_0",
-    "1_1"
-  ],
+  "apiVersions": ["1_0", "1_1"],
   "source": [
     "../gradido/federation/src/graphql/api/1_0/resolver/PublicKeyResolver.ts",
     "../gradido/federation/src/graphql/api/1_1/resolver/PublicKeyResolver.ts"

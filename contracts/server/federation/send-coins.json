@@ -5,13 +5,8 @@
   "model": "SendCoins",
   "description": "The four-step cross-community transfer: vote, settle, revert, revert-settled.",
   "mount": "/api/{apiVersion}",
-  "apiVersions": [
-    "1_0",
-    "1_1"
-  ],
-  "source": [
-    "../gradido/federation/src/graphql/api/1_0/resolver/SendCoinsResolver.ts"
-  ],
+  "apiVersions": ["1_0", "1_1"],
+  "source": ["../gradido/federation/src/graphql/api/1_0/resolver/SendCoinsResolver.ts"],
   "routes": [
     {
       "name": "sendCoins.vote",

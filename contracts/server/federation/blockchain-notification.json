@@ -5,9 +5,7 @@
   "model": "BlockchainNotification",
   "description": "The DLT connector reporting back that a transaction was confirmed or rejected.",
   "mount": "/api/{apiVersion}",
-  "apiVersions": [
-    "1_0"
-  ],
+  "apiVersions": ["1_0"],
   "source": [
     "../gradido/federation/src/graphql/api/1_0/resolver/BlockchainNotificationResolver.ts"
   ],

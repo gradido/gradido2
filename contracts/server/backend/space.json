@@ -5,17 +5,13 @@
   "model": "Space",
   "description": "HumHub spaces, read through the HumHub client. Not a gradido table.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"],
   "routes": [
     {
       "name": "space.get",
       "method": "GET",
       "path": "/space/get",
-      "rights": [
-        "LIST_HUMHUB_SPACES"
-      ],
+      "rights": ["LIST_HUMHUB_SPACES"],
       "request": {
         "fields": [
           {
@@ -41,20 +37,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "space.list",
       "method": "GET",
       "path": "/space/list",
-      "rights": [
-        "LIST_HUMHUB_SPACES"
-      ],
+      "rights": ["LIST_HUMHUB_SPACES"],
       "request": {
         "fields": [
           {
@@ -87,12 +76,7 @@
         "file": "../gradido/backend/src/graphql/resolver/ProjectBrandingResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     }
   ]
 }

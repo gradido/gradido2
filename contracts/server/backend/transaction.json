@@ -5,17 +5,13 @@
   "model": "Transaction",
   "description": "The transaction list and sending coins to another member.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/TransactionResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/TransactionResolver.ts"],
   "routes": [
     {
       "name": "transaction.list",
       "method": "GET",
       "path": "/transaction/list",
-      "rights": [
-        "TRANSACTION_LIST"
-      ],
+      "rights": ["TRANSACTION_LIST"],
       "request": {
         "fields": [
           {
@@ -56,20 +52,13 @@
         "file": "../gradido/backend/src/graphql/resolver/TransactionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "transaction.sendCoins",
       "method": "POST",
       "path": "/transaction/send-coins",
-      "rights": [
-        "SEND_COINS"
-      ],
+      "rights": ["SEND_COINS"],
       "request": {
         "fields": [
           {
@@ -110,20 +99,13 @@
         "file": "../gradido/backend/src/graphql/resolver/TransactionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "transaction.sendEmail",
       "method": "POST",
       "path": "/transaction/send-email",
-      "rights": [
-        "SEND_COINS"
-      ],
+      "rights": ["SEND_COINS"],
       "request": {
         "fields": [
           {
@@ -164,12 +146,7 @@
         "file": "../gradido/backend/src/graphql/resolver/TransactionResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     }
   ]
 }

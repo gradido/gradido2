@@ -5,17 +5,13 @@
   "model": "ThankYouCardPayment",
   "description": "A till charging a thank-you card: target lookup, request, confirmation by PIN.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/ThankYouCardPaymentResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/ThankYouCardPaymentResolver.ts"],
   "routes": [
     {
       "name": "thankYouCardPayment.getTarget",
       "method": "GET",
       "path": "/thank-you-card-payment/get-target",
-      "rights": [
-        "RECEIVE_THANK_YOU_CARD_PAYMENT"
-      ],
+      "rights": ["RECEIVE_THANK_YOU_CARD_PAYMENT"],
       "request": {
         "fields": [
           {
@@ -40,20 +36,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ThankYouCardPaymentResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "thankYouCardPayment.create",
       "method": "POST",
       "path": "/thank-you-card-payment/create",
-      "rights": [
-        "RECEIVE_THANK_YOU_CARD_PAYMENT"
-      ],
+      "rights": ["RECEIVE_THANK_YOU_CARD_PAYMENT"],
       "request": {
         "fields": [
           {
@@ -90,20 +79,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ThankYouCardPaymentResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "thankYouCardPayment.confirm",
       "method": "POST",
       "path": "/thank-you-card-payment/confirm",
-      "rights": [
-        "RECEIVE_THANK_YOU_CARD_PAYMENT"
-      ],
+      "rights": ["RECEIVE_THANK_YOU_CARD_PAYMENT"],
       "request": {
         "fields": [
           {
@@ -134,12 +116,7 @@
         "file": "../gradido/backend/src/graphql/resolver/ThankYouCardPaymentResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     }
   ]
 }

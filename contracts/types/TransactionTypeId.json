@@ -10,7 +10,12 @@
     { "name": "CREATION", "value": "1" },
     { "name": "SEND", "value": "2" },
     { "name": "RECEIVE", "value": "3" },
-    { "name": "DECAY", "value": "4", "virtual": true, "description": "Never stored. Computed for display only — an implementation that writes it to the database is wrong." },
+    {
+      "name": "DECAY",
+      "value": "4",
+      "virtual": true,
+      "description": "Never stored. Computed for display only — an implementation that writes it to the database is wrong."
+    },
     { "name": "LINK_SUMMARY", "value": "5", "virtual": true }
   ]
 }

@@ -47,16 +47,12 @@
       "default": null
     }
   ],
-  "primaryKey": [
-    "id"
-  ],
+  "primaryKey": ["id"],
   "unique": [],
   "indexes": [
     {
       "name": "user_id",
-      "columns": [
-        "user_id"
-      ]
+      "columns": ["user_id"]
     }
   ],
   "notes": [

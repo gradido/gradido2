@@ -5,17 +5,13 @@
   "model": "ContributionMessage",
   "description": "The dialogue between a member and a moderator on one contribution.",
   "mount": "/",
-  "source": [
-    "../gradido/backend/src/graphql/resolver/ContributionMessageResolver.ts"
-  ],
+  "source": ["../gradido/backend/src/graphql/resolver/ContributionMessageResolver.ts"],
   "routes": [
     {
       "name": "contributionMessage.create",
       "method": "POST",
       "path": "/contribution-message/create",
-      "rights": [
-        "CREATE_CONTRIBUTION_MESSAGE"
-      ],
+      "rights": ["CREATE_CONTRIBUTION_MESSAGE"],
       "request": {
         "fields": [
           {
@@ -59,20 +55,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionMessageResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contributionMessage.list",
       "method": "GET",
       "path": "/contribution-message/list",
-      "rights": [
-        "LIST_ALL_CONTRIBUTION_MESSAGES"
-      ],
+      "rights": ["LIST_ALL_CONTRIBUTION_MESSAGES"],
       "request": {
         "fields": [
           {
@@ -119,20 +108,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionMessageResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "user",
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["user", "moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contributionMessage.adminList",
       "method": "GET",
       "path": "/contribution-message/admin-list",
-      "rights": [
-        "ADMIN_LIST_ALL_CONTRIBUTION_MESSAGES"
-      ],
+      "rights": ["ADMIN_LIST_ALL_CONTRIBUTION_MESSAGES"],
       "request": {
         "fields": [
           {
@@ -179,19 +161,13 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionMessageResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     },
     {
       "name": "contributionMessage.adminCreate",
       "method": "POST",
       "path": "/contribution-message/admin-create",
-      "rights": [
-        "ADMIN_CREATE_CONTRIBUTION_MESSAGE"
-      ],
+      "rights": ["ADMIN_CREATE_CONTRIBUTION_MESSAGE"],
       "request": {
         "fields": [
           {
@@ -235,11 +211,7 @@
         "file": "../gradido/backend/src/graphql/resolver/ContributionMessageResolver.ts"
       },
       "auth": "session",
-      "roles": [
-        "moderator",
-        "moderator-ai",
-        "admin"
-      ]
+      "roles": ["moderator", "moderator-ai", "admin"]
     }
   ]
 }

@@ -6,20 +6,53 @@
   "source": "database/src/entity/FederatedCommunity.ts plus database/migration/migrations",
   "columns": [
     { "name": "id", "type": "uint64", "nullable": false, "identity": true },
-    { "name": "foreign", "type": "bool", "nullable": false, "default": "true", "note": "Reserved word in PostgreSQL, same as communities.foreign." },
-    { "name": "public_key", "type": "bytes(32)", "nullable": true, "default": null, "references": { "table": "communities", "column": "public_key" }, "description": "The community this endpoint belongs to. Joined by key, not by id." },
-    { "name": "api_version", "type": "varchar(10)", "nullable": false, "description": "'1_0' or '1_1'. Selects which route set the endpoint serves — see server/federation/." },
-    { "name": "end_point", "type": "varchar(255)", "nullable": false, "description": "Base URL. The federation client appends the api_version to it, so it ends in a slash or is made to." },
-    { "name": "last_announced_at", "type": "timestamp_ms", "nullable": true, "default": null, "description": "When this endpoint last announced itself over the DHT." },
-    { "name": "verified_at", "type": "timestamp_ms", "nullable": true, "default": null, "description": "When the public key behind this endpoint was last confirmed by asking it." },
+    {
+      "name": "foreign",
+      "type": "bool",
+      "nullable": false,
+      "default": "true",
+      "note": "Reserved word in PostgreSQL, same as communities.foreign."
+    },
+    {
+      "name": "public_key",
+      "type": "bytes(32)",
+      "nullable": true,
+      "default": null,
+      "references": { "table": "communities", "column": "public_key" },
+      "description": "The community this endpoint belongs to. Joined by key, not by id."
+    },
+    {
+      "name": "api_version",
+      "type": "varchar(10)",
+      "nullable": false,
+      "description": "'1_0' or '1_1'. Selects which route set the endpoint serves — see server/federation/."
+    },
+    {
+      "name": "end_point",
+      "type": "varchar(255)",
+      "nullable": false,
+      "description": "Base URL. The federation client appends the api_version to it, so it ends in a slash or is made to."
+    },
+    {
+      "name": "last_announced_at",
+      "type": "timestamp_ms",
+      "nullable": true,
+      "default": null,
+      "description": "When this endpoint last announced itself over the DHT."
+    },
+    {
+      "name": "verified_at",
+      "type": "timestamp_ms",
+      "nullable": true,
+      "default": null,
+      "description": "When the public key behind this endpoint was last confirmed by asking it."
+    },
     { "name": "last_error_at", "type": "timestamp_ms", "nullable": true, "default": null },
     { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" },
     { "name": "updated_at", "type": "timestamp_ms", "nullable": true, "default": null }
   ],
   "primaryKey": ["id"],
-  "unique": [
-    { "name": "public_api_key", "columns": ["public_key", "api_version"] }
-  ],
+  "unique": [{ "name": "public_api_key", "columns": ["public_key", "api_version"] }],
   "indexes": [],
   "notes": [
     "This table was the original `communities`; migration 0065 renamed it and created a new communities table beside it. The two are still joined on public_key, which is why that column is the join key rather than a community id.",
