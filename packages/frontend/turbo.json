@@ -1,0 +1,35 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "locale": {
+      "inputs": ["src/locales/**"],
+      "outputs": ["public/locales/**"]
+    },
+    "build": {
+      "dependsOn": ["locale", "^build"],
+      "outputs": ["build/**"],
+      "cache": true,
+      "env": [
+        "API_BASE_URL",
+        "BASE_PATH",
+        "COMMUNITY_NAME",
+        "DEV_SERVER_PORT",
+        "NODE_ENV",
+        "WEBSITE_URL"
+      ]
+    },
+    "dev": {
+      "dependsOn": ["locale", "^build"],
+      "persistent": true,
+      "cache": false,
+      "env": [
+        "API_BASE_URL",
+        "BASE_PATH",
+        "COMMUNITY_NAME",
+        "DEV_SERVER_PORT",
+        "NODE_ENV",
+        "WEBSITE_URL"
+      ]
+    }
+  }
+}

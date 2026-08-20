@@ -1,0 +1,244 @@
+// Layout of the authentication pages: the photo blob on the left, the form column
+// on the right. Values come from the design tokens; only the geometry lives here.
+
+.auth-template {
+  overflow-x: hidden;
+}
+
+/* Header — the logo sits on a white blob that overlaps the photo */
+
+.auth-header {
+  z-index: 1;
+  height: var(--gdd-auth-header-height);
+
+  > nav,
+  > nav > .navbar-brand {
+    padding: 0 !important;
+  }
+}
+
+.auth-header-brand {
+  position: relative;
+}
+
+.auth-header-logo {
+  position: absolute;
+  padding: 0.5rem;
+}
+
+.auth-header-leaves {
+  top: -11px;
+  right: 7%;
+  max-width: 64%;
+}
+
+/* Left column — fixed, so scrolling the form does not move the photo */
+
+.auth-aside {
+  top: 0;
+  bottom: 0;
+  width: var(--gdd-auth-aside-width);
+}
+
+.auth-aside-image {
+  top: 0;
+  bottom: 0;
+}
+
+.auth-aside-cta {
+  max-width: 733px;
+  margin-top: 520px;
+  text-shadow: var(--gdd-shadow-text);
+}
+
+/* Carousel — cross-faded rather than slid, because the blob mask makes a horizontal
+   slide read as a glitch at the curved edge. */
+
+.auth-carousel {
+  position: relative;
+  top: -16px;
+  height: 110%;
+}
+
+.auth-carousel-inner {
+  height: 100%;
+  overflow: hidden;
+  border-radius: var(--gdd-radius-blob);
+  backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
+}
+
+.auth-carousel-slide {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-size: cover;
+  opacity: 0;
+  transition: opacity 1.2s ease-in-out;
+
+  &.is-active {
+    opacity: 1;
+  }
+}
+
+.auth-carousel-caption {
+  position: absolute;
+  top: 301px;
+  right: 15%;
+  left: 15%;
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem;
+  color: #fff;
+  text-align: center;
+  font-size: var(--gdd-caption-size);
+  text-shadow: var(--gdd-shadow-text);
+}
+
+.auth-carousel-title {
+  font-size: var(--gdd-caption-title-size);
+}
+
+.auth-carousel-subtitle {
+  font-size: var(--gdd-caption-subtitle-size);
+}
+
+/* Form column */
+
+.auth-column {
+  z-index: 1000;
+}
+
+.page-font-size {
+  font-size: 1rem;
+}
+
+.svg-type {
+  width: 19px;
+
+  &:hover {
+    filter: invert(38%) sepia(18%) saturate(5307%) hue-rotate(179deg) brightness(89%) contrast(89%);
+  }
+}
+
+.auth-coin {
+  width: 6rem;
+  height: 6rem;
+}
+
+/* Language switch */
+
+.language-switch {
+  position: relative;
+  display: inline-block;
+}
+
+.ls-trigger {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0;
+  font: inherit;
+  line-height: 1.2;
+  color: inherit;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+
+  &:hover .ls-current {
+    text-decoration: underline;
+  }
+}
+
+.ls-globe {
+  font-size: 1.15em;
+  opacity: 0.7;
+}
+
+.ls-caret {
+  font-size: 0.9em;
+  opacity: 0.6;
+}
+
+.ls-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 1060;
+  min-width: 180px;
+  max-height: 280px;
+  padding: 4px;
+  margin: 0;
+  overflow-y: auto;
+  list-style: none;
+  background: var(--gdd-white);
+  border: 0.5px solid rgb(0 0 0 / 15%);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+}
+
+.ls-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  border-radius: 6px;
+
+  &:hover {
+    background: #f2f4f6;
+  }
+
+  &.is-active {
+    color: #185fa5;
+    background: #e9f1fb;
+  }
+}
+
+/* Text size popover */
+
+.text-size-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 1060;
+  padding: 8px 12px;
+  color: var(--gdd-white);
+  white-space: nowrap;
+  background-color: #383838;
+  border-radius: 8px;
+}
+
+/* Footer */
+
+.auth-footer .nav-link {
+  color: var(--gdd-ink) !important;
+}
+
+/* Hovering anywhere in the auth pages underlines, which is how legacy reads */
+
+.auth-template a:hover,
+.auth-template .btn:hover {
+  text-decoration: underline;
+}
+
+@media screen and (width <= 1024px) {
+  .auth-header {
+    height: var(--gdd-auth-header-height-md);
+  }
+}
+
+@media screen and (width <= 768px) {
+  .auth-header {
+    height: var(--gdd-auth-header-height-sm);
+  }
+}
+
+@media screen and (width <= 450px) {
+  .auth-header-leaves {
+    top: -15px;
+    right: 0;
+    max-width: 61%;
+  }
+}

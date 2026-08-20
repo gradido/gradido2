@@ -1,0 +1,16 @@
+// Work Sans, self-hosted.
+//
+// Legacy declares this font but never actually renders it: its `@font-face` carries a
+// family *list* plus `!important` in the `font-family` descriptor, which makes the whole
+// rule invalid, so the face is never registered and every page falls back to whatever
+// `sans-serif` happens to be on the reader's machine. Declared correctly here.
+//
+// One variable file covers the whole weight axis, so the four static weights legacy
+// requested from Google Fonts become a single request that no third party sees.
+@font-face {
+  font-family: 'Work Sans';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/WorkSans-variable.woff2') format('woff2');
+}

@@ -16,6 +16,7 @@
       "**/*.cjs",
       "scripts/**/*.ts",
       "!**/build",
+      "!**/public/locales",
       "!**/node_modules",
       "!**/coverage",
       "!**/.zig-cache",

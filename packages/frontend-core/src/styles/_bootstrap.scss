@@ -1,0 +1,72 @@
+// Bootstrap, configured from the design tokens.
+//
+// Only values Bootstrap has to know at compile time live here — the ones it uses to
+// derive contrast colors, shades, the heading scale and the spacing utilities.
+// Everything purely visual is a custom property and belongs in `_theme.scss`, where a
+// different framework could pick it up unchanged.
+@use 'tokens';
+
+@use 'bootstrap/scss/bootstrap' with (
+  $font-family-sans-serif: tokens.get('font-sans'),
+  $font-size-base: tokens.get('font-size-base'),
+  $line-height-base: tokens.get('line-height'),
+
+  $h1-font-size: tokens.get('font-size-h1'),
+  $h2-font-size: tokens.get('font-size-h2'),
+  $h3-font-size: tokens.get('font-size-h3'),
+  $h4-font-size: tokens.get('font-size-h4'),
+  $h5-font-size: tokens.get('font-size-h5'),
+  $h6-font-size: tokens.get('font-size-h6'),
+  $headings-line-height: tokens.get('headings-line-height'),
+  $headings-font-weight: tokens.get('weight-bold'),
+  $btn-font-weight: tokens.get('weight-bold'),
+
+  $spacer: tokens.$spacer,
+  $spacers: tokens.$spacers,
+
+  $body-bg: tokens.get('page-bg'),
+  $body-color: tokens.get('body-color'),
+  $headings-color: tokens.get('heading'),
+
+  $primary: tokens.get('blue'),
+  $secondary: tokens.get('gold'),
+  $success: tokens.get('success'),
+  $info: tokens.get('info'),
+  $warning: tokens.get('warning'),
+  $danger: tokens.get('danger'),
+
+  // Links are green in Gradido, not primary-blue — the navbar and the auth links
+  // opt back into blue through `.auth-navbar`.
+  $link-color: tokens.get('green'),
+  $link-hover-color: tokens.get('ink'),
+  $link-decoration: none,
+  $link-hover-decoration: underline,
+
+  // Bootstrap emits `--bs-btn-box-shadow` only when shadows are switched on, and has no
+  // `$btn-hover-box-shadow` at all — `.btn:hover` keeps the base shadow.
+  $enable-shadows: true,
+  $btn-box-shadow: tokens.get('shadow-button'),
+  $btn-active-box-shadow: tokens.get('shadow-button-active'),
+
+  // Switching shadows on gives inputs an inset one by default. Gradido's fields are flat.
+  $input-box-shadow: none,
+
+  $input-btn-padding-y: tokens.get('control-padding-y'),
+  $input-btn-padding-x: tokens.get('control-padding-x'),
+  // Buttons carry more horizontal padding than inputs, so a label sits off the edge.
+  $btn-padding-x: tokens.get('button-padding-x'),
+  $card-spacer-y: tokens.get('card-padding-y'),
+  $card-spacer-x: tokens.get('card-padding-x'),
+  $nav-link-padding-y: tokens.get('nav-link-padding-y'),
+  $nav-link-padding-x: tokens.get('nav-link-padding-x'),
+
+  // Used to pull a caption up against the heading it introduces.
+  $enable-negative-margins: true,
+
+  $border-radius: tokens.get('radius-input'),
+  $border-radius-lg: tokens.get('radius-button'),
+  $input-border-radius: tokens.get('radius-input'),
+  $btn-border-radius: tokens.get('radius-button'),
+  $btn-border-radius-lg: tokens.get('radius-button'),
+  $btn-border-radius-sm: tokens.get('radius-button')
+);

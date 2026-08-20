@@ -27,12 +27,6 @@ not because the scope is small.
 - `https://github.com/gradido/gradido/shared-native` already contains determinism-critical C — decay, GradidoUnit
   arithmetic, signing, transaction types and validation. Reuse it, do not reimplement it.
 
-The `package.json` files currently in the tree are leftovers from an earlier attempt.
-**Do not treat them as a reference for dependencies, package names, or the tech stack.**
-Where they disagree with `Architecture.md` — e.g. tRPC vs. Eden Treaty, zod vs. valibot,
-mysql2 vs. PostgreSQL/SQLite — `Architecture.md` is correct and the `package.json` is
-obsolete.
-
 The toolchain (bun, turborepo, tsgo, biome, zig, google test) is described in
 `Architecture.md`, but not all of it is configured yet. Before running or assuming a
 build/test/lint command, check what actually exists in the repository. Do not invent

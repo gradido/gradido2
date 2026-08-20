@@ -1,0 +1,6 @@
+// Full Gradido stylesheet: tokens, the configured Bootstrap build, the brand layer.
+// Unused Bootstrap rules are dropped by PurgeCSS in the consuming app's postcss config.
+@use 'tokens';
+@use 'fonts';
+@use 'bootstrap';
+@use 'theme';

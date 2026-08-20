@@ -1,0 +1,184 @@
+// Gradido component styles.
+//
+// Every value here reads a `--gdd-*` custom property. Nothing in this file is
+// Bootstrap-specific beyond the class names it attaches to, which is what keeps the
+// brand independent of the CSS framework underneath it.
+
+.pointer {
+  cursor: pointer;
+}
+
+.fs-7 {
+  font-size: var(--gdd-font-size-sm);
+}
+
+.c-grey {
+  color: var(--gdd-ink) !important;
+}
+
+.c-blau {
+  color: var(--gdd-blue) !important;
+}
+
+.shadow-default {
+  box-shadow: var(--gdd-shadow);
+}
+
+.app-box-shadow {
+  box-shadow: var(--gdd-shadow-app);
+}
+
+.bg-gradido-gradient {
+  background: var(--gdd-gradient-brand) !important;
+  color: var(--gdd-white) !important;
+}
+
+/* Buttons */
+
+// A `<button>` gets `text-shadow: none` from the browser's own stylesheet for form
+// controls; an `<a class="btn">` does not, and would pick up the shadow of a dark
+// backdrop it sits on. Same class, same look, whichever element carries it.
+.btn {
+  text-shadow: none;
+}
+
+// The elevation comes from Bootstrap's `$btn-box-shadow`, which every `.btn` carries.
+// Legacy declares a much heavier shadow on these classes, but `.btn` is emitted after
+// them and wins, so that shadow has never actually rendered — reproducing it here would
+// have put a cloud under the buttons that the page it copies does not have.
+%gradido-button {
+  display: inline-block;
+  padding: 0.6em 50px;
+  letter-spacing: 0.05em;
+  color: var(--gdd-white);
+  border: 0;
+  border-radius: var(--gdd-radius-button);
+  transition: all 0.5s ease;
+}
+
+.btn-gradido {
+  @extend %gradido-button;
+
+  background: var(--gdd-gradient-gold);
+
+  &:hover,
+  &:focus,
+  &:active {
+    color: var(--gdd-white);
+  }
+}
+
+.btn-gradido-disable {
+  @extend %gradido-button;
+
+  background: var(--gdd-gradient-disabled);
+
+  &:hover,
+  &:focus,
+  &:active,
+  &:disabled {
+    color: var(--gdd-white);
+    opacity: 1;
+  }
+}
+
+.btn-outline-gradido {
+  color: var(--gdd-gold-ink);
+  border: 1px solid var(--gdd-gold-border);
+}
+
+/* App shell */
+
+@media screen and (width <= 1024px) {
+  #app {
+    padding-right: var(--gdd-page-inset);
+    padding-left: var(--gdd-page-inset);
+  }
+}
+
+@media screen and (width <= 500px) {
+  #app {
+    font-size: 0.85rem;
+  }
+}
+
+/* The gold bar that closes off every page */
+
+.goldrand {
+  height: var(--gdd-gold-bar-height);
+  background: var(--gdd-gradient-gold-bar);
+}
+
+/* Surfaces */
+
+.gradido-custom-background {
+  background-color: var(--gdd-surface) !important;
+  border-radius: var(--gdd-radius-card) !important;
+}
+
+.gradido-border-radius {
+  overflow: hidden;
+  border-radius: var(--gdd-radius-button) !important;
+}
+
+/* Forms */
+
+.form-control,
+.form-select {
+  height: 50px;
+  border-radius: var(--gdd-radius-input);
+}
+
+.input-group .rounded-end {
+  border-top-right-radius: var(--gdd-radius-input) !important;
+  border-bottom-right-radius: var(--gdd-radius-input) !important;
+}
+
+// The invalid-state animation makes the field jump while the user is still typing.
+.form-control {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* Auth links — blue, where the rest of the app links green */
+
+.auth-navbar a,
+a.auth-navbar {
+  color: var(--gdd-blue);
+
+  &:hover {
+    color: var(--gdd-blue);
+    text-decoration: underline;
+  }
+
+  &.is-active {
+    color: var(--gdd-ink);
+  }
+}
+
+.separator-start {
+  // Tied to the text it separates, so the rule stays legible on any background.
+  border-left: 1px solid color-mix(in srgb, currentcolor 40%, transparent);
+}
+
+// The show/hide toggle sits in an outline-light button, whose ink would be almost
+// invisible. It reads as part of the field, so it takes the body color.
+.password-toggle {
+  color: var(--gdd-body-color);
+
+  &:hover,
+  &:focus,
+  &:active {
+    color: var(--gdd-body-color);
+  }
+}
+
+/* Toaster */
+
+.gdd-toaster-body {
+  color: var(--gdd-white);
+}
+
+.gdd-toaster-body-darken {
+  color: #2c2c2c;
+}

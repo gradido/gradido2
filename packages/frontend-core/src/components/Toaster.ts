@@ -1,98 +1,86 @@
 import m from 'mithril'
-import 'bootstrap/js/src/toast'
+import { t } from '../i18n'
 
-// Toast typ definition
+// No Bootstrap JS here: the toasts are rendered as `.toast.show` and dismissed by this
+// component's own timer and close button, so its Toast class would only be a second
+// thing mutating the DOM mithril owns.
 interface Toast {
-  id?: number
+  id: number
   title: string
   message: string
   variant: string
   bodyClass?: string
-  timeout?: number
+  timeout: number
 }
 
-const defaultDelay = 5000
+const DEFAULT_DELAY = 5000
 
-export class Toaster implements m.ClassComponent<{}> {
-  constructor(private toasts: Toast[] = [], private counter = 0) {}
+export class Toaster implements m.ClassComponent {
+  private toasts: Toast[] = []
+  private counter = 0
 
-  public toast(toast: Toast) {
+  toast(toast: Omit<Toast, 'id' | 'timeout'> & { timeout?: number }): void {
     const id = ++this.counter
-    toast.id = id
-    toast.timeout ??= defaultDelay
-    this.toasts.push(toast)
+    this.toasts.push({ ...toast, id, timeout: toast.timeout ?? DEFAULT_DELAY })
     m.redraw()
 
-    if (toast.timeout > 0) {
-      setTimeout(() => this.removeToast(id), toast.timeout)
+    if (toast.timeout !== 0) {
+      setTimeout(() => this.removeToast(id), toast.timeout ?? DEFAULT_DELAY)
     }
   }
 
-  removeToast(id: number) {
+  removeToast(id: number): void {
     this.toasts = this.toasts.filter((toast) => toast.id !== id)
     m.redraw()
   }
-// write css selectors fully so they can be found by PurgeCSS
-  public success(message: string, timeout?: number) {
-    this.toast({
-      title: t.__('Success'),
-      message,
-      variant: '.text-bg-success',
-      timeout
-    });
+
+  // Selectors are written out in full so PurgeCSS can find them.
+  success(message: string, timeout?: number): void {
+    this.toast({ title: t.__('Success'), message, variant: '.text-bg-success', timeout })
   }
 
-  public error(message: string, timeout?: number) {
-    this.toast({
-      title: t.__('Error'),
-      message,
-      variant: '.text-bg-danger',
-      timeout
-    });
+  error(message: string, timeout?: number): void {
+    this.toast({ title: t.__('Error'), message, variant: '.text-bg-danger', timeout })
   }
 
-  public warning(message: string, timeout?: number) {
+  warning(message: string, timeout?: number): void {
     this.toast({
       title: t.__('Info'),
       message,
       variant: '.text-bg-warning',
       bodyClass: '.gdd-toaster-body-darken',
-      timeout
-    });
+      timeout,
+    })
   }
 
   view() {
     return m(
       '.toast-container.position-fixed.top-0.end-0.p-3',
       this.toasts.map((toast) =>
-        m(`.toast.show.gdd-toaster${toast.variant}`,
+        m(
+          `.toast.show.gdd-toaster${toast.variant}`,
           {
             key: toast.id,
             role: 'alert',
-            'data-bs-delay': toast.timeout === defaultDelay ? undefined : toast.timeout,
             'aria-live': 'assertive',
-            'aria-atomic': true
+            'aria-atomic': true,
           },
           [
-            m('div.toast-header.gdd-toaster-title', [
-              m(
-                'strong.me-auto',
-                toast.title
-              ),
-              m(
-                'button.btn-close.ms-2.mb-1',
-                {
-                  type: 'button',
-                  'aria-label': t.__('Close'),
-                  onclick: () => toast.id ? this.removeToast(toast.id) : undefined
-                }
-              )
+            m('.toast-header.gdd-toaster-title', [
+              m('strong.me-auto', toast.title),
+              m('button.btn-close.ms-2.mb-1', {
+                type: 'button',
+                'aria-label': t.__('Close'),
+                onclick: () => this.removeToast(toast.id),
+              }),
             ]),
-            m(`.toast-body${toast.bodyClass || '.gdd-toaster-body'}`, toast.message)
-          ]
-        )
-      )
+            m(`.toast-body${toast.bodyClass ?? '.gdd-toaster-body'}`, toast.message),
+          ],
+        ),
+      ),
     )
   }
 }
 
+/** One toaster per app — components report through this instead of threading a handle. */
+export const toaster = new Toaster()

@@ -7,6 +7,10 @@
         // The build template, kept in sync by `c-cpp-zig-build`.
         // Add your own dependencies here with `zig fetch --save <url>`.
         .c_cpp_zig_build = .{ .path = ".zig-native" },
+        .blockchain_core = .{
+            .url = "git+https://github.com/gradido/gradido-blockchain-core.git#bc29d8085e370387c613cdf2abc9f308222a0675",
+            .hash = "blockchain_core-0.16.0-r94upiqdDgAd3AayQflFxBXLb74T-tHRofauCPLWv0rs",
+        },
     },
     .paths = .{ "build.zig", "build.zig.zon", "src", "napi", "include", "third_party" },
 }
