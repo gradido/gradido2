@@ -5,6 +5,7 @@ import m from 'mithril'
 import { AuthLayout } from './layouts/AuthLayout'
 import { Login } from './pages/Login'
 import { Placeholder } from './pages/Placeholder'
+import { Register } from './pages/Register'
 import { ROUTES } from './routes'
 
 const root = document.getElementById('app')
@@ -25,7 +26,7 @@ setLocale(storedLocale(), import.meta.env.BASE_URL).then(() => {
       render: () => m(AuthLayout, m(Login)),
     },
     [ROUTES.register]: {
-      render: () => m(AuthLayout, m(Placeholder, { title: t.__('Sign up') })),
+      render: () => m(AuthLayout, m(Register)),
     },
     [ROUTES.forgotPassword]: {
       render: () => m(AuthLayout, m(Placeholder, { title: t.__('Reset password') })),

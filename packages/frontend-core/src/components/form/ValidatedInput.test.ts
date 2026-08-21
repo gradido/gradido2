@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import m from 'mithril'
 import * as v from 'valibot'
 import { FormField } from '../../form/FormField'
 import { attrsOf, byTag, classesOf, find, render, textOf } from '../../testing/vnode'
@@ -61,7 +62,7 @@ describe('wiring', () => {
   })
 
   test('an appended control moves the field into an input group', () => {
-    const tree = draw(new FormField(schema), { append: { tag: 'button', attrs: {}, children: [] } })
+    const tree = draw(new FormField(schema), { append: m('button', { type: 'button' }) })
     expect(find(tree, (vnode) => classesOf(vnode).includes('input-group'))).toBeDefined()
   })
 })

@@ -126,3 +126,36 @@ msgstr "Diese E-Mail-Adresse ist zu lang"
 
 msgid "An email address cannot contain spaces"
 msgstr "Eine E-Mail-Adresse darf keine Leerzeichen enthalten"
+
+msgid "First name"
+msgstr "Vorname"
+
+msgid "Last name"
+msgstr "Nachname"
+
+msgid "Registering …"
+msgstr "Registrieren …"
+
+msgid "Already have a %1 account?"
+msgstr "Du hast schon ein %1 Konto?"
+
+msgid "I agree to the [privacy policy]."
+msgstr "Ich stimme der [Datenschutzerklärung] zu."
+
+msgid "Thank you!"
+msgstr "Danke!"
+
+msgid "You are registered now, please check your emails and click the activation link."
+msgstr "Du bist jetzt registriert, bitte überprüfe deine E-Mails und klicke auf den Aktivierungslink."
+
+msgid "This name is too long"
+msgstr "Dieser Name ist zu lang"
+
+msgid "Please enter at least three characters"
+msgstr "Bitte gib mindestens drei Zeichen ein"
+
+msgid "Please enter at least two characters"
+msgstr "Bitte gib mindestens zwei Zeichen ein"
+
+msgid "Please agree to the privacy policy"
+msgstr "Bitte stimme der Datenschutzerklärung zu"

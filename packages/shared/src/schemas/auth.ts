@@ -33,6 +33,42 @@ export const emailSchema = v.pipe(
   v.email('Please enter a valid email address'),
 )
 
+/** contracts/db/users.json — `first_name` and `last_name` are `varchar(255)`. */
+export const NAME_MAX_LENGTH = 255
+
+// Legacy asks for three characters of a first name and two of a last name. Both are
+// deliberately lenient: names are shorter and stranger than form designers expect.
+const MIN_FIRST_NAME = 3
+const MIN_LAST_NAME = 2
+
+/** Wrong however the name continues: it cannot outgrow the column that stores it. */
+const namePrevalidate = v.pipe(v.string(), v.maxLength(NAME_MAX_LENGTH, 'This name is too long'))
+
+export const firstNamePrevalidateSchema = namePrevalidate
+export const lastNamePrevalidateSchema = namePrevalidate
+
+export const firstNameSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.maxLength(NAME_MAX_LENGTH, 'This name is too long'),
+  v.nonEmpty('This field is required'),
+  v.minLength(MIN_FIRST_NAME, 'Please enter at least three characters'),
+)
+
+export const lastNameSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.maxLength(NAME_MAX_LENGTH, 'This name is too long'),
+  v.nonEmpty('This field is required'),
+  v.minLength(MIN_LAST_NAME, 'Please enter at least two characters'),
+)
+
+/** Consent is a decision, so there is nothing to prevalidate — it is given or it is not. */
+export const privacyConsentSchema = v.pipe(
+  v.boolean(),
+  v.check((agreed) => agreed, 'Please agree to the privacy policy'),
+)
+
 // A password has no prevalidation: no keystroke makes it wrong, only unfinished. Login
 // only checks that one was entered — the strength rules belong to registration and
 // password reset, which validate against the stored policy.
@@ -44,3 +80,11 @@ export const loginSchema = v.object({
 })
 
 export type LoginInput = v.InferOutput<typeof loginSchema>
+
+export const registerSchema = v.object({
+  firstName: firstNameSchema,
+  lastName: lastNameSchema,
+  email: emailSchema,
+})
+
+export type RegisterInput = v.InferOutput<typeof registerSchema>

@@ -11,6 +11,8 @@ export interface ValidatedInputAttrs {
   inputmode?: string
   autocomplete?: string
   disabled?: boolean
+  /** Added to the field's wrapper — spacing is the arranging form's business. */
+  class?: string
   /** Rendered after the input inside an input group, e.g. a show-password toggle. */
   append?: m.Children
   /** Called after every accepted keystroke, so a form can re-evaluate its submit button. */
@@ -54,7 +56,7 @@ export const ValidatedInput: m.Component<ValidatedInputAttrs> = {
 
     const feedback = m('.invalid-feedback', { id: feedbackId }, issue ? translateIssue(issue) : '')
 
-    return m(`.input-${name}`, [
+    return m(`.input-${name}`, { class: attrs.class }, [
       m('label.form-label', { for: id }, label),
       append ? m('.input-group.has-validation', [input, append, feedback]) : [input, feedback],
     ])

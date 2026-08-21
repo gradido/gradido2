@@ -93,6 +93,14 @@ export function translateIssue(message: string): string {
       return t.__('This email address is too long')
     case 'An email address cannot contain spaces':
       return t.__('An email address cannot contain spaces')
+    case 'This name is too long':
+      return t.__('This name is too long')
+    case 'Please enter at least three characters':
+      return t.__('Please enter at least three characters')
+    case 'Please enter at least two characters':
+      return t.__('Please enter at least two characters')
+    case 'Please agree to the privacy policy':
+      return t.__('Please agree to the privacy policy')
     default:
       return t.__(message)
   }

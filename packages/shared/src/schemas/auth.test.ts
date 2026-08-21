@@ -2,7 +2,16 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as v from 'valibot'
-import { EMAIL_MAX_LENGTH, emailPrevalidateSchema, emailSchema, loginPasswordSchema } from './auth'
+import {
+  EMAIL_MAX_LENGTH,
+  emailPrevalidateSchema,
+  emailSchema,
+  firstNameSchema,
+  lastNameSchema,
+  loginPasswordSchema,
+  NAME_MAX_LENGTH,
+  privacyConsentSchema,
+} from './auth'
 
 const prevalidate = (value: string) => v.safeParse(emailPrevalidateSchema, value)
 const validate = (value: string) => v.safeParse(emailSchema, value)
@@ -66,6 +75,50 @@ describe('login password', () => {
     expect(v.safeParse(loginPasswordSchema, '').success).toBe(false)
     expect(v.safeParse(loginPasswordSchema, 'x').success).toBe(true)
   })
+})
+
+describe('names', () => {
+  test('a first name needs three characters, a last name two', () => {
+    expect(messageOf(v.safeParse(firstNameSchema, 'Ei'))).toBe(
+      'Please enter at least three characters',
+    )
+    expect(v.safeParse(firstNameSchema, 'Ein').success).toBe(true)
+    expect(messageOf(v.safeParse(lastNameSchema, 'L'))).toBe('Please enter at least two characters')
+    expect(v.safeParse(lastNameSchema, 'Li').success).toBe(true)
+  })
+
+  test('an empty name says what it needs rather than how short it is', () => {
+    expect(messageOf(v.safeParse(firstNameSchema, ''))).toBe('This field is required')
+  })
+
+  test('surrounding whitespace is trimmed away, not counted', () => {
+    expect(v.parse(firstNameSchema, '  Einhorn  ')).toBe('Einhorn')
+    expect(v.safeParse(firstNameSchema, '  Ei  ').success).toBe(false)
+  })
+
+  test('a name may not outgrow the column that stores it', () => {
+    expect(v.safeParse(firstNameSchema, 'E'.repeat(NAME_MAX_LENGTH)).success).toBe(true)
+    expect(v.safeParse(firstNameSchema, 'E'.repeat(NAME_MAX_LENGTH + 1)).success).toBe(false)
+  })
+})
+
+describe('privacy consent', () => {
+  test('has to be given', () => {
+    expect(messageOf(v.safeParse(privacyConsentSchema, false))).toBe(
+      'Please agree to the privacy policy',
+    )
+    expect(v.safeParse(privacyConsentSchema, true).success).toBe(true)
+  })
+})
+
+test('NAME_MAX_LENGTH matches contracts/db/users.json', () => {
+  const contract = JSON.parse(
+    readFileSync(join(import.meta.dir, '../../../../contracts/db/users.json'), 'utf8'),
+  )
+  const columns: { name: string; type: string }[] = contract.columns
+  for (const name of ['first_name', 'last_name']) {
+    expect(columns.find((column) => column.name === name)?.type).toBe(`varchar(${NAME_MAX_LENGTH})`)
+  }
 })
 
 test('EMAIL_MAX_LENGTH matches contracts/db/user_contacts.json', () => {
