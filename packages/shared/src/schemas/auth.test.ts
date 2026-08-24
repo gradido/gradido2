@@ -15,9 +15,9 @@ import {
 
 const prevalidate = (value: string) => v.safeParse(emailPrevalidateSchema, value)
 const validate = (value: string) => v.safeParse(emailSchema, value)
-// Widened to either schema's result: the two pipes produce different issue unions, so a
-// helper typed against one of them cannot be handed the other's.
-const messageOf = (result: ReturnType<typeof prevalidate> | ReturnType<typeof validate>) =>
+// Every schema here produces its own issue union, so the helper is typed against the one
+// thing they have in common: a result of some schema, whose first issue carries a message.
+const messageOf = (result: v.SafeParseResult<v.GenericSchema>) =>
   result.success ? undefined : result.issues[0].message
 
 describe('email prevalidation — what is wrong the moment it is typed', () => {

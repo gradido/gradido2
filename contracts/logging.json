@@ -191,6 +191,50 @@
         "note": "The one line where the two implementations may legitimately differ in content: impl says which one is speaking."
       },
       {
+        "event": "startup.server.stopped",
+        "cat": "startup",
+        "level": "info",
+        "data": [
+          {
+            "name": "signal",
+            "type": "string",
+            "description": "closed vocabulary: SIGINT, SIGTERM"
+          }
+        ],
+        "note": "The last line of a clean shutdown: connections stopped, database closed, log flushed."
+      },
+      {
+        "event": "startup.shutdown.failed",
+        "cat": "startup",
+        "level": "fatal",
+        "data": [
+          {
+            "name": "signal",
+            "type": "string",
+            "description": "closed vocabulary: SIGINT, SIGTERM"
+          },
+          {
+            "name": "reason",
+            "type": "string",
+            "description": "closed vocabulary: timeout, error"
+          }
+        ],
+        "note": "The process exits with 1 after this line. timeout means the shutdown outlived its deadline and was cut short, so what it was waiting for did not finish."
+      },
+      {
+        "event": "startup.database.failed",
+        "cat": "startup",
+        "level": "fatal",
+        "data": [
+          {
+            "name": "db",
+            "type": "string",
+            "description": "postgresql | sqlite"
+          }
+        ],
+        "note": "The database did not answer, or answered that it will not: wrong credentials, no such database, no permission. The process exits with 1 after this line."
+      },
+      {
         "event": "auth.login.succeeded",
         "cat": "auth",
         "level": "info",
@@ -258,6 +302,24 @@
           }
         ],
         "note": "Carries err. The path is the route pattern, not the concrete URL — a concrete one leaks ids into the log."
+      },
+      {
+        "event": "db.connection.failed",
+        "cat": "db",
+        "level": "warn",
+        "data": [
+          {
+            "name": "attempt",
+            "type": "uint32",
+            "description": "One-based, so attempt 1 is the first try."
+          },
+          {
+            "name": "attempts",
+            "type": "uint32",
+            "description": "How many tries there will be in total."
+          }
+        ],
+        "note": "One line per failed attempt while waiting for the database at startup. warn, not error: a database that is still starting up is expected, and the line that says it never came is startup.database.failed. The driver's own message goes in msg -- it is not a contracted error code, and it must never carry the connection password."
       },
       {
         "event": "db.query.failed",

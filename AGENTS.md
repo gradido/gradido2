@@ -74,6 +74,8 @@ packages/          TypeScript, reference implementation
   backend          runnable HTTP server: routes, wiring, startup
   backend-core     backend domain code: data, logic, interactions, repositories
   federation       federation server
+  service-core     what every service process needs before it has a domain:
+                   logger, graceful shutdown, environment parsing, retry
   admin            admin frontend
   frontend         user frontend
   frontend-core    UI code shared by admin and frontend
@@ -89,6 +91,17 @@ contracts/         language-independent JSON contracts, see section 5
 
 Business logic belongs in the `-core` packages. The packages next to them are the
 deployable applications that wire that logic up.
+
+`service-core` is the exception to that sentence and the reason it is worth naming: it holds
+no business logic at all, only what backend, federation and dht-node each start a process
+with. It lives apart from `backend-core` because that one is domain code and is mirrored by
+`fast-servers/backend-core`, while this is infrastructure — section 4, the row that is each
+implementation's own and is not mirrored. The C path has its own answer to the same problem
+and no counterpart to this package.
+
+It must stay free of both the HTTP server and the database: the dht-node imports it, and
+`Architecture.md` is explicit that the dht-node touches no database. The database connection
+therefore lives in `backend-core`, next to the repositories that use it.
 
 Route definitions belong in `packages/shared` so frontend, admin and frontend-core can
 import their types via Eden Treaty.
@@ -378,6 +391,29 @@ zig    pinned by c-cpp-zig-build, which builds shared-native.
 
 `bun install` followed by `turbo backend#start` is enough — do not install a toolchain
 manually and do not add one to the instructions.
+
+### Run everything from the repository root
+
+```text
+bun run lint        bun run lint:fix
+bun run typecheck
+bun run test
+bun install && turbo backend#start
+```
+
+Each of these goes through turbo, and turbo is what knows the dependency graph. `test`
+depends on `^build`, so `shared-native` — determinism-critical C behind N-API — is compiled
+before anything that imports it runs.
+
+**Do not `cd` into a package and run `bun test` there.** It bypasses that graph: with
+`shared-native` unbuilt, the tests of `shared` fail with `Export named 'hashGeneric' not
+found in module .../index.cjs`, which reads like broken code and is not. The same holds for
+`bun run typecheck` and `bun run lint` — run them at the root, and use
+`turbo test --filter=<package>` when a single package is what you want.
+
+A task cached by turbo is not a task skipped: a cache hit restores the outputs, so the
+build artifact is there either way. If you suspect the cache rather than the code, `--force`
+re-executes instead of guessing.
 
 Record Elysia idioms that keep being reinvented here as well; h2o belongs in
 `fast-servers/AGENTS.md`.
