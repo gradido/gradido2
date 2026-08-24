@@ -1,6 +1,6 @@
 import * as v from 'valibot'
 
-export type StringSchema = v.GenericSchema<string, string>
+export type FieldSchema<T> = v.GenericSchema<T, T>
 
 /**
  * The two rule sets a field is checked against.
@@ -10,7 +10,7 @@ export type StringSchema = v.GenericSchema<string, string>
  * `prevalidate` and "not a valid address yet" in `validate`, and only the field knows
  * which of its rules is which.
  */
-export interface FieldRules {
+export interface FieldRules<T> {
   /**
    * Checked on every keystroke. Only what is already wrong belongs here — a value that
    * is merely unfinished is not an error yet, and saying so reads as an accusation.
@@ -18,7 +18,7 @@ export interface FieldRules {
    * Judge the raw value, and do not normalize in this set: trimming here would delay a
    * trailing space until the next keystroke made it an interior one.
    */
-  prevalidate?: StringSchema
+  prevalidate?: FieldSchema<T>
   /**
    * Checked for validity, and shown once the user leaves the field or reaches for the
    * submit button. This is also where normalization belongs (`v.trim()` and friends).
@@ -27,7 +27,7 @@ export interface FieldRules {
    * how an address pasted with surrounding whitespace goes straight to green instead of
    * being reported for the whitespace the trim is about to remove.
    */
-  validate: StringSchema
+  validate: FieldSchema<T>
 }
 
 /**
@@ -38,19 +38,22 @@ export interface FieldRules {
  * fails, when the user leaves it, or when they reach for the submit button — and green
  * as soon as it is valid, which is the confirmation people look for while typing.
  */
-export class FormField {
+export class FormField<T = string> {
   private touched = false
   private revealed = false
-  private readonly rules: FieldRules
+  private readonly rules: FieldRules<T>
+  private readonly initial: T
 
   constructor(
-    rules: StringSchema | FieldRules,
-    public value = '',
+    rules: FieldSchema<T> | FieldRules<T>,
+    /** Text fields start out empty; every other kind has to say what empty means for it. */
+    public value: T = '' as unknown as T,
   ) {
     this.rules = 'validate' in rules ? rules : { validate: rules }
+    this.initial = value
   }
 
-  set(next: string): void {
+  set(next: T): void {
     this.value = next
   }
 
@@ -64,7 +67,7 @@ export class FormField {
     this.revealed = true
   }
 
-  reset(value = ''): void {
+  reset(value: T = this.initial): void {
     this.value = value
     this.touched = false
     this.revealed = false
@@ -74,7 +77,7 @@ export class FormField {
    * The first issue a schema reports, as its untranslated source message. Issues come
    * back in pipeline order, so `''` reports "required" rather than "not an address".
    */
-  private messageFrom(schema: StringSchema | undefined): string | undefined {
+  private messageFrom(schema: FieldSchema<T> | undefined): string | undefined {
     if (!schema) {
       return undefined
     }
@@ -117,17 +120,24 @@ export class FormField {
   }
 
   /** The parsed value — trimmed and normalized by the schema, unlike `value`. */
-  get parsed(): string {
+  get parsed(): T {
     return v.parse(this.rules.validate, this.value)
   }
 }
 
+/** What `Form` needs of a field, whatever type of value it holds. */
+interface AnyFormField {
+  readonly valid: boolean
+  reveal(): void
+  reset(): void
+}
+
 /** A set of fields submitted together. */
-export class Form<TName extends string> {
-  constructor(public readonly fields: Record<TName, FormField>) {}
+export class Form<TFields extends Record<string, AnyFormField>> {
+  constructor(public readonly fields: TFields) {}
 
   get valid(): boolean {
-    return Object.values<FormField>(this.fields).every((field) => field.valid)
+    return Object.values<AnyFormField>(this.fields).every((field) => field.valid)
   }
 
   /**
@@ -136,21 +146,22 @@ export class Form<TName extends string> {
    * screen by the time the question is asked.
    */
   reveal(): void {
-    for (const field of Object.values<FormField>(this.fields)) {
+    for (const field of Object.values<AnyFormField>(this.fields)) {
       field.reveal()
     }
   }
 
   reset(): void {
-    for (const field of Object.values<FormField>(this.fields)) {
+    for (const field of Object.values<AnyFormField>(this.fields)) {
       field.reset()
     }
   }
 
-  values(): Record<TName, string> {
-    const result = {} as Record<TName, string>
-    for (const [name, field] of Object.entries<FormField>(this.fields)) {
-      result[name as TName] = field.parsed
+  values(): { [K in keyof TFields]: TFields[K] extends FormField<infer V> ? V : never } {
+    const result = {} as { [K in keyof TFields]: TFields[K] extends FormField<infer V> ? V : never }
+    for (const name of Object.keys(this.fields) as (keyof TFields)[]) {
+      const field = this.fields[name] as unknown as FormField<unknown>
+      result[name] = field.parsed as never
     }
     return result
   }

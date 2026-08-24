@@ -1,4 +1,4 @@
-import type { LoginInput } from 'shared'
+import type { LoginInput, RegisterInput } from 'shared'
 import { CONFIG } from '../config'
 
 /**
@@ -34,14 +34,15 @@ export interface LoginResult {
 // call whose request and response types come from there instead of being declared
 // here. See Architecture.md, *HTTP server*.
 const LOGIN_PATH = '/auth/login'
+const REGISTER_PATH = '/auth/register'
 
 const isLoginErrorCode = (value: unknown): value is LoginErrorCode =>
   Object.values(LoginErrorCode).includes(value as LoginErrorCode)
 
-export async function login(input: LoginInput): Promise<LoginResult> {
+async function post(path: string, input: unknown): Promise<unknown> {
   let response: Response
   try {
-    response = await fetch(`${CONFIG.API_BASE_URL}${LOGIN_PATH}`, {
+    response = await fetch(`${CONFIG.API_BASE_URL}${path}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       credentials: 'include',
@@ -51,12 +52,25 @@ export async function login(input: LoginInput): Promise<LoginResult> {
     throw new LoginError(LoginErrorCode.Unknown, (error as Error).message)
   }
 
-  const body = await response.json().catch(() => undefined)
+  const body = (await response.json().catch(() => undefined)) as
+    | { error?: { code?: unknown; message?: string } }
+    | undefined
 
   if (!response.ok) {
     const code = isLoginErrorCode(body?.error?.code) ? body.error.code : LoginErrorCode.Unknown
     throw new LoginError(code, body?.error?.message ?? `HTTP ${response.status}`)
   }
+  return body
+}
 
-  return body as LoginResult
+/**
+ * Register. Nothing comes back but success: the account is not usable until the address
+ * is confirmed, so the page's job afterwards is to send the visitor to their inbox.
+ */
+export async function register(input: RegisterInput & { language: string }): Promise<void> {
+  await post(REGISTER_PATH, input)
+}
+
+export async function login(input: LoginInput): Promise<LoginResult> {
+  return (await post(LOGIN_PATH, input)) as LoginResult
 }

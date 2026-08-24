@@ -135,12 +135,39 @@ arnm               the arena, the containers, the conversions and the JSON
                    was hostmem until arnm 0.5.0 renamed every symbol.
 h2o                the fast HTTP backend, and the picohttpparser the other
                    backend compiles. Fetched by every build for that reason.
-libuv       lazy   the platform half of the fallback backend.
+libuv              the platform layer — see below. Today the build fetches
+                   it lazily, for the fallback backend only; that is behind
+                   the decision, not ahead of it.
 googletest  lazy   the unit tests.
 compile_commands   feeds compile_commands.json.
+libpq              designed, not pinned. Architecture.md, *Databases*.
 ```
 
 `lazy` means a build that does not select that path never downloads it.
+
+### libuv is the platform layer
+
+Threads and synchronisation now, filesystem, DNS and child processes as they are needed. One
+dependency where there would otherwise be four `#ifdef _WIN32` shims written at four different
+times. It earns its place by what it bundles, not by any one part: for threads alone it would be
+49 000 lines against a 150-line shim. The decision is that everything it offers and this project
+needs goes through it, so the platform seam exists once and is maintained once.
+
+Two rules come with it, and `Architecture.md`, *Platform layer*, holds the reasoning:
+
+```text
+loop-free  uv_thread_*, uv_mutex_*, uv_rwlock_*, uv_cond_*, uv_sem_*, uv_once, uv_key_*
+           usable as they are, next to h2o's own evloop
+loop-bound everything asynchronous — uv_fs_*, uv_getaddrinfo, uv_spawn, uv_queue_work
+           needs a uv_loop_t, and the process has h2o's. Do not start a second one on
+           the request thread; put it on a thread of its own or change h2o's backend.
+```
+
+> **The code has not followed yet.** `service-core/src/thread.c` is the 150-line
+> `pthread`/`SRWLOCK` shim this decision exists to avoid, and `cache.c`, `log.c` and `main.c`
+> are written against it. Replacing it with the loop-free half is what the decision asks for,
+> and it makes libuv a dependency of every build rather than of the fallback backend. Until
+> that is done, do not add a second shim beside it.
 
 **Fetch, do not vendor.** picohttpparser was a copy under `third_party/` before it was a
 dependency, and the copy lost: two files nobody would ever diff against the original again are
@@ -173,10 +200,14 @@ an alternative to h2o — it is what the Windows build gets instead of nothing:
 http_h2o.c        h2o. This is the fast path, and every performance figure in
                   ../Architecture.md is about it: HTTP/1.1 and HTTP/2, 11.6 µs
                   for a cached request. The default wherever it builds.
-http_fallback.c   libuv + picohttpparser. One thread, one event loop, HTTP/1.1,
-                  no TLS. It exists for one reason: h2o is a posix event loop
-                  and does not compile against the MSVC runtime.
+http_fallback.c   libuv + picohttpparser and about a hundred lines of framing.
+                  One thread, one event loop, HTTP/1.1, no TLS. It exists for
+                  one reason: h2o is a posix event loop and does not compile
+                  against the MSVC runtime.
 ```
+
+It is not a second HTTP library and must not become one. Owning the accept loop is what keeps
+the handler signature single; Mongoose is GPLv2 or commercial and is not the way out.
 
 **The fallback is not a deployment option.** One thread means one core, whatever the machine
 has, and nothing about it was built to carry load. It is there so that everything around the
@@ -249,7 +280,13 @@ the table lock is released before any session lock is taken
 data-set locks are acquired in a fixed order
 no lock upgrade — release shared, take exclusive, check again
 no session lock is ever held across a database call
+the key hash is mixed AND seeded per process; the slot comes from the low bits,
+    a table from the high ones, and the two never overlap
 ```
+
+The seeded mix is not paranoia. With a bounded probe walk a colliding key set does not make
+the cache slow, it makes it stop holding anything — correct answers, hit rate on the floor,
+nothing in the log. `Architecture.md`, *What was measured*, has the two reproductions.
 
 The table half of it is `service-core/src/cache.c`, and `service-core/tests/test_cache.cpp`
 covers it. Run that under TSan and not only plain: its concurrent test proves little on its own,
@@ -277,6 +314,21 @@ h2o    max_request_entity_size defaults to a gigabyte. Both backends have
        to refuse at SC_HTTP_MAX_BODY, so the server sets it at startup.
 h2o    the head limit is H2O_MAX_REQLEN, a compile-time constant of about
        400 KiB. There is no knob. The 8 KiB limit is the fallback's own.
+http   the Windows fallback is libuv + picohttpparser + ~100 lines, not a
+       second HTTP library. Owning the accept loop is what keeps the
+       handler signature single. Mongoose is GPLv2/commercial — do not
+       reach for it.
+pg     Unix socket, not TCP loopback, when the database is on this host —
+       83.4 to 48.1 µs for one connection string
+pg     one round trip per request: user row and roles in one statement.
+       A round trip costs more than the join it saves.
+pg     do not hand-write row extraction. structs and from_row/bind_params
+       are generated from contracts/db — 330 columns is not a review task.
+       Query construction stays hand-written; that part is business logic.
+jwt    require the claim before checking it. `exp` absent, or null, or a
+       string, is not `exp` valid — see Architecture.md, Safety net
+zig    a native Debian build needs addMultiarchIncludeDir on every artifact
+       that includes uv.h or a libpq header; cross builds never hit it
 zig    on Debian and Ubuntu `zig libc` reports sys_include_dir=/usr/include
        while asm/errno.h sits one level deeper, under the multiarch triple.
        build.zig generates a corrected description and hands it to every
@@ -284,7 +336,7 @@ zig    on Debian and Ubuntu `zig libc` reports sys_include_dir=/usr/include
        a compilation this build declares.
 zig    the cdb step writes compile_commands.json into the CURRENT directory.
        Run `zig build` from fast-servers/ or find a stray copy later.
-zig    a dependency's artifact needs setLibCFile() of its own -- it does
+zig    a dependency's artifact needs setLibCFile() of its own — it does
        not travel from the target that links it. libsodium went without
        for a while and nobody noticed, because a cached object is not
        recompiled: only changing the optimize mode asked for a fresh one
@@ -296,10 +348,10 @@ biome  `check --write --unsafe` deletes console calls rather than flagging
 arnm   the json reader keeps its FIRST error and every getter after it
        answers empty. A getter on a value of the wrong type therefore
        silences the reads that follow, in another field entirely. Where a
-       value may legitimately not be what is wanted -- an element of an
-       aud list, an optional member -- ask arnm_json_reader_type_of() or
+       value may legitimately not be what is wanted — an element of an
+       aud list, an optional member — ask arnm_json_reader_type_of() or
        _has() first: neither records anything.
-sodium its SHA-256 is the portable C one -- crypto_hash/sha256/ has only
+sodium its SHA-256 is the portable C one — crypto_hash/sha256/ has only
        a `cp/` directory, where AEGIS has an aesni one. It runs at about
        0.43 GB/s where OpenSSL does 2.2. At JWT sizes that gap mostly
        disappears into per-call overhead, so swapping the library buys
@@ -308,7 +360,7 @@ core   grdu_binary_to_base64 / grdu_binary_from_base64 are pinned to
        sodium_base64_VARIANT_ORIGINAL. A JWT is base64url without padding,
        so jwt.c calls sodium directly with the url-safe variant. The two
        alphabets differ in two characters, which is enough that a token
-       fails only sometimes -- roughly seven in ten carry a '-' or '_'.
+       fails only sometimes — roughly seven in ten carry a '-' or '_'.
 ```
 
 Add to this list when something costs you an afternoon.
