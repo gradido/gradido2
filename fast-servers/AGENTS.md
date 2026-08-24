@@ -95,8 +95,21 @@ Same policy as `../AGENTS.md` section 13, and it already holds here: `build.zig.
 every dependency to a fixed commit with a hash. Keep it that way — a floating dependency in
 a C build is a floating dependency in the process that signs transactions.
 
-Prefer no dependency at all. h2o, yyjson and libpq earn their place; a library that saves
-fifty lines of C does not.
+Prefer no dependency at all. h2o, yyjson, libpq and libuv earn their place; a library that
+saves fifty lines of C does not.
+
+`libuv` is the platform layer — threads and synchronisation now, filesystem, DNS and child
+processes as they are needed. It earns its place by what it bundles, not by any one part: for
+threads alone it would be 49 000 lines against a 150-line `#ifdef` shim. Two rules come with
+it, and `Architecture.md`, *Platform layer*, holds the reasoning:
+
+```text
+loop-free  uv_thread_*, uv_mutex_*, uv_rwlock_*, uv_cond_*, uv_sem_*, uv_once, uv_key_*
+           usable as they are, next to h2o's own evloop
+loop-bound everything asynchronous — uv_fs_*, uv_getaddrinfo, uv_spawn, uv_queue_work
+           needs a uv_loop_t, and the process has h2o's. Do not start a second one on
+           the request thread; put it on a thread of its own or change h2o's backend.
+```
 
 ---
 
@@ -128,7 +141,13 @@ the table lock is released before any session lock is taken
 data-set locks are acquired in a fixed order
 no lock upgrade — release shared, take exclusive, check again
 no session lock is ever held across a database call
+the key hash is mixed AND seeded per process; the slot comes from the low bits,
+    a table from the high ones, and the two never overlap
 ```
+
+The seeded mix is not paranoia. With a bounded probe walk a colliding key set does not make
+the cache slow, it makes it stop holding anything — correct answers, hit rate on the floor,
+nothing in the log. `Architecture.md`, *What was measured*, has the two reproductions.
 
 ---
 
@@ -142,6 +161,20 @@ h2o   register the generator before the query goes out, not after —
       otherwise a client disconnect writes into a freed request
 h2o   the request pool lives exactly as long as the request; anything
       the answer outlives it must not come from there
+pg    Unix socket, not TCP loopback, when the database is on this host —
+      83.4 to 48.1 µs for one connection string
+pg    one round trip per request: user row and roles in one statement.
+      A round trip costs more than the join it saves.
+pg    do not hand-write row extraction. structs and from_row/bind_params
+      are generated from contracts/db — 330 columns is not a review task.
+      Query construction stays hand-written; that part is business logic.
+jwt   require the claim before checking it. `exp` absent, or null, or a
+      string, is not `exp` valid — see Architecture.md, Safety net
+zig   a native Debian build needs addMultiarchIncludeDir on every artifact
+      that includes uv.h or a libpq header; cross builds never hit it
+http  the Windows fallback is libuv + picohttpparser + ~100 lines, not a
+      second HTTP library. Owning the accept loop is what keeps the handler
+      signature single. Mongoose is GPLv2/commercial — do not reach for it.
 ```
 
 Add to this list when something costs you an afternoon.
