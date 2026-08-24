@@ -4,7 +4,7 @@
 #include "gradido_blockchain_core/data/wire/ledger_anchor.h"
 #include "gradido_blockchain_core/data/wire/hiero.h"
 #include "gradido_blockchain_core/types/ledger_anchor.h"
-#include "hostmem/converter.h"
+#include "arnm/converter.h"
 
 #include <cstddef>
 #include <napi.h>
@@ -135,7 +135,7 @@ namespace gradido::data::wire {
         if (written >= sizeof(buffer)) {
             std::string message = "[LedgerAnchor.getHieroTransactionId] Hiero Transaction Id String is to big, max expected: 127, actually: ";
             char sizeBuffer[24];
-            hostmem_uint64_to_string(sizeBuffer, sizeof(sizeBuffer), written);
+            arnm_uint64_to_string(sizeBuffer, sizeof(sizeBuffer), written);
             message += sizeBuffer;
             Napi::Error::New(env, message.c_str()).ThrowAsJavaScriptException();
             return env.Null();

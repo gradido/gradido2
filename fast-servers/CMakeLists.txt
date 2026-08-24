@@ -1,0 +1,294 @@
+cmake_minimum_required(VERSION 3.18.2)
+cmake_policy(VERSION 3.18.2)
+
+# CMP0135 makes FetchContent stamp extracted archives with the extraction time instead of the
+# timestamps inside the tarball. It only exists from CMake 3.24 on, and setting an unknown policy
+# is a hard error -- so it is asked for rather than assumed.
+if(POLICY CMP0135)
+  cmake_policy(SET CMP0135 NEW)
+endif()
+
+# build.zig is the master build of this project -- it defines the targets, the options and the
+# matrix that gets verified. This file exists for the one case zig cannot serve: the MSVC ABI on
+# Windows, whose SDK zig does not ship. Everything here mirrors build.zig rather than leading it;
+# when the two disagree, build.zig is right. See ../AGENTS.md.
+#
+#   cmake -B build
+#   cmake --build build --config Release
+#
+# The dependencies are fetched, not looked for. It is the second build of a project whose first
+# one downloads everything it needs, and a Windows developer who has to install libuv by hand
+# before the tree compiles will conclude the tree does not compile.
+#
+# On Linux this file works too and is the better of the two builds for one purpose: it prints the
+# -Wall -Wextra findings. zig hides C compiler warnings when a step succeeds and turns them into
+# errors when one fails, so a green `zig build` says nothing about them either way.
+
+project(fast_servers C)
+
+# CMake only learned to pass /std:c11 to MSVC in 3.20; older versions accept these lines and
+# quietly hand MSVC its default C mode instead. MSVC itself needs VS 2019 16.8 for C11, which
+# ships with a newer CMake anyway -- but if a Windows build fails on C11 syntax, check the CMake
+# version before the source.
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+include(FetchContent)
+
+if(WIN32)
+  set(FS_H2O_DEFAULT OFF)
+else()
+  set(FS_H2O_DEFAULT ON)
+endif()
+
+# Mirrors -Dh2o and -Dsanitize of build.zig, defaulting the same way.
+option(FS_ENABLE_H2O "Build the h2o HTTP backend; off selects the libuv+picohttpparser fallback. Requires a libh2o-evloop via pkg-config, and is unavailable on Windows" ${FS_H2O_DEFAULT})
+option(FS_ENABLE_TESTS "Build the googletest unit tests and the integration probe" OFF)
+option(FS_ENABLE_SANITIZERS "Build with AddressSanitizer, plus UndefinedBehaviorSanitizer on non-MSVC toolchains (MSVC ships no UBSan)" OFF)
+option(FS_ENABLE_THREAD_SANITIZER "Build with ThreadSanitizer (mutually exclusive with FS_ENABLE_SANITIZERS)" OFF)
+
+if(WIN32 AND FS_ENABLE_H2O)
+  message(FATAL_ERROR "FS_ENABLE_H2O does not build for Windows: h2o is a posix event loop. Leave it off and the binary serves over libuv and picohttpparser instead.")
+endif()
+
+# Set before any target is declared, so every component is instrumented the same way -- mixing an
+# instrumented library with an uninstrumented binary produces false reports.
+if(FS_ENABLE_SANITIZERS AND FS_ENABLE_THREAD_SANITIZER)
+  message(FATAL_ERROR "FS_ENABLE_SANITIZERS and FS_ENABLE_THREAD_SANITIZER cannot be combined; ThreadSanitizer does not run together with AddressSanitizer")
+endif()
+
+if(FS_ENABLE_SANITIZERS)
+  if(MSVC)
+    # MSVC ships AddressSanitizer only, there is no UndefinedBehaviorSanitizer counterpart. This
+    # is also the one sanitizer build.zig cannot offer: zig does not ship the asan runtime, which
+    # is why AGENTS.md section 4 needs both builds to satisfy its list.
+    message(STATUS "Sanitizers enabled: address")
+    add_compile_options(/fsanitize=address /Zi)
+  else()
+    message(STATUS "Sanitizers enabled: address, undefined")
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=address,undefined)
+  endif()
+endif()
+
+if(FS_ENABLE_THREAD_SANITIZER)
+  if(MSVC)
+    message(FATAL_ERROR "FS_ENABLE_THREAD_SANITIZER is not supported by MSVC")
+  endif()
+  message(STATUS "Sanitizers enabled: thread")
+  add_compile_options(-fsanitize=thread -fno-omit-frame-pointer -g)
+  add_link_options(-fsanitize=thread)
+endif()
+
+if(MSVC)
+  # The sources are ASCII and stay that way, which already settles the question: every byte means
+  # the same in every codepage. This is the second line of defence, for the window between
+  # someone typing an em dash and the linter telling them not to -- without it MSVC reads the
+  # file in the system codepage and warns (C4819) or mangles the character.
+  add_compile_options(/utf-8)
+endif()
+
+# Mirrors c_flags in build.zig. /W4 goes in without a /W3 to fight because cmake_policy(VERSION
+# 3.18.2) at the top puts CMP0092 at NEW, which keeps CMake from seeding CMAKE_C_FLAGS with /W3;
+# were it OLD, both would arrive and MSVC would answer D9025.
+if(MSVC)
+  set(FS_WARNING_FLAGS /W4)
+else()
+  set(FS_WARNING_FLAGS -Wall -Wextra)
+endif()
+
+# --- dependencies ---------------------------------------------------------------------------
+#
+# The commits are the ones build.zig.zon pins. Two lists of the same versions is the cost of
+# having two builds; when they disagree, build.zig.zon is the one that is right.
+
+# gradido-blockchain-core. Its own CMakeLists fetches libsodium (libsodium-cmake, which is what
+# makes this work on MSVC at all) when USE_SODIUM is on, and arnm, whose sources it compiles
+# into its own target -- so asking for it here is enough to get all three. The sodium target it
+# brings is what service-core's jwt.c links against.
+#
+# The commit and not the tag: a tag can be moved, and this build has no business taking whatever
+# it resolves to today. It is v0.17.1.
+set(USE_SODIUM ON CACHE BOOL "" FORCE)
+FetchContent_Declare(blockchain_core
+  GIT_REPOSITORY https://github.com/gradido/gradido-blockchain-core.git
+  GIT_TAG 9aaf20d2fb603a7bbd0c19ff3f113b29ea0de4f8
+)
+FetchContent_MakeAvailable(blockchain_core)
+
+# arnm, for its headers only. The core populated it and compiled its sources -- yyjson included
+# -- into gradido_blockchain_core, so there is nothing to fetch again and nothing to link; what
+# is needed here is where it landed. FetchContent records that globally, which is what makes it
+# readable from this scope although another CMakeLists did the populating.
+#
+# This build pinned yyjson itself until blockchain-core 0.17.0, which was correct while the core
+# did not carry it. Do not bring that back: two definitions of every yyjson_* symbol is a
+# link-order lottery.
+FetchContent_GetProperties(arnm)
+if(NOT arnm_SOURCE_DIR)
+  message(FATAL_ERROR
+    "gradido-blockchain-core did not populate arnm. It has since 0.17.0; if a newer one stopped, "
+    "service-core needs another source for arnm/ and for yyjson.h.")
+endif()
+message(STATUS "arnm from ${arnm_SOURCE_DIR}")
+
+if(NOT FS_ENABLE_H2O)
+  # libuv, the platform half of the fallback backend. Upstream's own CMakeLists, which is what
+  # the zig build's package wraps as well.
+  set(LIBUV_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  set(LIBUV_BUILD_BENCH OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(libuv
+    GIT_REPOSITORY https://github.com/libuv/libuv.git
+    GIT_TAG v1.52.0
+  )
+  FetchContent_MakeAvailable(libuv)
+
+  # picohttpparser, the parser half. It has no build system of its own and lives as a submodule
+  # of h2o, so what is fetched is h2o -- shallow, and with that one submodule rather than the
+  # dozen it otherwise carries.
+  #
+  # SOURCE_SUBDIR points at a directory with no CMakeLists.txt on purpose: it is what keeps
+  # MakeAvailable from calling add_subdirectory() and pulling h2o's whole build into this one.
+  # Only picohttpparser.c is compiled below, because upstream ships a bench.c and a test.c
+  # beside it and each of those carries a main().
+  FetchContent_Declare(h2o
+    GIT_REPOSITORY https://github.com/h2o/h2o.git
+    GIT_TAG 706842c0f8c0d9422efb97a4d8ef7d6ec9df87b7
+    GIT_SUBMODULES deps/picohttpparser
+    GIT_SUBMODULES_RECURSE OFF
+    GIT_SHALLOW FALSE
+    SOURCE_SUBDIR deps/picohttpparser
+  )
+  FetchContent_MakeAvailable(h2o)
+  set(FS_PICOHTTPPARSER_DIR ${h2o_SOURCE_DIR}/deps/picohttpparser)
+endif()
+
+if(FS_ENABLE_TESTS)
+  # googletest is C++ testing C, which is what ../arnm and ../blockchain-core do as well. The
+  # language is enabled here rather than in project() so that a build without tests never asks
+  # for a C++ compiler it does not need.
+  enable_language(CXX)
+  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+  # Same version build.zig.zon pins, so the three repositories test against one googletest.
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG v1.15.2
+  )
+  FetchContent_MakeAvailable(googletest)
+  enable_testing()
+endif()
+
+# --- components -----------------------------------------------------------------------------
+
+# The two HTTP backends live beside each other in service-core/src; exactly one is compiled.
+file(GLOB SERVICE_CORE_SRC "service-core/src/*.c")
+if(FS_ENABLE_H2O)
+  list(REMOVE_ITEM SERVICE_CORE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/service-core/src/http_fallback.c")
+else()
+  list(REMOVE_ITEM SERVICE_CORE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/service-core/src/http_h2o.c")
+  list(APPEND SERVICE_CORE_SRC "${FS_PICOHTTPPARSER_DIR}/picohttpparser.c")
+endif()
+
+file(GLOB BACKEND_CORE_SRC "backend-core/src/*.c")
+file(GLOB BACKEND_SRC "backend/src/*.c")
+file(GLOB FEDERATION_SRC "federation/src/*.c")
+# dht-node's Rust half does not exist yet; src/ holds the C stand-in behind the same extern "C"
+# header. When the crate lands, this is where cargo gets invoked and the stub drops out.
+file(GLOB DHT_NODE_SRC "dht-node/src/*.c")
+
+# Every component's public headers on every component's search path -- same as build.zig, and for
+# the same reason: what may depend on what is in Architecture.md, and a #include that breaks it is
+# a review finding rather than a link error.
+set(FS_INCLUDE_DIRS
+  ${CMAKE_CURRENT_SOURCE_DIR}/service-core/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/backend-core/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/backend/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/federation/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/dht-node/include
+)
+
+function(fs_add_component name)
+  add_library(${name} STATIC ${ARGN})
+  target_include_directories(${name} PUBLIC ${FS_INCLUDE_DIRS})
+  target_compile_options(${name} PRIVATE ${FS_WARNING_FLAGS})
+  if(NOT WIN32)
+    find_package(Threads REQUIRED)
+    target_link_libraries(${name} PUBLIC Threads::Threads)
+  endif()
+endfunction()
+
+fs_add_component(service_core ${SERVICE_CORE_SRC})
+fs_add_component(backend_core ${BACKEND_CORE_SRC})
+fs_add_component(backend ${BACKEND_SRC})
+fs_add_component(federation ${FEDERATION_SRC})
+fs_add_component(dht_node ${DHT_NODE_SRC})
+
+# The core hides its crypto declarations behind this macro, so a consumer that does not define it
+# sees a different header than the one that was compiled.
+foreach(target service_core backend_core)
+  target_compile_definitions(${target} PRIVATE USE_SODIUM)
+  target_link_libraries(${target} PUBLIC gradido_blockchain_core sodium)
+  target_include_directories(${target} PRIVATE
+    ${blockchain_core_SOURCE_DIR}/include
+    # data/unit.h reaches for "r128/r128.h", which the core vendors rather than installs.
+    ${blockchain_core_SOURCE_DIR}/third_party
+    # arnm_result is what a grd* call answers with, so a consumer of the core's public headers
+    # needs arnm's include path as well.
+    ${arnm_SOURCE_DIR}/include
+  )
+endforeach()
+
+# PRIVATE, and a header path only: libarnm inside the core carries the yyjson symbols. Nothing
+# above service-core needs this, and nothing above it learns which parser is underneath.
+target_include_directories(service_core PRIVATE ${arnm_SOURCE_DIR}/third_party/yyjson/src)
+
+if(FS_ENABLE_H2O)
+  # Unlike build.zig, this file does not build h2o -- zig fetches the pinned checkout and
+  # compiles the source list itself, which is a page of build.zig and would be a second page
+  # here. The CMake build asks the system for a libh2o-evloop that is already there.
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(H2O REQUIRED libh2o-evloop)
+  target_include_directories(service_core PRIVATE ${H2O_INCLUDE_DIRS})
+  target_compile_definitions(service_core PRIVATE H2O_USE_LIBUV=0)
+  target_link_directories(service_core PUBLIC ${H2O_LIBRARY_DIRS})
+  target_link_libraries(service_core PUBLIC ${H2O_LIBRARIES})
+else()
+  target_include_directories(service_core PRIVATE ${FS_PICOHTTPPARSER_DIR})
+  target_link_libraries(service_core PUBLIC uv_a)
+  # picohttpparser is upstream's and is not ours to keep clean under our warning flags.
+  if(MSVC)
+    set_source_files_properties(${FS_PICOHTTPPARSER_DIR}/picohttpparser.c PROPERTIES COMPILE_OPTIONS "/W0")
+  else()
+    set_source_files_properties(${FS_PICOHTTPPARSER_DIR}/picohttpparser.c PROPERTIES COMPILE_OPTIONS "-w")
+  endif()
+endif()
+
+target_link_libraries(backend PUBLIC backend_core service_core)
+target_link_libraries(federation PUBLIC backend_core service_core)
+target_link_libraries(dht_node PUBLIC service_core)
+target_link_libraries(backend_core PUBLIC service_core)
+
+add_executable(fast-servers src/main.c)
+target_include_directories(fast-servers PRIVATE ${FS_INCLUDE_DIRS})
+target_compile_options(fast-servers PRIVATE ${FS_WARNING_FLAGS})
+target_link_libraries(fast-servers PRIVATE backend federation dht_node backend_core service_core)
+
+if(MSVC)
+  # debug symbols for a parent project stepping into this one
+  target_compile_options(fast-servers PRIVATE $<$<CONFIG:Debug>:/JMC>)
+  set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT fast-servers)
+endif()
+
+if(FS_ENABLE_TESTS)
+  # Unit tests live beside the component they test rather than in one tree at the root -- see
+  # README.md, and build.zig, which explains why this project departs from its siblings here.
+  add_subdirectory(service-core/tests)
+  add_subdirectory(tests/integration)
+endif()
+
+install(TARGETS fast-servers RUNTIME DESTINATION bin)

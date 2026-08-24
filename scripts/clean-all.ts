@@ -16,6 +16,36 @@ const TARGETS = [
   'compile_commands.json',
 ]
 
+/**
+ * Directories with a native build of their own.
+ *
+ * They are listed rather than discovered because they are not workspaces and never will be:
+ * nothing under `fast-servers/` is in the root package.json, deliberately, so that
+ * `bun install` never needs the C path -- see AGENTS.md, "droppable, not merely removable".
+ * The workspace loop therefore never reaches them.
+ *
+ * A name that is not there is not an error: removeIfExists treats a missing path as already
+ * clean, which is what keeps this list from breaking the day the fast path is dropped.
+ */
+const NATIVE_ROOTS = ['fast-servers']
+
+/**
+ * What a native build leaves behind, beside build.zig and CMakeLists.txt.
+ *
+ * zig writes `.zig-cache` and `zig-out`, and regenerates `compile_commands.json` on every
+ * build. cmake writes into `build/` when it is pointed there, which is what the README does and
+ * what `-p build/fallback` puts the second zig build into -- and leaves `CMakeCache.txt` and
+ * `CMakeFiles/` in the source tree when someone configures without `-B`.
+ */
+const NATIVE_TARGETS = [
+  '.zig-cache',
+  'zig-out',
+  'build',
+  'compile_commands.json',
+  'CMakeCache.txt',
+  'CMakeFiles',
+]
+
 async function readWorkspaces(): Promise<string[]> {
   const packageJsonPath = join(ROOT, 'package.json')
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8')) as PackageJson
@@ -76,6 +106,18 @@ for (const workspace of workspaces) {
 
   for (const target of TARGETS) {
     await removeIfExists(join(workspacePath, target))
+  }
+
+  console.log()
+}
+
+console.log(`Cleaning ${NATIVE_ROOTS.length} native builds...\n`)
+
+for (const nativeRoot of NATIVE_ROOTS) {
+  console.log(`Native: ${nativeRoot}`)
+
+  for (const target of NATIVE_TARGETS) {
+    await removeIfExists(join(ROOT, nativeRoot, target))
   }
 
   console.log()

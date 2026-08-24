@@ -26,6 +26,8 @@ When TypeScript changes: identify whether business behavior changed, locate the
 corresponding domain path here, assess whether it is affected, update only when required.
 Do **not** force artificial parity. Preserve the business semantics, write idiomatic C.
 
+`README.md` beside this file holds the layout, the build commands and the options.
+
 ---
 
 ## 1. House dialect
@@ -42,6 +44,21 @@ So that review stays uniform and generated code stays checkable:
 
 Nothing on the session read path allocates. See `Architecture.md`, *Session cache*, for why
 that is still an open constraint rather than a solved one.
+
+Two exceptions exist. Both are written down where they are, so that neither spreads by being
+mistaken for the rule:
+
+```text
+http_fallback.c   one calloc per connection, 80 KiB of buffers. Affordable
+                  only because that backend is the one not carrying load —
+                  do not carry the shape over to the h2o path.
+log.c             a line that would not fit is truncated. The one place
+                  truncating beats failing: the alternative is losing the
+                  event entirely, and the structure around it is never
+                  truncated, only the human sentence.
+```
+
+Anything else that wants to allocate per request is a design change, not a patch.
 
 ---
 
@@ -79,13 +96,22 @@ event loop is undefined behavior for exactly the same reason a C++ exception is.
 Do not add a second Rust module. If one looks necessary, change `../Architecture.md` first —
 a third toolchain on the fast path is a design decision, not a dependency.
 
+**Tests are not modules.** The unit tests are C++ because googletest is, calling `extern "C"`
+headers — the same arrangement `../arnm` and `../blockchain-core` use. This section is about
+what runs inside a server; nothing under `<component>/tests/` is linked into one.
+
 ---
 
 ## 3. zig builds, it does not implement
 
-Build system and cross compiler. No application code — its API still moves between versions,
-and the repositories currently disagree about which one is pinned (see `../AGENTS.md`,
-*Toolchain*). Verify before assuming.
+Build system and cross compiler. No application code — its API still moves between versions.
+
+`build.zig.zon` declares `minimum_zig_version = "0.15.1"`, which is what `../h20Test` asks for
+as well. That is a floor, not the pin: `../AGENTS.md`, *Toolchain*, holds where the pinned
+toolchain comes from and why the number is worth reading rather than guessing.
+
+`CMakeLists.txt` mirrors `build.zig` and exists for the one target zig cannot serve, the MSVC
+ABI. When the two disagree, `build.zig` is right.
 
 ---
 
@@ -95,8 +121,75 @@ Same policy as `../AGENTS.md` section 13, and it already holds here: `build.zig.
 every dependency to a fixed commit with a hash. Keep it that way — a floating dependency in
 a C build is a floating dependency in the process that signs transactions.
 
-Prefer no dependency at all. h2o, yyjson and libpq earn their place; a library that saves
-fifty lines of C does not.
+What is in, and what each is for:
+
+```text
+blockchain_core    the money arithmetic, the wire formats, the crypto.
+                   Same commit packages/shared-native pins, so both builds
+                   in this repository see one layout of the same structs.
+libsodium          HS256, for the JWT. Same pin and the same options the
+                   core requests, or the build gets two instances of it.
+arnm               the arena, the containers and the conversions the core
+                   is written against — arnm_result is what a grd* call
+                   answers with — and, since arnm 0.7.2, the yyjson jwt.c
+                   parses a token with. Same pin and options as the core.
+                   It was hostmem until arnm 0.5.0 renamed every symbol.
+h2o                the fast HTTP backend, and the picohttpparser the other
+                   backend compiles. Fetched by every build for that reason.
+libuv       lazy   the platform half of the fallback backend.
+googletest  lazy   the unit tests.
+compile_commands   feeds compile_commands.json.
+```
+
+`lazy` means a build that does not select that path never downloads it.
+
+**Fetch, do not vendor.** picohttpparser was a copy under `third_party/` before it was a
+dependency, and the copy lost: two files nobody would ever diff against the original again are
+worse than a download the Windows build does not compile. If something looks too small to be
+worth pinning, that is an argument for not depending on it at all, not for copying it in.
+
+**Watch what the core starts carrying.** This build pinned yyjson itself while blockchain-core
+was at 0.16.0 and had no parser; 0.17.0 began linking libarnm, which carries one, and the pin
+became two definitions of every `yyjson_*` symbol with link order deciding between them. When
+the core takes on a dependency this build also names, one of the two has to go — and it is this
+one, because a consumer that pins around its own library is pinning twice.
+
+Prefer no dependency at all. A library that saves fifty lines of C does not earn its place.
+
+---
+
+## 3b. h2o, and the fallback behind the same header
+
+h2o is the server. `service_core/http.h` has a second implementation behind it, and it is not
+an alternative to h2o — it is what the Windows build gets instead of nothing:
+
+```text
+http_h2o.c        h2o. This is the fast path, and every performance figure in
+                  ../Architecture.md is about it: HTTP/1.1 and HTTP/2, 11.6 µs
+                  for a cached request. The default wherever it builds.
+http_fallback.c   libuv + picohttpparser. One thread, one event loop, HTTP/1.1,
+                  no TLS. It exists for one reason: h2o is a posix event loop
+                  and does not compile against the MSVC runtime.
+```
+
+**The fallback is not a deployment option.** One thread means one core, whatever the machine
+has, and nothing about it was built to carry load. It is there so that everything around the
+request path — the roles, the configuration, the domain code — can be worked on and debugged
+where h2o cannot build. A high-performance server on Windows is not on the table anyway; the
+fast path targets the Linux machine this project runs on. `-Dh2o=false` selects the fallback and
+Windows forces it, and there is no third reason to choose it.
+
+Three rules follow, and the first is the one that keeps the seam worth having:
+
+- **A role never asks which one is underneath.** `sc_http_backend_name()` exists for the startup
+  line and for `--version`. Code that branches on it has put behavior on one backend and not the
+  other, which is the same failure as putting a feature on the fast path and not in TypeScript.
+- **A change to one is a change to both, or it is a divergence.** Every difference a *client*
+  can observe is listed in `tests/integration/README.md` and asserted in the suite, so none of
+  them moves unnoticed. The one to know before either goes behind a proxy: `Content-Length`
+  together with `Transfer-Encoding` — h2o serves the request, the fallback refuses it.
+- **A new route goes behind the header, never into a backend.** `tests/integration/probe/` is
+  the worked example of a second consumer of that header.
 
 ---
 
@@ -114,6 +207,28 @@ Contract vectors as a merge gate, green on both implementations.
 
 A data race here does not fail a test. It fails in production, under load, weeks later.
 
+How to run them:
+
+```text
+zig build -Dtests -Dsanitize=thread test              TSan
+zig build -Dtests -Dsanitize=undefined_behavior test  UBSan
+cmake -B build -DFS_ENABLE_SANITIZERS=ON              ASan, and only here — zig
+                                                      ships no asan runtime, which
+                                                      is half of why CMakeLists.txt
+                                                      exists at all
+```
+
+What the list above still asks for and does not have, named rather than left to be discovered:
+
+```text
+fuzzing            nothing is fuzzed. service-core/src/jwt.c is the first
+                   candidate — base64 and JSON, both read before anything
+                   has been vouched for — and picohttpparser is the second,
+                   now that a backend of ours runs it.
+contract vectors   contracts/test-vectors is empty, so the merge gate has
+                   nothing to run yet.
+```
+
 ---
 
 ## 5. Before you touch the session cache
@@ -130,6 +245,12 @@ no lock upgrade — release shared, take exclusive, check again
 no session lock is ever held across a database call
 ```
 
+The table half of it is `service-core/src/cache.c`, and `service-core/tests/test_cache.cpp`
+covers it. Run that under TSan and not only plain: its concurrent test proves little on its own,
+because a reference count incremented outside the table lock does not fail an assertion. What is
+still open — how a session's working set grows while only a shared lock is held — is in
+`Architecture.md`, *Open*, and nothing in the cache decides it.
+
 ---
 
 ## 6. Known idioms
@@ -138,10 +259,60 @@ Record here what keeps being reinvented or mis-remembered, so the next agent doe
 rediscover it:
 
 ```text
-h2o   register the generator before the query goes out, not after —
-      otherwise a client disconnect writes into a freed request
-h2o   the request pool lives exactly as long as the request; anything
-      the answer outlives it must not come from there
+h2o    register the generator before the query goes out, not after —
+       otherwise a client disconnect writes into a freed request
+h2o    the request pool lives exactly as long as the request; anything
+       the answer outlives it must not come from there
+h2o    h2o_send_inline does NOT set res.content_length. Its own comment
+       says why — it also serves 304s — and without it the HTTP/1 layer
+       answers chunked, which the other backend never does. Set it before
+       sending. curl hides this; the integration suite is what caught it.
+h2o    max_request_entity_size defaults to a gigabyte. Both backends have
+       to refuse at SC_HTTP_MAX_BODY, so the server sets it at startup.
+h2o    the head limit is H2O_MAX_REQLEN, a compile-time constant of about
+       400 KiB. There is no knob. The 8 KiB limit is the fallback's own.
+zig    on Debian and Ubuntu `zig libc` reports sys_include_dir=/usr/include
+       while asm/errno.h sits one level deeper, under the multiarch triple.
+       build.zig generates a corrected description and hands it to every
+       target, because libsodium and libtsan fail without it and neither is
+       a compilation this build declares.
+zig    the cdb step writes compile_commands.json into the CURRENT directory.
+       Run `zig build` from fast-servers/ or find a stray copy later.
+biome  `check --write --unsafe` deletes console calls rather than flagging
+       them. It removed a diagnostic in tests/integration once, silently.
+       Read the diff after running it, or do not pass --unsafe.
 ```
 
 Add to this list when something costs you an afternoon.
+
+---
+
+## 7. Where tests go
+
+```text
+<component>/tests/    unit tests, beside the component they test
+tests/integration/    the assembled binary, driven over sockets by bun test
+```
+
+Unit tests live beside their component rather than in one tree at the root, which is where
+`../arnm` and `../blockchain-core` keep theirs. Those are one library each; this is five, and a
+test binary that links one component and has only that component's include directory on its
+search path is what proves a header carries its own dependencies. A shared test tree with all
+five paths on it can never fail that way.
+
+`tests/integration/` holds what tests the assembled binary rather than a component. The suite
+runs against `http-probe` — once per HTTP backend, because the point is that both answer the
+same — and its README lists where they do not.
+
+Two rules about it:
+
+- **A test route is still a route.** Nothing that exists so a test can observe something goes
+  into backend or federation; it goes into the probe. `/_health` is operational, it is the only
+  route the roles have, and it is not a precedent.
+- **It is not a workspace.** `bun install` must not need anything under `fast-servers/`, or the
+  fast path stops being droppable, so this directory is absent from the root `package.json` and
+  has no dependencies of its own. `bun test` from inside it is the whole setup.
+
+`bun clear` at the repository root removes what both builds leave behind here.
+`scripts/clean-all.ts` names `fast-servers` explicitly, for the same reason: it is not a
+workspace, so the loop that cleans those never arrives.
