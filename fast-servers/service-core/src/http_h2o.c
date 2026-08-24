@@ -1,7 +1,7 @@
 /*
  * The h2o backend: one event loop per server, the evloop socket layer, no libuv.
  *
- * The accept path follows h2o's own examples and ../h20Test/src/main.c. What is different here
+ * The accept path follows h2o's own examples and the h2o prototype. What is different here
  * is that the loop is not `while (h2o_evloop_run(loop, INT32_MAX))`: it ticks, so the quit flag
  * a signal handler raised is seen within SC_RUNTIME_TICK_MS and every role shuts down together.
  *

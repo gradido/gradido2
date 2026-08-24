@@ -1,8 +1,8 @@
 /**
  * The HTTP surface, driven over raw sockets against the built binary.
  *
- * Translated from ../../../h20Test/fallback_server/test.py, where every one of these was a bug
- * first — the README there names which. What is new is that this runs against *both* backends:
+ * Translated from the raw-socket suite of the h2o prototype that preceded this repository,
+ * where every one of these was a bug first. What is new is that this runs against *both* backends:
  * the same file, the same bytes, once against h2o and once against libuv+picohttpparser. A role
  * is written against service_core/http.h and cannot tell them apart, so anything a client can
  * tell apart is a defect in one of the two.

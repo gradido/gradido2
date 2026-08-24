@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const zcc = @import("compile_commands");
 
 /// Flags every first-party C source is compiled with.
@@ -6,7 +7,7 @@ const zcc = @import("compile_commands");
 /// -Wall and -Wextra are the baseline and the tree is clean under them, so anything they print
 /// is new. CMakeLists.txt mirrors this, MSVC spelling included.
 ///
-/// -Wconversion is deliberately absent, unlike in ../arnm. It earns its place there because
+/// -Wconversion is deliberately absent, unlike in arnm. It earns its place there because
 /// that library narrows on purpose and often; here the narrowing-heavy code is the money
 /// arithmetic, which lives in gradido-blockchain-core and is compiled by its own build. What
 /// this project would get instead is a page of findings from the h2o headers, which are not
@@ -92,22 +93,59 @@ fn applySanitize(module: *std.Build.Module, mode: SanitizeMode) void {
     }
 }
 
-/// Zig's native libc detection finds `/usr/include` and considers the matter closed. On Debian
-/// and Ubuntu the more interesting half -- `asm/errno.h` and friends -- sits one level deeper
-/// under the multiarch triple, so it is quietly handed back if it is there.
-fn addMultiarchIncludeDir(
+/// True when @p target names the machine this build runs on.
+///
+/// Either by being native, or by spelling the host's own triple out --
+/// `-Dtarget=x86_64-linux-gnu` on an x86_64 Debian is the same machine, but zig treats it as a
+/// cross build and stops consulting the system's headers. That distinction is invisible in the
+/// error it produces, which is 78 lines of `'openssl/ssl.h' file not found`.
+fn targetIsHost(target: std.Build.ResolvedTarget) bool {
+    if (target.query.isNative()) return true;
+    const t = target.result;
+    return t.cpu.arch == builtin.target.cpu.arch and t.os.tag == builtin.target.os.tag and
+        t.abi == builtin.target.abi;
+}
+
+/// Puts the host's own header and library directories on @p compile, for what zig does not carry.
+///
+/// Three of them, for two different reasons:
+///
+///   /usr/include                     OpenSSL and zlib, which h2o includes and which no
+///                                    dependency of this build provides.
+///   /usr/include/<arch>-linux-<abi>  On Debian and Ubuntu the more interesting half of libc,
+///                                    `asm/errno.h` and friends, sits one level deeper under
+///                                    the multiarch triple and zig's detection stops above it.
+///   /usr/lib/<arch>-linux-<abi>      Where the -l flags for ssl, crypto and z resolve.
+///
+/// A native target already has the first and the third; a *named* host target has neither,
+/// which is the whole reason this function exists. A target that is not the host gets nothing:
+/// its headers and libraries are not these, and pretending otherwise builds a binary against
+/// one machine's libraries for another's.
+fn addHostSystemPaths(
     b: *std.Build,
     compile: *std.Build.Step.Compile,
     target: std.Build.ResolvedTarget,
 ) void {
     const t = target.result;
-    if (!target.query.isNative() or t.os.tag != .linux) return;
+    if (!targetIsHost(target) or t.os.tag != .linux) return;
     if (!std.mem.startsWith(u8, @tagName(t.abi), "gnu") and
         !std.mem.startsWith(u8, @tagName(t.abi), "musl")) return;
 
-    const dir = b.fmt("/usr/include/{s}-linux-{s}", .{ @tagName(t.cpu.arch), @tagName(t.abi) });
-    std.fs.accessAbsolute(dir, .{}) catch return;
-    compile.addSystemIncludePath(.{ .cwd_relative = dir });
+    const triple = b.fmt("{s}-linux-{s}", .{ @tagName(t.cpu.arch), @tagName(t.abi) });
+    const named_host = !target.query.isNative();
+
+    if (named_host) compile.addSystemIncludePath(.{ .cwd_relative = "/usr/include" });
+
+    const multiarch_include = b.fmt("/usr/include/{s}", .{triple});
+    if (std.fs.accessAbsolute(multiarch_include, .{})) |_| {
+        compile.addSystemIncludePath(.{ .cwd_relative = multiarch_include });
+    } else |_| {}
+
+    if (!named_host) return;
+    for ([_][]const u8{ b.fmt("/usr/lib/{s}", .{triple}), "/usr/lib", "/lib" }) |dir| {
+        std.fs.accessAbsolute(dir, .{}) catch continue;
+        compile.addLibraryPath(.{ .cwd_relative = dir });
+    }
 }
 
 /// A libc description Debian's native detection does not produce, for the compiles this build
@@ -129,7 +167,7 @@ fn addMultiarchIncludeDir(
 fn nativeLibcFile(b: *std.Build, target: std.Build.ResolvedTarget) ?std.Build.LazyPath {
     const t = target.result;
     if (b.libc_file != null) return null;
-    if (!target.query.isNative() or t.os.tag != .linux) return null;
+    if (!targetIsHost(target) or t.os.tag != .linux) return null;
     if (!std.mem.startsWith(u8, @tagName(t.abi), "gnu") and
         !std.mem.startsWith(u8, @tagName(t.abi), "musl")) return null;
 
@@ -346,7 +384,7 @@ const h2o_c_flags = [_][]const u8{
 };
 
 /// Builds libh2o-evloop from the upstream h2o checkout, which arrives without a build.zig and
-/// without any sign of remorse about it. Lifted from ../h20Test, where it was written.
+/// without any sign of remorse about it. Lifted from the h2o prototype, where it was written.
 fn buildH2o(
     b: *std.Build,
     dep: *std.Build.Dependency,
@@ -363,7 +401,7 @@ fn buildH2o(
         }),
     });
 
-    addMultiarchIncludeDir(b, lib, target);
+    addHostSystemPaths(b, lib, target);
     for (h2o_include_dirs) |dir| lib.addIncludePath(dep.path(dir));
 
     // The evloop backend, so libuv remains a stranger
@@ -450,7 +488,7 @@ fn addComponent(
     applySanitize(lib.root_module, context.sanitize);
     if (context.libc_file) |file| lib.setLibCFile(file);
     addComponentIncludes(b, lib);
-    addMultiarchIncludeDir(b, lib, context.target);
+    addHostSystemPaths(b, lib, context.target);
     addDirSources(lib, b, src_dir, skip);
     context.cdb.append(b.allocator, lib) catch @panic("OOM");
     return lib;
@@ -476,6 +514,18 @@ pub fn build(b: *std.Build) void {
         std.debug.panic("-Dh2o=true does not build for Windows: h2o is a posix event loop. " ++
             "Leave it off and the binary serves over libuv and picohttpparser instead.", .{});
     }
+    // h2o includes <openssl/ssl.h> and links ssl, crypto and z, none of which this build
+    // provides and all of which come from the host. For the host itself that is fine -- named
+    // or native, addHostSystemPaths finds them. For any other target they are the wrong
+    // machine's, and what zig says about it is 78 lines of 'openssl/ssl.h' file not found.
+    if (enable_h2o and !targetIsHost(target)) {
+        std.debug.panic(
+            "-Dh2o=true cannot cross compile to {s}-{s}-{s}: h2o needs the host's OpenSSL and " ++
+                "zlib, and this build does not carry them. Add -Dh2o=false for the " ++
+                "libuv+picohttpparser backend, which needs nothing from the host.",
+            .{ @tagName(target.result.cpu.arch), @tagName(target.result.os.tag), @tagName(target.result.abi) },
+        );
+    }
 
     const libc_file = nativeLibcFile(b, target);
 
@@ -500,6 +550,15 @@ pub fn build(b: *std.Build) void {
     // dht-node/Architecture.md for why it is Rust at all.
     const dht_node = addComponent(&context, "dht_node", "dht-node/src", &.{});
 
+    // libuv is the platform layer, not an HTTP detail: the session cache's reader/writer lock,
+    // the log's mutex and the thread each role runs on all come from its loop-free half. Every
+    // build links it, which is why it is fetched here rather than inside the backend branch.
+    // AGENTS.md section 3a holds the decision.
+    const uv_dep = b.dependency("libuv", .{ .target = target, .optimize = optimize });
+    const uv = uv_dep.artifact("uv");
+    addHostSystemPaths(b, uv, target);
+    if (libc_file) |file| uv.setLibCFile(file);
+
     // gradido-blockchain-core: the money arithmetic and the wire formats backend-core will be
     // written against, and -- today -- the two libraries service-core reaches into. It vendors
     // yyjson and links libsodium, so pinning either separately would put a second definition of
@@ -510,7 +569,7 @@ pub fn build(b: *std.Build) void {
         .sodium = true,
     });
     const gbc = gbc_dep.artifact("gradido_blockchain_core");
-    addMultiarchIncludeDir(b, gbc, target);
+    addHostSystemPaths(b, gbc, target);
     if (libc_file) |file| gbc.setLibCFile(file);
 
     // libsodium, requested with the core's own options so that both get the same instance --
@@ -535,6 +594,13 @@ pub fn build(b: *std.Build) void {
     // every symbol it has. Requested with the core's options, so that both get one instance.
     const arnm_dep = b.dependency("arnm", .{ .target = target, .optimize = optimize });
 
+    // uv.h is included by service-core's own sources and by main.c, so the header path and the
+    // library go on everything that compiles either -- a native Debian build needs
+    // addMultiarchIncludeDir on each of them as well, which addComponent already does.
+    for ([_]*std.Build.Step.Compile{ service_core, backend_core }) |compile| {
+        compile.linkLibrary(uv);
+    }
+
     for ([_]*std.Build.Step.Compile{ service_core, backend_core }) |compile| {
         // The core hides its crypto declarations behind this macro, so a consumer that does not
         // define it sees a different header than the one that was compiled.
@@ -558,7 +624,7 @@ pub fn build(b: *std.Build) void {
     applySanitize(exe.root_module, sanitize);
     if (libc_file) |file| exe.setLibCFile(file);
     addComponentIncludes(b, exe);
-    addMultiarchIncludeDir(b, exe, target);
+    addHostSystemPaths(b, exe, target);
     exe.addCSourceFiles(.{ .files = &.{"src/main.c"}, .flags = &c_flags });
 
     exe.linkLibrary(backend);
@@ -568,6 +634,8 @@ pub fn build(b: *std.Build) void {
     exe.linkLibrary(service_core);
     exe.linkLibrary(gbc);
     exe.linkLibrary(sodium);
+    // main.c runs each role on a uv_thread_t.
+    exe.linkLibrary(uv);
 
     // Both backends read from the h2o checkout: the fast one compiles libh2o out of it, the
     // fallback takes picohttpparser out of its deps/. Which is why it is fetched either way --
@@ -593,17 +661,8 @@ pub fn build(b: *std.Build) void {
 
         http_backend_lib = h2o;
     } else {
-        // Lazy for the mirror image of h2o's reason: a build on the fast path never fetches
-        // libuv. On the first run this is null while zig downloads, and the build re-runs by
-        // itself afterwards.
-        if (b.lazyDependency("libuv", .{ .target = target, .optimize = optimize })) |uv_dep| {
-            const uv = uv_dep.artifact("uv");
-            addMultiarchIncludeDir(b, uv, target);
-            if (libc_file) |file| uv.setLibCFile(file);
-
-            service_core.linkLibrary(uv);
-            http_backend_lib = uv;
-        }
+        // The platform layer is already linked; the fallback backend only adds the parser.
+        http_backend_lib = uv;
         // picohttpparser, out of the same h2o checkout the other backend is built from. It is
         // two files with no build system of their own, so they are compiled straight into
         // service-core -- and only picohttpparser.c is named, because upstream ships a bench.c
@@ -643,7 +702,7 @@ pub fn build(b: *std.Build) void {
             applySanitize(bench.root_module, sanitize);
             if (libc_file) |file| bench.setLibCFile(file);
             addComponentIncludes(b, bench);
-            addMultiarchIncludeDir(b, bench, target);
+            addHostSystemPaths(b, bench, target);
             bench.addIncludePath(arnm_dep.path("include"));
             bench.addCSourceFiles(.{
                 .files = &.{b.fmt("benchmarks/{s}.c", .{name})},
@@ -663,7 +722,7 @@ pub fn build(b: *std.Build) void {
 
     if (enable_tests) {
         // Unit tests live beside the component they test rather than in one tree at the root,
-        // which is where ../arnm and ../blockchain-core keep theirs. Those are one library
+        // which is where arnm and gradido-blockchain-core keep theirs. Those are one library
         // each; this is five, and a test binary that links one component and sees only that
         // component's include directory is what proves the header carries its own dependencies.
         // A shared test tree with all five paths on it can never fail that way.
@@ -724,7 +783,7 @@ pub fn build(b: *std.Build) void {
         applySanitize(probe.root_module, sanitize);
         if (libc_file) |file| probe.setLibCFile(file);
         addComponentIncludes(b, probe);
-        addMultiarchIncludeDir(b, probe, target);
+        addHostSystemPaths(b, probe, target);
         probe.addCSourceFiles(.{
             .files = &.{"tests/integration/probe/http_probe.c"},
             .flags = &c_flags,

@@ -11,8 +11,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <sodium.h>
+#include <uv.h>
+
+#include "service_core/atomic.h"
 #include "service_core/log.h"
-#include "service_core/thread.h"
 
 struct sc_cache_entry {
     /* Table pointer plus every request currently using it. Freed at zero, never anywhere
@@ -27,7 +30,10 @@ struct sc_cache_entry {
 };
 
 struct sc_cache {
-    sc_rwlock *lock;
+    /* By value, not behind a pointer: uv_rwlock_t is a concrete type and the table owns
+     * exactly one. */
+    uv_rwlock_t lock;
+    int lock_ready;
     sc_cache_entry **slots;
     uint32_t mask; /* capacity - 1, capacity being a power of two */
     uint32_t probe;
@@ -35,6 +41,42 @@ struct sc_cache {
     sc_cache_free_fn free_value;
     void *user_data;
 };
+
+/*
+ * The key hash is mixed and seeded, and both halves of that are load-bearing.
+ *
+ * The mix is the splitmix64 finalizer -- two multiplies and three shifts. Without it the slot
+ * comes from the low bits of an unmixed hash, which is a masked table over a raw key: a key set
+ * that strides by the table size then collides everywhere, and with a bounded probe walk that
+ * does not make the cache slow, it makes it stop holding anything. Correct answers throughout,
+ * hit rate on the floor, nothing in the log. Architecture.md, *What was measured*, has the
+ * reproduction and the figure -- 19 ns became 25 us.
+ *
+ * The seed is what makes such a key set unconstructible by someone who can choose the keys, and
+ * it costs one XOR. It is drawn once per process; uv_once is what makes "once" true even if a
+ * second cache is ever created off the startup thread.
+ */
+static uint64_t g_hash_seed;
+static uv_once_t g_hash_seed_once = UV_ONCE_INIT;
+
+static void draw_hash_seed(void)
+{
+    /* libsodium is initialised by the process before any cache exists -- see sc_jwt_init in
+     * main. randombytes_buf is the right source here for the same reason it is there: a
+     * predictable seed is the same as no seed. */
+    randombytes_buf(&g_hash_seed, sizeof(g_hash_seed));
+}
+
+/** splitmix64 finalizer. */
+static uint64_t mix64(uint64_t value)
+{
+    value ^= value >> 30;
+    value *= 0xbf58476d1ce4e5b9ULL;
+    value ^= value >> 27;
+    value *= 0x94d049bb133111ebULL;
+    value ^= value >> 31;
+    return value;
+}
 
 static uint32_t round_up_pow2(uint32_t value)
 {
@@ -44,16 +86,18 @@ static uint32_t round_up_pow2(uint32_t value)
     return result;
 }
 
-/* FNV-1a. The key is a digest already, so the hash only has to spread it over the slots. */
+/* FNV-1a over the seeded basis, then the finalizer. The slot is taken from the low bits of
+ * what comes out; when there is ever more than one table, it is routed by the high ones and the
+ * two must not overlap -- Architecture.md, *What was measured*. */
 static uint64_t hash_key(const char *key, size_t key_len)
 {
-    uint64_t hash = 1469598103934665603ull;
+    uint64_t hash = 1469598103934665603ull ^ g_hash_seed;
     size_t i;
     for (i = 0; i < key_len; ++i) {
         hash ^= (unsigned char)key[i];
         hash *= 1099511628211ull;
     }
-    return hash;
+    return mix64(hash);
 }
 
 static int entry_expired(const sc_cache *cache, const sc_cache_entry *entry, int64_t now_ms)
@@ -75,19 +119,19 @@ sc_cache *sc_cache_create(const sc_cache_config *cfg)
 
     if (cfg == NULL || cfg->capacity == 0)
         return NULL;
+    uv_once(&g_hash_seed_once, draw_hash_seed);
     cache = (sc_cache *)calloc(1, sizeof(*cache));
     if (cache == NULL)
         return NULL;
 
     capacity = round_up_pow2(cfg->capacity);
     cache->slots = (sc_cache_entry **)calloc(capacity, sizeof(*cache->slots));
-    cache->lock = sc_rwlock_create();
-    if (cache->slots == NULL || cache->lock == NULL) {
-        sc_rwlock_destroy(cache->lock);
+    if (cache->slots == NULL || uv_rwlock_init(&cache->lock) != 0) {
         free(cache->slots);
         free(cache);
         return NULL;
     }
+    cache->lock_ready = 1;
     cache->mask = capacity - 1;
     cache->probe = cfg->probe != 0 ? cfg->probe : SC_CACHE_PROBE_DEFAULT;
     if (cache->probe > capacity)
@@ -112,7 +156,8 @@ void sc_cache_destroy(sc_cache *cache)
         cache->slots[i] = NULL;
         sc_cache_release(entry);
     }
-    sc_rwlock_destroy(cache->lock);
+    if (cache->lock_ready)
+        uv_rwlock_destroy(&cache->lock);
     free(cache->slots);
     free(cache);
 }
@@ -129,7 +174,7 @@ sc_cache_entry *sc_cache_get(sc_cache *cache, const char *key, size_t key_len)
     hash = hash_key(key, key_len);
     now_ms = sc_now_ms();
 
-    sc_rwlock_rdlock(cache->lock);
+    uv_rwlock_rdlock(&cache->lock);
     for (i = 0; i < cache->probe; ++i) {
         sc_cache_entry *entry = cache->slots[(uint32_t)(hash + i) & cache->mask];
         if (entry == NULL)
@@ -147,7 +192,7 @@ sc_cache_entry *sc_cache_get(sc_cache *cache, const char *key, size_t key_len)
         found = entry;
         break;
     }
-    sc_rwlock_rdunlock(cache->lock);
+    uv_rwlock_rdunlock(&cache->lock);
     return found;
 }
 
@@ -179,7 +224,7 @@ sc_cache_entry *sc_cache_put(sc_cache *cache, const char *key, size_t key_len, v
     now_ms = entry->created_ms;
     victim = (uint32_t)hash & cache->mask;
 
-    sc_rwlock_wrlock(cache->lock);
+    uv_rwlock_wrlock(&cache->lock);
     /* Insertion never fails. The same key comes first and ends the walk -- taking a free slot
      * while an entry with this key sits further along the window would leave two, and a later
      * lookup would find whichever the probe order reached first. After that: a free slot, an
@@ -210,7 +255,7 @@ sc_cache_entry *sc_cache_put(sc_cache *cache, const char *key, size_t key_len, v
     }
     displaced = cache->slots[victim];
     cache->slots[victim] = entry;
-    sc_rwlock_wrunlock(cache->lock);
+    uv_rwlock_wrunlock(&cache->lock);
 
     /* Outside the lock: the last release runs the value's free callback, which is caller code
      * and may do anything, including take a lock of its own. */

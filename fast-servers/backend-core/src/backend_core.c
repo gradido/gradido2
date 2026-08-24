@@ -1,7 +1,7 @@
 #include "backend_core/backend_core.h"
 
+#include "service_core/atomic.h"
 #include "service_core/log.h"
-#include "service_core/thread.h"
 
 /*
  * Reference counted rather than a boolean: `--backend --federation` runs two roles in one

@@ -34,9 +34,8 @@
             .url = "https://github.com/gradido/arnm/archive/refs/tags/v0.7.2.tar.gz",
             .hash = "arnm-0.7.2-ZdhGsCwFGgA0uOWsPFL1vPE1tCGvc2TkG-A5oUQrPVgw",
         },
-        // The HTTP server on the fast path. Same commit ../h20Test is pinned to, so the two
-        // agree on the libh2o-evloop source list that build.zig copies out of h2o's
-        // CMakeLists.txt.
+        // The HTTP server on the fast path. build.zig copies the libh2o-evloop source list out
+        // of this checkout's CMakeLists.txt, so the pin and that list have to move together.
         //
         // Not lazy, although the Windows build does not compile libh2o: that build takes
         // picohttpparser out of deps/ here, and one pinned checkout both backends read from
@@ -46,16 +45,16 @@
             .url = "git+https://github.com/h2o/h2o#706842c0f8c0d9422efb97a4d8ef7d6ec9df87b7",
             .hash = "N-V-__8AACufnwFkhWbkiO3KxcVcasJKyoe9sYRvT0rp5-MI",
         },
-        // The platform layer of the fallback backend, which is the one that builds for Windows.
-        // Lazy: a build on the fast path never fetches it. The parser half of that backend comes
-        // out of the h2o checkout above.
+        // The platform layer: threads and synchronisation now, filesystem, DNS and child
+        // processes as they are needed. Not lazy, because every build uses the loop-free half
+        // -- see AGENTS.md section 3a. It is also the platform half of the fallback HTTP
+        // backend, whose parser comes out of the h2o checkout above.
         .libuv = .{
             .url = "git+https://github.com/allyourcodebase/libuv.git#c1ccce24e1077ae7780857c89fb4b3aeb9080315",
             .hash = "libuv-1.52.0-htqqvzNqAAAB6cHIx-wIffe_mqMW5GOKjHeDBJYHGwls",
-            .lazy = true,
         },
-        // googletest, for the unit tests under -Dtests. Same pin as ../arnm and
-        // ../blockchain-core, so the three repositories test against one version. Lazy: a build
+        // googletest, for the unit tests under -Dtests. Same pin as arnm and
+        // gradido-blockchain-core, so the three repositories test against one version. Lazy: a build
         // without -Dtests never fetches it.
         .googletest = .{
             .url = "git+https://github.com/allyourcodebase/googletest#e2affdd13730f800aa63772039f2adfa971461b6",

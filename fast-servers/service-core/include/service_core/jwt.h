@@ -6,8 +6,8 @@
  * libsodium underneath, and only libsodium. There is no second backend and no macro selecting
  * one: gradido-blockchain-core is a dependency of this build already and brings libsodium with
  * it, so a choice here would be a choice between the library that is present and one that would
- * have to be added. ../h20Test/src/jwt.c is where this came from and still carries the OpenSSL
- * half; that is the version for a project that does not link the core.
+ * have to be added. The h2o prototype this came from still carries the OpenSSL half; that is
+ * the version for a project that does not link the core.
  *
  * Everything after the signature check reads attacker-supplied bytes. AGENTS.md section 4
  * requires this parser to be fuzzed before it verifies a token that came from outside.
@@ -31,6 +31,9 @@ typedef enum sc_jwt_result {
     SC_JWT_EXPIRED,
     SC_JWT_BAD_ISSUER,
     SC_JWT_BAD_AUDIENCE,
+    /* A claim the verifier requires is absent, or is not of the type it has to be. That covers
+     * the claim the caller asked for and `exp`, which is required rather than optional -- see
+     * Architecture.md, *Safety net*. */
     SC_JWT_MISSING_CLAIM
 } sc_jwt_result;
 
@@ -59,6 +62,9 @@ void sc_jwt_init(void);
 /**
  * Verifies the signature, the expiry, the issuer and the audience -- in that order -- and then
  * copies the value of @p claim into @p out as a NUL-terminated string.
+ *
+ * `exp` is required: a token without one, or with one that is not a number, answers
+ * SC_JWT_MISSING_CLAIM rather than being treated as a token that never expires.
  *
  * @param out  buffer of at least SC_JWT_MAX_CLAIM bytes
  * @param now  unix seconds, passed in so a caller can reuse a timestamp it already has rather

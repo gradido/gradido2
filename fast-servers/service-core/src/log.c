@@ -11,7 +11,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "service_core/thread.h"
+#include <uv.h>
 
 #if defined(_WIN32)
 #include <sys/timeb.h>
@@ -25,9 +25,10 @@ static const char *const kCategoryNames[SC_CAT__COUNT] = {
 };
 
 static sc_log_level g_minimum = SC_LOG_INFO;
-/* Created on the first sc_log_init and never destroyed: the log outlives everything that
+/* Initialised on the first sc_log_init and never destroyed: the log outlives everything that
  * would be in a position to tear it down. */
-static sc_mutex *g_write_lock;
+static uv_mutex_t g_write_lock;
+static int g_write_lock_ready;
 
 int64_t sc_now_ms(void)
 {
@@ -46,8 +47,8 @@ int64_t sc_now_ms(void)
 void sc_log_init(sc_log_level minimum)
 {
     g_minimum = minimum;
-    if (g_write_lock == NULL)
-        g_write_lock = sc_mutex_create();
+    if (!g_write_lock_ready && uv_mutex_init(&g_write_lock) == 0)
+        g_write_lock_ready = 1;
 }
 
 sc_log_level sc_log_level_from_name(const char *name, sc_log_level fallback)
@@ -153,10 +154,10 @@ void sc_log(sc_log_level level, sc_log_cat cat, const char *event, const char *f
 
     /* One lock, one fwrite: two roles logging at the same moment must not interleave halves of
      * a line, because a half line is not JSON and the tests parse this stream. */
-    if (g_write_lock != NULL)
-        sc_mutex_lock(g_write_lock);
+    if (g_write_lock_ready)
+        uv_mutex_lock(&g_write_lock);
     (void)fwrite(line, 1, (size_t)written, stderr);
     (void)fflush(stderr);
-    if (g_write_lock != NULL)
-        sc_mutex_unlock(g_write_lock);
+    if (g_write_lock_ready)
+        uv_mutex_unlock(&g_write_lock);
 }

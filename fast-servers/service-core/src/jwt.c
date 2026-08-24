@@ -1,8 +1,8 @@
 /*
  * HS256 over libsodium, which also does the base64url, with arnm reading and writing the JSON.
  *
- * Ported from ../h20Test/src/jwt.c, minus its OpenSSL half. See jwt.h for why there is only one
- * crypto backend here.
+ * Carried over from the h2o prototype that preceded this repository, minus its OpenSSL half.
+ * See jwt.h for why there is only one crypto backend here.
  *
  * The JSON goes through arnm/json_reader.h and arnm/json_writer.h rather than through yyjson
  * directly. yyjson is still what runs underneath, but nothing of it reaches those headers -- no
@@ -325,11 +325,14 @@ sc_jwt_result sc_jwt_verify_hs256(const sc_jwt_config *config, const char *token
     if (arnm_json_reader_status(&reader) != ARNM_SUCCESS)
         return SC_JWT_MALFORMED;
 
-    /* Only an expiry that is there and is a number expires a token. A payload without one is
-     * not treated as expired -- the behavior this was ported with, and not this file's to
-     * change on its own. */
-    if (arnm_json_reader_type_of(&reader, "exp") == ARNM_JSON_TYPE_NUMBER &&
-        arnm_json_reader_get_int64(&reader, "exp") <= now)
+    /* Require the claim, then check it. A claim that is absent is not a claim that passed:
+     * the prototype this was carried over from checks exp only where it is present and numeric,
+     * so a correctly signed token without exp -- or with "exp": null, or with it as a string --
+     * never expires. All four cases were reproduced and accepted; Architecture.md, *Safety net*,
+     * records it. The hard session timeout is only as hard as this line. */
+    if (arnm_json_reader_type_of(&reader, "exp") != ARNM_JSON_TYPE_NUMBER)
+        return SC_JWT_MISSING_CLAIM;
+    if (arnm_json_reader_get_int64(&reader, "exp") <= now)
         return SC_JWT_EXPIRED;
 
     if (config->issuer != NULL && !member_is(&reader, "iss", config->issuer))

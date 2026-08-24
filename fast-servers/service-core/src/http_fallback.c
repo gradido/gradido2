@@ -8,12 +8,6 @@
  * fast: one thread, one loop, no TLS, no HTTP/2, and h2o answers a cached request in 11.6 us
  * where this does not try to.
  *
- * Lifted from ../h20Test/fallback_server/server.c, where the machinery around the parser was
- * written and tested -- its test.py drives raw sockets through twenty-two cases and its README
- * records which of them were bugs first. What changed here is the seam: that file called one
- * fb_handle() and this one dispatches over the routes service_core/http.h registers, so the
- * roles do not know which backend answered them.
- *
  * What picohttpparser does is parse a head and say how long it was. Everything below that call
  * is this file: owning the buffer, deciding the body length, waiting for the body, decoding
  * chunked, answering, and then finding the next request in what is left.

@@ -18,6 +18,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <uv.h>
+
 #include "backend/backend.h"
 #include "dht_node/dht_node_server.h"
 #include "federation/federation.h"
@@ -27,7 +29,6 @@
 #include "service_core/log.h"
 #include "service_core/runtime.h"
 #include "service_core/status.h"
-#include "service_core/thread.h"
 
 #define FS_VERSION "0.0.1"
 
@@ -57,9 +58,13 @@ typedef struct fs_role_thread {
     const fs_role *role;
     const sc_config *cfg;
     sc_status status;
+    uv_thread_t handle;
+    int started;
 } fs_role_thread;
 
-static int run_role(void *arg)
+/* uv_thread_cb answers nothing, so the outcome goes into the slot the caller already owns --
+ * which is where main reads it after the join anyway. */
+static void run_role(void *arg)
 {
     fs_role_thread *slot = (fs_role_thread *)arg;
 
@@ -71,7 +76,6 @@ static int run_role(void *arg)
                      sc_status_name(slot->status));
         sc_runtime_request_quit();
     }
-    return (int)slot->status;
 }
 
 static void print_usage(FILE *out)
@@ -101,7 +105,6 @@ int main(int argc, char **argv)
 {
     int selected[FS_ROLE_COUNT];
     fs_role_thread threads[FS_ROLE_COUNT];
-    sc_thread *handles[FS_ROLE_COUNT];
     sc_config cfg;
     sc_status status;
     int any_selected = 0;
@@ -109,7 +112,7 @@ int main(int argc, char **argv)
     int i;
 
     memset(selected, 0, sizeof(selected));
-    memset(handles, 0, sizeof(handles));
+    memset(threads, 0, sizeof(threads));
 
     for (i = 1; i < argc; ++i) {
         const char *arg = argv[i];
@@ -167,11 +170,13 @@ int main(int argc, char **argv)
         threads[i].role = &kRoles[i];
         threads[i].cfg = &cfg;
         threads[i].status = SC_OK;
-        if (sc_thread_start(&handles[i], run_role, &threads[i]) != SC_OK) {
+        if (uv_thread_create(&threads[i].handle, run_role, &threads[i]) != 0) {
             sc_log_fatal(SC_CAT_STARTUP, "role.thread_failed", "cannot start a thread for %s",
                          kRoles[i].name);
             sc_runtime_request_quit();
             exit_code = 1;
+        } else {
+            threads[i].started = 1;
         }
     }
 
@@ -181,9 +186,9 @@ int main(int argc, char **argv)
     sc_log_info(SC_CAT_STARTUP, "process.stopping", "shutting down");
 
     for (i = 0; i < FS_ROLE_COUNT; ++i) {
-        if (handles[i] == NULL)
+        if (!threads[i].started)
             continue;
-        (void)sc_thread_join(handles[i], NULL);
+        (void)uv_thread_join(&threads[i].handle);
         if (threads[i].status != SC_OK)
             exit_code = 1;
     }

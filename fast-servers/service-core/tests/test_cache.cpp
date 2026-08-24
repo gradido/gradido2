@@ -8,7 +8,7 @@
  * meant to be run under `-Dsanitize=thread`, where it is ThreadSanitizer rather than an
  * assertion that decides whether it passed. Running it without TSan proves very little.
  *
- * C++ because googletest is, which is what ../blockchain-core and ../arnm do as well. It is not
+ * C++ because googletest is, which is what gradido-blockchain-core and arnm do as well. It is not
  * an exception to AGENTS.md section 2: the rule there is about modules in the request path, and
  * nothing in this file is linked into a server.
  */

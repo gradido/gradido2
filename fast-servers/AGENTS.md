@@ -28,6 +28,13 @@ Do **not** force artificial parity. Preserve the business semantics, write idiom
 
 `README.md` beside this file holds the layout, the build commands and the options.
 
+Comments in here and in the sources refer to **the h2o prototype**: a separate project, not in
+this repository and not published, where the h2o request path, the JWT verifier, the session
+cache and the fallback server were written and measured before any of it moved here. What it
+established is written down in `Architecture.md`; what it produced was carried over rather than
+depended on. Nothing in this repository reaches for it, and no path to it belongs in a file that
+is published — this one included.
+
 ---
 
 ## 1. House dialect
@@ -97,7 +104,7 @@ Do not add a second Rust module. If one looks necessary, change `../Architecture
 a third toolchain on the fast path is a design decision, not a dependency.
 
 **Tests are not modules.** The unit tests are C++ because googletest is, calling `extern "C"`
-headers — the same arrangement `../arnm` and `../blockchain-core` use. This section is about
+headers — the same arrangement arnm and gradido-blockchain-core use. This section is about
 what runs inside a server; nothing under `<component>/tests/` is linked into one.
 
 ---
@@ -106,9 +113,9 @@ what runs inside a server; nothing under `<component>/tests/` is linked into one
 
 Build system and cross compiler. No application code — its API still moves between versions.
 
-`build.zig.zon` declares `minimum_zig_version = "0.15.1"`, which is what `../h20Test` asks for
-as well. That is a floor, not the pin: `../AGENTS.md`, *Toolchain*, holds where the pinned
-toolchain comes from and why the number is worth reading rather than guessing.
+`build.zig.zon` declares `minimum_zig_version = "0.15.1"`. That is a floor, not the pin:
+`../AGENTS.md`, *Toolchain*, holds where the pinned toolchain comes from and why the number is
+worth reading rather than guessing.
 
 `CMakeLists.txt` mirrors `build.zig` and exists for the one target zig cannot serve, the MSVC
 ABI. When the two disagree, `build.zig` is right.
@@ -135,9 +142,7 @@ arnm               the arena, the containers, the conversions and the JSON
                    was hostmem until arnm 0.5.0 renamed every symbol.
 h2o                the fast HTTP backend, and the picohttpparser the other
                    backend compiles. Fetched by every build for that reason.
-libuv              the platform layer — see below. Today the build fetches
-                   it lazily, for the fallback backend only; that is behind
-                   the decision, not ahead of it.
+libuv              the platform layer — see below. Every build links it.
 googletest  lazy   the unit tests.
 compile_commands   feeds compile_commands.json.
 libpq              designed, not pinned. Architecture.md, *Databases*.
@@ -163,11 +168,14 @@ loop-bound everything asynchronous — uv_fs_*, uv_getaddrinfo, uv_spawn, uv_que
            the request thread; put it on a thread of its own or change h2o's backend.
 ```
 
-> **The code has not followed yet.** `service-core/src/thread.c` is the 150-line
-> `pthread`/`SRWLOCK` shim this decision exists to avoid, and `cache.c`, `log.c` and `main.c`
-> are written against it. Replacing it with the loop-free half is what the decision asks for,
-> and it makes libuv a dependency of every build rather than of the fallback backend. Until
-> that is done, do not add a second shim beside it.
+The loop-free half is used directly and not wrapped: `uv_rwlock_t` in the session cache,
+`uv_mutex_t` in the log, `uv_thread_t` for the thread each role runs on, `uv_once` for the
+cache's hash seed. There is no `service_core/thread.h` to go through, and there must not be one
+again — a wrapper is the shim under another name.
+
+What libuv does not offer stays ours: `service_core/atomic.h` is four functions over the
+compiler's builtins, because libuv has no atomics and `<stdatomic.h>` is behind an experimental
+switch on MSVC, which the CMake build has to compile.
 
 **Fetch, do not vendor.** picohttpparser was a copy under `third_party/` before it was a
 dependency, and the copy lost: two files nobody would ever diff against the original again are
@@ -327,8 +335,14 @@ pg     do not hand-write row extraction. structs and from_row/bind_params
        Query construction stays hand-written; that part is business logic.
 jwt    require the claim before checking it. `exp` absent, or null, or a
        string, is not `exp` valid — see Architecture.md, Safety net
-zig    a native Debian build needs addMultiarchIncludeDir on every artifact
-       that includes uv.h or a libpq header; cross builds never hit it
+zig    a host build needs addHostSystemPaths on every artifact that includes
+       uv.h, a libpq header or anything of h2o's
+zig    -Dtarget=x86_64-linux-gnu is NOT the native target as far as zig is
+       concerned, even on that machine: it stops consulting /usr/include
+       and /usr/lib, and h2o then fails with 78 lines of 'openssl/ssl.h'
+       file not found. targetIsHost() is what tells the two apart, and it
+       is why addHostSystemPaths adds those directories for a named host
+       target and not for a native one, which already has them.
 zig    on Debian and Ubuntu `zig libc` reports sys_include_dir=/usr/include
        while asm/errno.h sits one level deeper, under the multiarch triple.
        build.zig generates a corrected description and hands it to every
@@ -375,7 +389,7 @@ tests/integration/    the assembled binary, driven over sockets by bun test
 ```
 
 Unit tests live beside their component rather than in one tree at the root, which is where
-`../arnm` and `../blockchain-core` keep theirs. Those are one library each; this is five, and a
+arnm and gradido-blockchain-core keep theirs. Those are one library each; this is five, and a
 test binary that links one component and has only that component's include directory on its
 search path is what proves a header carries its own dependencies. A shared test tree with all
 five paths on it can never fail that way.

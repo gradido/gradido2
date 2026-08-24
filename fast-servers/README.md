@@ -32,6 +32,12 @@ On a Debian-style host the build generates the libc description `zig libc` does 
 libsodium and libtsan fail on `asm/errno.h`. See `nativeLibcFile` in `build.zig`; `--libc <file>`
 overrides it.
 
+Naming the host's own triple works and is the same build: `-Dtarget=x86_64-linux-gnu` on that
+machine gets `/usr/include` and `/usr/lib` back, which zig otherwise withholds from anything it
+considers a cross build. A target that is genuinely another machine needs `-Dh2o=false`, because
+h2o wants the host's OpenSSL and zlib and this build does not carry them — it says so and stops
+rather than letting the compiler explain it 78 times.
+
 ## h2o, and the fallback behind the same header
 
 h2o is the server:
@@ -48,12 +54,12 @@ The second one is not an alternative to h2o. It exists because h2o is a posix ev
 does not compile against the MSVC runtime, which would otherwise leave the Windows build with no
 server at all — and one thread means one core, whatever the machine has, so it is not something
 to deploy. It is there so that the roles, the configuration and the domain code can be worked on
-and debugged where h2o cannot build. It came from
-[`../h20Test/fallback_server`](../../h20Test/fallback_server), where the machinery around the
-parser was written and tested against raw sockets — keep-alive, pipelining, chunked bodies
-decoded in place, a bounded drain so an error response is not lost to an RST. A high-performance
-build for Windows is not on the table anyway: the fast path targets the Linux server this
-project runs on.
+and debugged where h2o cannot build. It came from the h2o prototype that preceded this
+repository, where the machinery around the parser was written and tested against raw sockets —
+keep-alive, pipelining, chunked bodies decoded in place, a bounded drain so an error response is
+not lost to an RST. `tests/integration/` is that suite, translated. A high-performance build for
+Windows is not on the table anyway: the fast path targets the Linux server this project runs
+on.
 
 Its parser comes out of the same pinned h2o checkout h2o itself is compiled from —
 `deps/picohttpparser` — so both builds fetch h2o whatever they select. That costs the Windows
@@ -67,7 +73,7 @@ zig build -Dtests test      # the googletest binaries, built and run
 ```
 
 Unit tests live beside the component they test — `service-core/tests/` — rather than in one
-tree at the root, which is where `../arnm` and `../blockchain-core` keep theirs. Those are one
+tree at the root, which is where arnm and gradido-blockchain-core keep theirs. Those are one
 library each; this is five, and a test binary that links one component and sees only that
 component's include directory is what proves the header carries its own dependencies. A shared
 test tree with all five paths on it can never fail that way.
@@ -122,17 +128,20 @@ Each role answers `GET /_health`. That is the whole of what is implemented: the 
 Windows SDK. It mirrors `build.zig` and never leads it.
 
 ```sh
-cmake -B build && cmake --build build          # linux, needs libh2o-evloop via pkg-config
-cmake -B build -DFS_ENABLE_H2O=OFF             # what the Windows build does automatically
+cmake -B build && cmake --build build
 cmake -B build -DFS_ENABLE_TESTS=ON && ctest --test-dir build
+cmake -B build -DFS_ENABLE_H2O=ON              # only where libh2o-evloop is installed
 ```
 
-Its dependencies are fetched rather than looked for — libsodium, libuv and picohttpparser
-included — so a Windows developer needs Visual Studio and nothing else. What it does not fetch is
-a *buildable* h2o: `FS_ENABLE_H2O=ON` asks pkg-config for a `libh2o-evloop` that is already
-installed, because compiling h2o is a page of `build.zig` that would have to be written a second
-time here and it does not build for the target this file exists for. The fallback path still
-fetches the h2o checkout, for its `deps/picohttpparser` and nothing else.
+Its dependencies are fetched rather than looked for — the core, libsodium, libuv and
+picohttpparser included — so a Windows developer needs Visual Studio and nothing else.
+
+The one thing it does not build is h2o, and that is why `FS_ENABLE_H2O` is **off by default
+here while `-Dh2o` is on in `build.zig`**. Compiling h2o is a page of `build.zig` that would
+have to be written a second time in CMake, and it does not build for the target this file
+exists for at all — so this build asks pkg-config for an installed `libh2o-evloop` instead, and
+defaults to not asking. It still fetches the h2o checkout either way, for its
+`deps/picohttpparser`.
 
 On Linux the CMake build is worth having for a second reason: it prints the `-Wall -Wextra`
 findings. `zig build` hides C compiler warnings when a step succeeds and turns them into errors
@@ -142,8 +151,8 @@ when one fails, so a green `zig build` says nothing about them either way.
 
 ```text
 src/main.c        role selection, the quit flag, one thread per role
-service-core/     logging, config, threads, the HTTP surface and its two backends,
-                  the cache table, JWT
+service-core/     logging, config, the HTTP surface and its two backends,
+                  the cache table, JWT. Threads and locks come from libuv
 backend-core/     the backend domain. Empty, and the emptiness is the point
 backend/          the HTTP server the frontend talks to
 federation/       the HTTP server other communities talk to

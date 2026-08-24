@@ -16,6 +16,8 @@ endif()
 #   cmake -B build
 #   cmake --build build --config Release
 #
+# Everything it needs is fetched. The one thing it does not build is h2o -- see FS_ENABLE_H2O.
+#
 # The dependencies are fetched, not looked for. It is the second build of a project whose first
 # one downloads everything it needs, and a Windows developer who has to install libuv by hand
 # before the tree compiles will conclude the tree does not compile.
@@ -36,14 +38,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FetchContent)
 
-if(WIN32)
-  set(FS_H2O_DEFAULT OFF)
-else()
-  set(FS_H2O_DEFAULT ON)
-endif()
-
-# Mirrors -Dh2o and -Dsanitize of build.zig, defaulting the same way.
-option(FS_ENABLE_H2O "Build the h2o HTTP backend; off selects the libuv+picohttpparser fallback. Requires a libh2o-evloop via pkg-config, and is unavailable on Windows" ${FS_H2O_DEFAULT})
+# Off by default, and here is where this file does NOT mirror build.zig: `zig build` fetches h2o
+# and compiles libh2o-evloop itself, this one cannot. Asking pkg-config for a libh2o-evloop that
+# almost nobody has installed would make `cmake -B build` fail out of the box on the very
+# platform the project targets, which is worse than building the backend that needs nothing.
+# Turn it on where the library is actually installed.
+option(FS_ENABLE_H2O "Build the h2o HTTP backend instead of the libuv+picohttpparser fallback. Needs a libh2o-evloop installed and visible to pkg-config; unavailable on Windows" OFF)
 option(FS_ENABLE_TESTS "Build the googletest unit tests and the integration probe" OFF)
 option(FS_ENABLE_BENCHMARKS "Build the bench_* binaries" OFF)
 option(FS_ENABLE_SANITIZERS "Build with AddressSanitizer, plus UndefinedBehaviorSanitizer on non-MSVC toolchains (MSVC ships no UBSan)" OFF)
@@ -134,17 +134,19 @@ if(NOT arnm_SOURCE_DIR)
 endif()
 message(STATUS "arnm from ${arnm_SOURCE_DIR}")
 
-if(NOT FS_ENABLE_H2O)
-  # libuv, the platform half of the fallback backend. Upstream's own CMakeLists, which is what
-  # the zig build's package wraps as well.
-  set(LIBUV_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-  set(LIBUV_BUILD_BENCH OFF CACHE BOOL "" FORCE)
-  FetchContent_Declare(libuv
-    GIT_REPOSITORY https://github.com/libuv/libuv.git
-    GIT_TAG v1.52.0
-  )
-  FetchContent_MakeAvailable(libuv)
+# libuv is the platform layer -- the session cache's reader/writer lock, the log's mutex and the
+# thread each role runs on all come from its loop-free half -- so every build gets it, not only
+# the one that also uses it as the fallback backend's platform. AGENTS.md section 3a holds the
+# decision. Upstream's own CMakeLists, which is what the zig build's package wraps as well.
+set(LIBUV_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(LIBUV_BUILD_BENCH OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(libuv
+  GIT_REPOSITORY https://github.com/libuv/libuv.git
+  GIT_TAG v1.52.0
+)
+FetchContent_MakeAvailable(libuv)
 
+if(NOT FS_ENABLE_H2O)
   # picohttpparser, the parser half. It has no build system of its own and lives as a submodule
   # of h2o, so what is fetched is h2o -- shallow, and with that one submodule rather than the
   # dozen it otherwise carries.
@@ -166,7 +168,7 @@ if(NOT FS_ENABLE_H2O)
 endif()
 
 if(FS_ENABLE_TESTS)
-  # googletest is C++ testing C, which is what ../arnm and ../blockchain-core do as well. The
+  # googletest is C++ testing C, which is what arnm and gradido-blockchain-core do as well. The
   # language is enabled here rather than in project() so that a build without tests never asks
   # for a C++ compiler it does not need.
   enable_language(CXX)
@@ -233,7 +235,8 @@ fs_add_component(dht_node ${DHT_NODE_SRC})
 # sees a different header than the one that was compiled.
 foreach(target service_core backend_core)
   target_compile_definitions(${target} PRIVATE USE_SODIUM)
-  target_link_libraries(${target} PUBLIC gradido_blockchain_core sodium)
+  # uv_a and not uv: the static one, matching what the zig build links.
+  target_link_libraries(${target} PUBLIC gradido_blockchain_core sodium uv_a)
   target_include_directories(${target} PRIVATE
     ${blockchain_core_SOURCE_DIR}/include
     # data/unit.h reaches for "r128/r128.h", which the core vendors rather than installs.
@@ -249,14 +252,20 @@ if(FS_ENABLE_H2O)
   # compiles the source list itself, which is a page of build.zig and would be a second page
   # here. The CMake build asks the system for a libh2o-evloop that is already there.
   find_package(PkgConfig REQUIRED)
-  pkg_check_modules(H2O REQUIRED libh2o-evloop)
+  pkg_check_modules(H2O libh2o-evloop)
+  if(NOT H2O_FOUND)
+    message(FATAL_ERROR
+      "FS_ENABLE_H2O=ON but pkg-config cannot see libh2o-evloop.\n"
+      "  This build does not compile h2o -- `zig build` does, and needs nothing installed.\n"
+      "  Either install libh2o-evloop, or leave FS_ENABLE_H2O off and get the\n"
+      "  libuv+picohttpparser backend, which needs nothing either.")
+  endif()
   target_include_directories(service_core PRIVATE ${H2O_INCLUDE_DIRS})
   target_compile_definitions(service_core PRIVATE H2O_USE_LIBUV=0)
   target_link_directories(service_core PUBLIC ${H2O_LIBRARY_DIRS})
   target_link_libraries(service_core PUBLIC ${H2O_LIBRARIES})
 else()
   target_include_directories(service_core PRIVATE ${FS_PICOHTTPPARSER_DIR})
-  target_link_libraries(service_core PUBLIC uv_a)
   # picohttpparser is upstream's and is not ours to keep clean under our warning flags.
   if(MSVC)
     set_source_files_properties(${FS_PICOHTTPPARSER_DIR}/picohttpparser.c PROPERTIES COMPILE_OPTIONS "/W0")
@@ -273,7 +282,8 @@ target_link_libraries(backend_core PUBLIC service_core)
 add_executable(fast-servers src/main.c)
 target_include_directories(fast-servers PRIVATE ${FS_INCLUDE_DIRS})
 target_compile_options(fast-servers PRIVATE ${FS_WARNING_FLAGS})
-target_link_libraries(fast-servers PRIVATE backend federation dht_node backend_core service_core)
+# main.c runs each role on a uv_thread_t; the rest arrives through service_core.
+target_link_libraries(fast-servers PRIVATE backend federation dht_node backend_core service_core uv_a)
 
 if(MSVC)
   # debug symbols for a parent project stepping into this one
