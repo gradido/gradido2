@@ -322,6 +322,13 @@ h2o    max_request_entity_size defaults to a gigabyte. Both backends have
        to refuse at SC_HTTP_MAX_BODY, so the server sets it at startup.
 h2o    the head limit is H2O_MAX_REQLEN, a compile-time constant of about
        400 KiB. There is no knob. The 8 KiB limit is the fallback's own.
+h2o    it sends `Server: h2o/<version>` on every response until globalconf
+       .server_name is emptied — and from a git checkout that version reads
+       "2.3.0-DEV", which announces an unreleased build. Not a vulnerability
+       and not a defence: fingerprinting works on header order anyway. It
+       denies the scanner that shortlists by banner, and costs one line.
+       The fallback never sent one, so this was also a divergence the suite
+       had not thought to assert. It does now.
 http   the Windows fallback is libuv + picohttpparser + ~100 lines, not a
        second HTTP library. Owning the accept loop is what keeps the
        handler signature single. Mongoose is GPLv2/commercial — do not

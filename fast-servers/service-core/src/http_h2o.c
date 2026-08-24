@@ -78,6 +78,23 @@ sc_http_server *sc_http_server_create(const sc_http_config *cfg)
     /* h2o's own default is a gigabyte. The fallback backend stops at SC_HTTP_MAX_BODY, and a
      * body one accepts while the other answers 413 is a difference a client can see. */
     server->config.max_request_entity_size = SC_HTTP_MAX_BODY;
+    /*
+     * No `Server:` header. h2o defaults it to "h2o/" H2O_VERSION and emits it on every response,
+     * error pages included -- and because this build compiles h2o from a git checkout rather
+     * than a release, what it announced was "h2o/2.3.0-DEV": not merely the server, but an
+     * unreleased build of it.
+     *
+     * This is not a security control. Anyone looking will still recognise h2o from the order of
+     * its headers and the shape of its HTTP/2 settings, and hiding a version has never fixed a
+     * vulnerability. What it denies is the cheap pass: a scanner that shortlists hosts by banner
+     * for a known CVE gets nothing, and that costs one assignment.
+     *
+     * A zero length name is the supported way -- lib/http1.c writes the header only when
+     * `server_name.len` is non-zero. The fallback backend has never sent one, which is what
+     * makes this a difference between the two rather than a preference; tests/integration
+     * asserts that neither does.
+     */
+    server->config.server_name = h2o_iovec_init(NULL, 0);
     server->hostconf =
         h2o_config_register_host(&server->config, h2o_iovec_init(H2O_STRLIT("default")), 65535);
     return server;

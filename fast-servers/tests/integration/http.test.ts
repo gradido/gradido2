@@ -78,6 +78,17 @@ describe('the ordinary path', () => {
     expect(bodyOf(response).toString()).toBe('/path')
   })
 
+  test('neither backend announces what it is', async () => {
+    // h2o sends `Server: h2o/2.3.0-DEV` unless its server_name is emptied, and the fallback has
+    // never sent one -- a difference a client can see, and one this suite did not catch until
+    // someone read a curl dump. Error responses go through the same header flattening, so both
+    // are checked: a 404 is the one an unauthenticated scanner reaches first.
+    for (const path of ['/hello', '/nope']) {
+      const head = headOf(await once(get(path))).toLowerCase()
+      expect(head).not.toContain('server:')
+    }
+  })
+
   test('a handler that declines leaves the request unrouted', async () => {
     // /hello answers GET and returns -1 for anything else, which is the convention both
     // backends implement: nothing else is registered for that path, so it is a 404.
