@@ -1,0 +1,84 @@
+.{
+    .name = .fast_servers,
+    .version = "0.0.1",
+    .minimum_zig_version = "0.15.1",
+    // Generated once by the toolchain. Changing it has security and trust implications.
+    .fingerprint = 0xc33121de5d4a66ee,
+    // Every dependency is pinned to a fixed commit with a hash, per ../AGENTS.md section 13 and
+    // fast-servers/AGENTS.md section 3a. A floating dependency in this build is a floating
+    // dependency in the process that signs transactions.
+    .dependencies = .{
+        // The native base library: the money arithmetic, the wire formats, the crypto that
+        // backend-core will be written against. Same commit packages/shared-native pins, so the
+        // two builds in this repository compile against one layout of the same structs.
+        .blockchain_core = .{
+            .url = "git+https://github.com/gradido/gradido-blockchain-core.git#9aaf20d2fb603a7bbd0c19ff3f113b29ea0de4f8",
+            .hash = "blockchain_core-0.17.1-r94upvXcDgBsMqABC06mo_JNMWmYB6ZncwFYe0ylc1Pc",
+        },
+        // libsodium, and the same pin the core carries: the two must be one package in the
+        // build graph, or service-core would compile against one copy of sodium.h and link the
+        // other. Requested with the core's options for the same reason -- differing options
+        // would fork the instance rather than share it.
+        .libsodium = .{
+            .url = "git+https://github.com/jedisct1/libsodium#77e1ce5d6dee871c49ef211222ba18ef0c486bda",
+            .hash = "N-V-__8AAGV3jgBL34nv4uUihxaCgroWLfj966-SVjBHn9RE",
+        },
+        // arnm: the arena, the containers and the conversions the core is written against, and
+        // since 0.7.2 the yyjson jwt.c parses a token with. Same pin and the same options the
+        // core requests, for the same reason libsodium is here.
+        //
+        // This replaces a yyjson pin of this build's own, which was correct while the core was
+        // at 0.16.0 and became a duplicate the moment 0.17.0 started linking libarnm -- two
+        // definitions of every yyjson_* symbol, and link order deciding between them.
+        .arnm = .{
+            .url = "https://github.com/gradido/arnm/archive/refs/tags/v0.7.2.tar.gz",
+            .hash = "arnm-0.7.2-ZdhGsCwFGgA0uOWsPFL1vPE1tCGvc2TkG-A5oUQrPVgw",
+        },
+        // The HTTP server on the fast path. build.zig copies the libh2o-evloop source list out
+        // of this checkout's CMakeLists.txt, so the pin and that list have to move together.
+        //
+        // Not lazy, although the Windows build does not compile libh2o: that build takes
+        // picohttpparser out of deps/ here, and one pinned checkout both backends read from
+        // beats a copy of two files in this repository that nothing would ever compare against
+        // the original again.
+        .h2o = .{
+            .url = "git+https://github.com/h2o/h2o#706842c0f8c0d9422efb97a4d8ef7d6ec9df87b7",
+            .hash = "N-V-__8AACufnwFkhWbkiO3KxcVcasJKyoe9sYRvT0rp5-MI",
+        },
+        // The platform layer: threads and synchronisation now, filesystem, DNS and child
+        // processes as they are needed. Not lazy, because every build uses the loop-free half
+        // -- see AGENTS.md section 3a. It is also the platform half of the fallback HTTP
+        // backend, whose parser comes out of the h2o checkout above.
+        .libuv = .{
+            .url = "git+https://github.com/allyourcodebase/libuv.git#c1ccce24e1077ae7780857c89fb4b3aeb9080315",
+            .hash = "libuv-1.52.0-htqqvzNqAAAB6cHIx-wIffe_mqMW5GOKjHeDBJYHGwls",
+        },
+        // googletest, for the unit tests under -Dtests. Same pin as arnm and
+        // gradido-blockchain-core, so the three repositories test against one version. Lazy: a build
+        // without -Dtests never fetches it.
+        .googletest = .{
+            .url = "git+https://github.com/allyourcodebase/googletest#e2affdd13730f800aa63772039f2adfa971461b6",
+            .hash = "googletest-1.15.2-vLU55gAVAAC86GD--lNpG3oVHLsJhdB0lFCOCsBEbiAE",
+            .lazy = true,
+        },
+        // Feeds compile_commands.json, which is where the -Wall -Wextra findings become visible
+        // in an editor -- zig itself hides them on a successful build.
+        .compile_commands = .{
+            .url = "https://github.com/the-argus/zig-compile-commands/archive/9400cd1963ea6bb58fe47ba7d9700075b808cdd2.tar.gz",
+            .hash = "zig_compile_commands-0.0.1-OZg5-e_JAAAGg1WHAePtq4l4Uvjs34BexnFFCZk63EaG",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "CMakeLists.txt",
+        "src",
+        "service-core",
+        "backend-core",
+        "backend",
+        "federation",
+        "dht-node",
+        "tests",
+        "benchmarks",
+    },
+}

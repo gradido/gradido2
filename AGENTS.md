@@ -387,6 +387,8 @@ zig    pinned by c-cpp-zig-build, which builds shared-native.
        build_helper/const.ts while ../h20Test asked for 0.15.1.
        Read the version out of the package; do not guess it and do
        not carry a number from an older repository into this one.
+       fast-servers/build.zig.zon states a floor of 0.15.1 for its
+       own build. A floor is not a pin and does not settle the above.
 ```
 
 `bun install` followed by `turbo backend#start` is enough — do not install a toolchain

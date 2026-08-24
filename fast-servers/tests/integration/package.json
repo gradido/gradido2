@@ -1,0 +1,10 @@
+{
+  "name": "fast-servers-integration",
+  "private": true,
+  "description": "Drives the built http-probe over raw sockets. Deliberately not a workspace of the root package.json: bun install must not need anything under fast-servers/, or the fast path stops being droppable.",
+  "scripts": {
+    "test": "bun test",
+    "lint": "../../../node_modules/.bin/biome check .",
+    "lint:fix": "../../../node_modules/.bin/biome check --write ."
+  }
+}

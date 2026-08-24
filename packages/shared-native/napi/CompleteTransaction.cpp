@@ -9,8 +9,10 @@
 #include "gradido_blockchain_core/interactions/validate/result_type.h"
 #include "gradido_blockchain_core/interactions/validate/options.h"
 #include "gradido_blockchain_core/result.h"
-#include "hostmem/converter.h"
-#include "hostmem/memory.h"
+// arena.h and not memory.h: arnm 0.6.0 split arnm_init_arena_borrow() out into its own
+// header, which includes memory.h, so nothing else had to move with it.
+#include "arnm/arena.h"
+#include "arnm/converter.h"
 #include "napi.h"
 
 using gradido::data::wire::LedgerAnchor;
@@ -62,22 +64,22 @@ namespace gradido::data::runtime {
             Napi::TypeError::New(env, "[CompleteTransaction.initFromProtobuf] Expected serialized to be a Uint8Array").ThrowAsJavaScriptException();
             return env.Undefined();
         }
-        uint8_t communityUuid[HOSTMEM_UUID_BINARY_SIZE];
+        uint8_t communityUuid[ARNM_UUID_BINARY_SIZE];
         if (info[1].IsBuffer()) {
             Napi::Buffer<uint8_t> communityUuidBuffer = info[1].As<Napi::Buffer<uint8_t>>();
-            if (communityUuidBuffer.Length() != HOSTMEM_UUID_BINARY_SIZE) {
+            if (communityUuidBuffer.Length() != ARNM_UUID_BINARY_SIZE) {
                 Napi::TypeError::New(env, "[CompleteTransaction.initFromProtobuf] Expected communityUuid to be size 16 as Uint8Array").ThrowAsJavaScriptException();
                 return env.Undefined();
             }
-            memcpy(communityUuid, communityUuidBuffer.Data(), HOSTMEM_UUID_BINARY_SIZE);
+            memcpy(communityUuid, communityUuidBuffer.Data(), ARNM_UUID_BINARY_SIZE);
         } else if (info[1].IsString()) {
             auto communityUuidString = info[1].As<Napi::String>().Utf8Value();
             if (communityUuidString.size() != 36) {
                 Napi::TypeError::New(env, "[CompleteTransaction.initFromProtobuf] Expected communityUuid to be size 36 as string").ThrowAsJavaScriptException();
                 return env.Undefined();
             }
-            hostmem_result result = hostmem_uuid_from_string(communityUuid, communityUuidString.c_str());
-            if (HOSTMEM_SUCCESS != result) {
+            arnm_result result = arnm_uuid_from_string(communityUuid, communityUuidString.c_str());
+            if (ARNM_SUCCESS != result) {
                 Napi::TypeError::New(env, "[CompleteTransaction.initFromProtobuf] Expected communityUuid to be valid uuid string").ThrowAsJavaScriptException();
                 return env.Undefined();
             }
@@ -92,11 +94,11 @@ namespace gradido::data::runtime {
         }
         const uint32_t serializedLength = static_cast<uint32_t>(serializedTx.Length());
 
-        // The buffer is a scratch arena for decoding, so hostmem wants it 8 byte aligned with a
+        // The buffer is a scratch arena for decoding, so arnm wants it 8 byte aligned with a
         // capacity that is a multiple of 8 - it refuses anything else instead of rounding.
         constexpr uint32_t STACK_BUFFER_SIZE = 4096;
         alignas(8) uint8_t buffer[STACK_BUFFER_SIZE];
-        hostmem_result init_result = grdr_complete_transaction_init_from_protobuf(
+        arnm_result init_result = grdr_complete_transaction_init_from_protobuf(
             &m_tx,
             serializedTx.Data(), serializedLength,
             communityUuid,
@@ -104,14 +106,14 @@ namespace gradido::data::runtime {
         );
 
         uint32_t bufferSize = STACK_BUFFER_SIZE;
-        while(HOSTMEM_ERROR_OUT_OF_MEMORY == init_result || HOSTMEM_ERROR_DESTINATION_BUFFER_TO_SMALL == init_result) {
+        while(ARNM_ERROR_OUT_OF_MEMORY == init_result || ARNM_ERROR_DESTINATION_BUFFER_TO_SMALL == init_result) {
             bufferSize *= 2;
             // 1 MB should be more as enough
             if(bufferSize >= 1024 * 1024) { break;}
             // malloc is aligned for any fundamental type, so the arena's 8 bytes are covered
             uint8_t* dynBuffer = (uint8_t*)malloc(bufferSize);
             if (!dynBuffer) {
-                init_result = HOSTMEM_ERROR_OUT_OF_MEMORY;
+                init_result = ARNM_ERROR_OUT_OF_MEMORY;
                 break;
             }
             init_result = grdr_complete_transaction_init_from_protobuf(
@@ -124,7 +126,7 @@ namespace gradido::data::runtime {
             free(dynBuffer);
         };
         Napi::Object result = Napi::Object::New(env);
-        if (HOSTMEM_SUCCESS != init_result) {
+        if (ARNM_SUCCESS != init_result) {
             std::string message = "deserialize or mapping failed: ";
             message += grd_result_to_string(init_result);
             Napi::Object error = Napi::Object::New(env);
@@ -152,13 +154,13 @@ namespace gradido::data::runtime {
           .enable_verify = verifySignatures
         };
         grd_error_details errorDetails;
-        // 8 byte aligned and a multiple of 8, which is what hostmem_init_arena_borrow requires
+        // 8 byte aligned and a multiple of 8, which is what arnm_init_arena_borrow requires
         alignas(8) uint8_t errorStringBuffer[256];
-        hostmem alloc = {};
-        hostmem_init_arena_borrow(&alloc, errorStringBuffer, sizeof(errorStringBuffer));
+        arnm alloc = {};
+        arnm_init_arena_borrow(&alloc, errorStringBuffer, sizeof(errorStringBuffer));
         // error details will use malloc for error message, when alloc has run out of memory
-        hostmem_result errorDetailsInitResult = grd_error_details_init(&errorDetails, &alloc);
-        if (errorDetailsInitResult != HOSTMEM_SUCCESS) {
+        arnm_result errorDetailsInitResult = grd_error_details_init(&errorDetails, &alloc);
+        if (errorDetailsInitResult != ARNM_SUCCESS) {
             std::string message = "[CompleteTransaction.validate] Error on error details init: ";
             message += grd_result_to_string(errorDetailsInitResult);
             Napi::Error::New(env, message.c_str()).ThrowAsJavaScriptException();
@@ -226,7 +228,7 @@ namespace gradido::data::runtime {
         if (!key) return env.Null();
 
         char buffer[37];
-        hostmem_uuid_to_string(buffer, key);
+        arnm_uuid_to_string(buffer, key);
         return Napi::String::New(env, buffer);
     }
 
@@ -236,7 +238,7 @@ namespace gradido::data::runtime {
         if (!key) return env.Null();
 
         char buffer[37];
-        hostmem_uuid_to_string(buffer, key);
+        arnm_uuid_to_string(buffer, key);
         return Napi::String::New(env, buffer);
     }
 
@@ -269,8 +271,8 @@ namespace gradido::data::runtime {
                 Napi::TypeError::New(env, "[CompleteTransaction.getAccountBalanceForPublicKey] Expected publicKey to be size 64 as string").ThrowAsJavaScriptException();
                 return env.Null();
             }
-            hostmem_result result = hostmem_binary_from_hex(publicKey, publicKeyString.c_str());
-            if (HOSTMEM_SUCCESS != result) {
+            arnm_result result = arnm_binary_from_hex(publicKey, publicKeyString.c_str());
+            if (ARNM_SUCCESS != result) {
                 Napi::TypeError::New(env, "[CompleteTransaction.getAccountBalanceForPublicKey] Expected publicKey to be valid hex string as string").ThrowAsJavaScriptException();
                 return env.Null();
             }
@@ -288,7 +290,7 @@ namespace gradido::data::runtime {
         result.Set("publicKey", Napi::Buffer<uint8_t>::Copy(env, grdw_account_balance_get_public_key(account_balance), SIGN_PUBLIC_KEY_SIZE));
         // Community UUID as string
         char uuidString[37];
-        hostmem_uuid_to_string(uuidString, grdw_account_balance_get_community_uuid(account_balance));
+        arnm_uuid_to_string(uuidString, grdw_account_balance_get_community_uuid(account_balance));
         result.Set("coinCommunityUuid", Napi::String::New(env, uuidString));
 
         return result;

@@ -6,10 +6,10 @@
  *
  * The C side is not vendored any more: `gradido-blockchain-core` is a zig package declared
  * in `build.zig.zon`, and the general-purpose half of it -- the arena allocator, the timer,
- * the duration and hex/uuid conversions -- lives in `hostmem`. Header references below name
+ * the duration and hex/uuid conversions -- lives in `arnm`. Header references below name
  * the file inside whichever of the two owns it.
  *
- * Result codes surfaced as `error.name` therefore read `HOSTMEM_*` (hostmem/result.h) or
+ * Result codes surfaced as `error.name` therefore read `ARNM_*` (arnm/result.h) or
  * `GRD_ERROR_PB_*` (gradido_blockchain_core/result.h), never the old `GRD_*` general ones.
  */
 
@@ -55,8 +55,8 @@ export function gradidoUnitToString(value: bigint, precision?: number): string
 export function toDecimalPlaces(value: bigint, places: number): bigint
 
 /**
- * C function declarations for hostmem_duration_string are found in
- * hostmem/duration.h
+ * C function declarations for arnm_duration_string are found in
+ * arnm/duration.h
  */
 
 /**

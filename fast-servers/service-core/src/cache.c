@@ -1,0 +1,283 @@
+/*
+ * The table half of the session cache. Architecture.md, *Session cache*, is the specification;
+ * this file is only its transcription, and where the two disagree the document is right.
+ *
+ * Not yet covered by a test or by TSan. AGENTS.md section 4 makes both a condition of putting
+ * this on a request path, and section 5 makes reading the design document a condition of
+ * changing it. Neither is satisfied by the fact that it compiles.
+ */
+#include "service_core/cache.h"
+
+#include <stdlib.h>
+#include <string.h>
+
+#include <sodium.h>
+#include <uv.h>
+
+#include "service_core/atomic.h"
+#include "service_core/log.h"
+
+struct sc_cache_entry {
+    /* Table pointer plus every request currently using it. Freed at zero, never anywhere
+     * else -- reaching zero implies unreachable, because the table drops its pointer before it
+     * gives up its reference. */
+    volatile int32_t references;
+    uint32_t key_len;
+    char key[SC_CACHE_KEY_MAX];
+    int64_t created_ms;
+    void *value;
+    sc_cache *owner;
+};
+
+struct sc_cache {
+    /* By value, not behind a pointer: uv_rwlock_t is a concrete type and the table owns
+     * exactly one. */
+    uv_rwlock_t lock;
+    int lock_ready;
+    sc_cache_entry **slots;
+    uint32_t mask; /* capacity - 1, capacity being a power of two */
+    uint32_t probe;
+    int64_t hard_timeout_ms;
+    sc_cache_free_fn free_value;
+    void *user_data;
+};
+
+/*
+ * The key hash is mixed and seeded, and both halves of that are load-bearing.
+ *
+ * The mix is the splitmix64 finalizer -- two multiplies and three shifts. Without it the slot
+ * comes from the low bits of an unmixed hash, which is a masked table over a raw key: a key set
+ * that strides by the table size then collides everywhere, and with a bounded probe walk that
+ * does not make the cache slow, it makes it stop holding anything. Correct answers throughout,
+ * hit rate on the floor, nothing in the log. Architecture.md, *What was measured*, has the
+ * reproduction and the figure -- 19 ns became 25 us.
+ *
+ * The seed is what makes such a key set unconstructible by someone who can choose the keys, and
+ * it costs one XOR. It is drawn once per process; uv_once is what makes "once" true even if a
+ * second cache is ever created off the startup thread.
+ */
+static uint64_t g_hash_seed;
+static uv_once_t g_hash_seed_once = UV_ONCE_INIT;
+
+static void draw_hash_seed(void)
+{
+    /* libsodium is initialised by the process before any cache exists -- see sc_jwt_init in
+     * main. randombytes_buf is the right source here for the same reason it is there: a
+     * predictable seed is the same as no seed. */
+    randombytes_buf(&g_hash_seed, sizeof(g_hash_seed));
+}
+
+/** splitmix64 finalizer. */
+static uint64_t mix64(uint64_t value)
+{
+    value ^= value >> 30;
+    value *= 0xbf58476d1ce4e5b9ULL;
+    value ^= value >> 27;
+    value *= 0x94d049bb133111ebULL;
+    value ^= value >> 31;
+    return value;
+}
+
+static uint32_t round_up_pow2(uint32_t value)
+{
+    uint32_t result = 1;
+    while (result < value && result < 0x40000000u)
+        result <<= 1;
+    return result;
+}
+
+/* FNV-1a over the seeded basis, then the finalizer. The slot is taken from the low bits of
+ * what comes out; when there is ever more than one table, it is routed by the high ones and the
+ * two must not overlap -- Architecture.md, *What was measured*. */
+static uint64_t hash_key(const char *key, size_t key_len)
+{
+    uint64_t hash = 1469598103934665603ull ^ g_hash_seed;
+    size_t i;
+    for (i = 0; i < key_len; ++i) {
+        hash ^= (unsigned char)key[i];
+        hash *= 1099511628211ull;
+    }
+    return mix64(hash);
+}
+
+static int entry_expired(const sc_cache *cache, const sc_cache_entry *entry, int64_t now_ms)
+{
+    if (cache->hard_timeout_ms <= 0)
+        return 0;
+    return now_ms - entry->created_ms >= cache->hard_timeout_ms;
+}
+
+static int entry_matches(const sc_cache_entry *entry, const char *key, size_t key_len)
+{
+    return entry->key_len == (uint32_t)key_len && memcmp(entry->key, key, key_len) == 0;
+}
+
+sc_cache *sc_cache_create(const sc_cache_config *cfg)
+{
+    sc_cache *cache;
+    uint32_t capacity;
+
+    if (cfg == NULL || cfg->capacity == 0)
+        return NULL;
+    uv_once(&g_hash_seed_once, draw_hash_seed);
+    cache = (sc_cache *)calloc(1, sizeof(*cache));
+    if (cache == NULL)
+        return NULL;
+
+    capacity = round_up_pow2(cfg->capacity);
+    cache->slots = (sc_cache_entry **)calloc(capacity, sizeof(*cache->slots));
+    if (cache->slots == NULL || uv_rwlock_init(&cache->lock) != 0) {
+        free(cache->slots);
+        free(cache);
+        return NULL;
+    }
+    cache->lock_ready = 1;
+    cache->mask = capacity - 1;
+    cache->probe = cfg->probe != 0 ? cfg->probe : SC_CACHE_PROBE_DEFAULT;
+    if (cache->probe > capacity)
+        cache->probe = capacity;
+    cache->hard_timeout_ms = cfg->hard_timeout_ms;
+    cache->free_value = cfg->free_value;
+    cache->user_data = cfg->user_data;
+    return cache;
+}
+
+void sc_cache_destroy(sc_cache *cache)
+{
+    uint32_t i;
+
+    if (cache == NULL)
+        return;
+    /* Give up the table's reference on everything still in it. An entry a request is holding
+     * survives this and is freed by that request -- which means the cache must outlive its
+     * readers, and that is a startup/shutdown ordering rule, not something to check here. */
+    for (i = 0; i <= cache->mask; ++i) {
+        sc_cache_entry *entry = cache->slots[i];
+        cache->slots[i] = NULL;
+        sc_cache_release(entry);
+    }
+    if (cache->lock_ready)
+        uv_rwlock_destroy(&cache->lock);
+    free(cache->slots);
+    free(cache);
+}
+
+sc_cache_entry *sc_cache_get(sc_cache *cache, const char *key, size_t key_len)
+{
+    uint64_t hash;
+    uint32_t i;
+    int64_t now_ms;
+    sc_cache_entry *found = NULL;
+
+    if (cache == NULL || key == NULL || key_len == 0 || key_len > SC_CACHE_KEY_MAX)
+        return NULL;
+    hash = hash_key(key, key_len);
+    now_ms = sc_now_ms();
+
+    uv_rwlock_rdlock(&cache->lock);
+    for (i = 0; i < cache->probe; ++i) {
+        sc_cache_entry *entry = cache->slots[(uint32_t)(hash + i) & cache->mask];
+        if (entry == NULL)
+            continue;
+        if (!entry_matches(entry, key, key_len))
+            continue;
+        /* An expired entry reads as absent. A reader holds only the shared lock and therefore
+         * does not reclaim it; the next put that walks this slot does, and that put is
+         * imminent because the miss this reader just took is what triggers it. */
+        if (entry_expired(cache, entry, now_ms))
+            break;
+        /* Inside the lock. After it would be a use-after-free: in the gap an evictor can drop
+         * the pointer, the count can fall to zero, and the increment lands in freed memory. */
+        (void)sc_atomic_inc(&entry->references);
+        found = entry;
+        break;
+    }
+    uv_rwlock_rdunlock(&cache->lock);
+    return found;
+}
+
+sc_cache_entry *sc_cache_put(sc_cache *cache, const char *key, size_t key_len, void *value)
+{
+    sc_cache_entry *entry;
+    sc_cache_entry *displaced = NULL;
+    uint64_t hash;
+    uint32_t i;
+    uint32_t victim;
+    int victim_rank = 4; /* 0 same key, 1 free, 2 expired, 3 unused, 4 first candidate */
+    int64_t now_ms;
+
+    if (cache == NULL || key == NULL || key_len == 0 || key_len > SC_CACHE_KEY_MAX)
+        return NULL;
+
+    /* The miss path may allocate; the lookup path may not. */
+    entry = (sc_cache_entry *)calloc(1, sizeof(*entry));
+    if (entry == NULL)
+        return NULL;
+    entry->references = 2; /* one for the table, one for the caller */
+    entry->key_len = (uint32_t)key_len;
+    memcpy(entry->key, key, key_len);
+    entry->created_ms = sc_now_ms();
+    entry->value = value;
+    entry->owner = cache;
+
+    hash = hash_key(key, key_len);
+    now_ms = entry->created_ms;
+    victim = (uint32_t)hash & cache->mask;
+
+    uv_rwlock_wrlock(&cache->lock);
+    /* Insertion never fails. The same key comes first and ends the walk -- taking a free slot
+     * while an entry with this key sits further along the window would leave two, and a later
+     * lookup would find whichever the probe order reached first. After that: a free slot, an
+     * expired entry, one nobody is using, otherwise the first candidate. Preferring an idle
+     * victim keeps sessions that are actively serving requests inside the table. */
+    for (i = 0; i < cache->probe; ++i) {
+        uint32_t slot = (uint32_t)(hash + i) & cache->mask;
+        sc_cache_entry *occupant = cache->slots[slot];
+        int rank;
+
+        if (occupant != NULL && entry_matches(occupant, key, key_len))
+            rank = 0;
+        else if (occupant == NULL)
+            rank = 1;
+        else if (entry_expired(cache, occupant, now_ms))
+            rank = 2;
+        else if (sc_atomic_load(&occupant->references) <= 1)
+            rank = 3;
+        else
+            rank = 4;
+
+        if (rank < victim_rank) {
+            victim_rank = rank;
+            victim = slot;
+        }
+        if (rank == 0)
+            break;
+    }
+    displaced = cache->slots[victim];
+    cache->slots[victim] = entry;
+    uv_rwlock_wrunlock(&cache->lock);
+
+    /* Outside the lock: the last release runs the value's free callback, which is caller code
+     * and may do anything, including take a lock of its own. */
+    sc_cache_release(displaced);
+    return entry;
+}
+
+void *sc_cache_entry_value(const sc_cache_entry *entry)
+{
+    return entry != NULL ? entry->value : NULL;
+}
+
+void sc_cache_release(sc_cache_entry *entry)
+{
+    if (entry == NULL)
+        return;
+    /* No lock. The table no longer points at an entry whose count can reach zero, so nothing
+     * can revive it; the acq_rel on the decrement is what makes the last user's writes visible
+     * before the memory is reused. */
+    if (sc_atomic_dec(&entry->references) != 0)
+        return;
+    if (entry->owner != NULL && entry->owner->free_value != NULL)
+        entry->owner->free_value(entry->value, entry->owner->user_data);
+    free(entry);
+}
