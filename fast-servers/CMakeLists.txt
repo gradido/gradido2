@@ -45,6 +45,7 @@ endif()
 # Mirrors -Dh2o and -Dsanitize of build.zig, defaulting the same way.
 option(FS_ENABLE_H2O "Build the h2o HTTP backend; off selects the libuv+picohttpparser fallback. Requires a libh2o-evloop via pkg-config, and is unavailable on Windows" ${FS_H2O_DEFAULT})
 option(FS_ENABLE_TESTS "Build the googletest unit tests and the integration probe" OFF)
+option(FS_ENABLE_BENCHMARKS "Build the bench_* binaries" OFF)
 option(FS_ENABLE_SANITIZERS "Build with AddressSanitizer, plus UndefinedBehaviorSanitizer on non-MSVC toolchains (MSVC ships no UBSan)" OFF)
 option(FS_ENABLE_THREAD_SANITIZER "Build with ThreadSanitizer (mutually exclusive with FS_ENABLE_SANITIZERS)" OFF)
 
@@ -243,10 +244,6 @@ foreach(target service_core backend_core)
   )
 endforeach()
 
-# PRIVATE, and a header path only: libarnm inside the core carries the yyjson symbols. Nothing
-# above service-core needs this, and nothing above it learns which parser is underneath.
-target_include_directories(service_core PRIVATE ${arnm_SOURCE_DIR}/third_party/yyjson/src)
-
 if(FS_ENABLE_H2O)
   # Unlike build.zig, this file does not build h2o -- zig fetches the pinned checkout and
   # compiles the source list itself, which is a page of build.zig and would be a second page
@@ -289,6 +286,10 @@ if(FS_ENABLE_TESTS)
   # README.md, and build.zig, which explains why this project departs from its siblings here.
   add_subdirectory(service-core/tests)
   add_subdirectory(tests/integration)
+endif()
+
+if(FS_ENABLE_BENCHMARKS)
+  add_subdirectory(benchmarks)
 endif()
 
 install(TARGETS fast-servers RUNTIME DESTINATION bin)

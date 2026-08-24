@@ -129,11 +129,10 @@ blockchain_core    the money arithmetic, the wire formats, the crypto.
                    in this repository see one layout of the same structs.
 libsodium          HS256, for the JWT. Same pin and the same options the
                    core requests, or the build gets two instances of it.
-arnm               the arena, the containers and the conversions the core
-                   is written against — arnm_result is what a grd* call
-                   answers with — and, since arnm 0.7.2, the yyjson jwt.c
-                   parses a token with. Same pin and options as the core.
-                   It was hostmem until arnm 0.5.0 renamed every symbol.
+arnm               the arena, the containers, the conversions and the JSON
+                   the core is written against — arnm_result is what a grd*
+                   call answers with. Same pin and options as the core. It
+                   was hostmem until arnm 0.5.0 renamed every symbol.
 h2o                the fast HTTP backend, and the picohttpparser the other
                    backend compiles. Fetched by every build for that reason.
 libuv       lazy   the platform half of the fallback backend.
@@ -153,6 +152,13 @@ was at 0.16.0 and had no parser; 0.17.0 began linking libarnm, which carries one
 became two definitions of every `yyjson_*` symbol with link order deciding between them. When
 the core takes on a dependency this build also names, one of the two has to go — and it is this
 one, because a consumer that pins around its own library is pinning twice.
+
+**Reach for arnm's surface, not for what is under it.** `arnm/json_reader.h` and
+`arnm/json_writer.h` let no yyjson type, constant or include path through, so `jwt.c` names one
+library where it used to name two and the parser underneath can be replaced without this
+repository hearing about it. The same holds for the allocator and the conversions. Going around
+them to the vendored source is how a build ends up pinned to an implementation detail of a
+dependency of a dependency.
 
 Prefer no dependency at all. A library that saves fifty lines of C does not earn its place.
 
@@ -278,9 +284,31 @@ zig    on Debian and Ubuntu `zig libc` reports sys_include_dir=/usr/include
        a compilation this build declares.
 zig    the cdb step writes compile_commands.json into the CURRENT directory.
        Run `zig build` from fast-servers/ or find a stray copy later.
+zig    a dependency's artifact needs setLibCFile() of its own -- it does
+       not travel from the target that links it. libsodium went without
+       for a while and nobody noticed, because a cached object is not
+       recompiled: only changing the optimize mode asked for a fresh one
+       and the build fell over. Check a new dependency with a mode this
+       tree has not built yet, not with the one it has.
 biome  `check --write --unsafe` deletes console calls rather than flagging
        them. It removed a diagnostic in tests/integration once, silently.
        Read the diff after running it, or do not pass --unsafe.
+arnm   the json reader keeps its FIRST error and every getter after it
+       answers empty. A getter on a value of the wrong type therefore
+       silences the reads that follow, in another field entirely. Where a
+       value may legitimately not be what is wanted -- an element of an
+       aud list, an optional member -- ask arnm_json_reader_type_of() or
+       _has() first: neither records anything.
+sodium its SHA-256 is the portable C one -- crypto_hash/sha256/ has only
+       a `cp/` directory, where AEGIS has an aesni one. It runs at about
+       0.43 GB/s where OpenSSL does 2.2. At JWT sizes that gap mostly
+       disappears into per-call overhead, so swapping the library buys
+       almost nothing; measure before believing otherwise.
+core   grdu_binary_to_base64 / grdu_binary_from_base64 are pinned to
+       sodium_base64_VARIANT_ORIGINAL. A JWT is base64url without padding,
+       so jwt.c calls sodium directly with the url-safe variant. The two
+       alphabets differ in two characters, which is enough that a token
+       fails only sometimes -- roughly seven in ten carry a '-' or '_'.
 ```
 
 Add to this list when something costs you an afternoon.

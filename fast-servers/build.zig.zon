@@ -80,5 +80,6 @@
         "federation",
         "dht-node",
         "tests",
+        "benchmarks",
     },
 }

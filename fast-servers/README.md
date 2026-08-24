@@ -22,6 +22,7 @@ Options, all with `-D`:
 |---|---|---|
 | `h2o` | on, forced off on Windows | build the h2o HTTP backend; off selects the fallback |
 | `tests` | off | the googletest binaries and the integration probe |
+| `benchmarks` | off | the `bench_*` binaries |
 | `sanitize` | `off` | `undefined_behavior` (UBSan) or `thread` (TSan) |
 
 AddressSanitizer is not in that list: zig does not ship the asan runtime, so it comes from the
@@ -78,6 +79,15 @@ load, weeks later.
 `tests/integration/` drives the built binary over raw sockets from `bun test`, once against each
 HTTP backend — see [its README](tests/integration/README.md), which also lists where the two
 backends genuinely differ.
+
+```sh
+zig build -Dbenchmarks --release=fast && ./zig-out/bin/bench_jwt
+```
+
+`benchmarks/` is built the way the server is and linked against the same libsodium, which is the
+point: what a JWT costs depends on which SHA-256 is underneath, and the one this build pins is
+not the one on the system. A Debug build measures Debug — pass `--release=fast` for a number
+worth quoting, and name the machine beside it.
 
 ## Run
 

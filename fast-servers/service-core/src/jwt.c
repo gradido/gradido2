@@ -1,14 +1,17 @@
 /*
- * HS256 over libsodium, which also does the base64url, with yyjson reading the two segments.
+ * HS256 over libsodium, which also does the base64url, with arnm reading and writing the JSON.
  *
  * Ported from ../h20Test/src/jwt.c, minus its OpenSSL half. See jwt.h for why there is only one
  * crypto backend here.
  *
- * yyjson comes from arnm, which has carried it since 0.7.2 and compiles it into libarnm, which
- * gradido-blockchain-core links. That is deliberate rather than convenient: a second, separately
- * pinned yyjson in this build would put two definitions of every yyjson_* symbol in front of the
- * linker, and the one that wins would depend on link order. This build did pin one, correctly,
- * while the core was at 0.16.0 and carried no parser of its own.
+ * The JSON goes through arnm/json_reader.h and arnm/json_writer.h rather than through yyjson
+ * directly. yyjson is still what runs underneath, but nothing of it reaches those headers -- no
+ * type, no constant, no include path -- so this file names one library where it used to name
+ * two, and the parser under arnm can change without this file hearing about it.
+ *
+ * Both halves draw from an arena on this stack frame and nothing else. A document is released
+ * where it has to be, but nothing is freed one allocation at a time: the arena goes when the
+ * function returns, which is the whole of the memory management here.
  */
 #include "service_core/jwt.h"
 
@@ -16,11 +19,20 @@
 #include <string.h>
 
 #include <sodium.h>
-#include <yyjson.h>
+
+#include "arnm/arena.h"
+#include "arnm/json_reader.h"
+#include "arnm/json_writer.h"
 
 /** Longest base64url segment decoded. A JWT that needs more than this is not one of ours. */
 #define MAX_SEGMENT 1024
-/** Enough for a document of this size; yyjson never touches malloc here. */
+/**
+ * The arena a reader or a writer draws from, a multiple of 8 as arnm_init_arena_borrow() wants.
+ *
+ * Generous for two segments of MAX_SEGMENT: a parse behind an arena costs one allocation on the
+ * insitu path, and the verify below releases the header's document before the payload's is
+ * parsed. Nothing here reaches the host allocator, and nothing is meant to.
+ */
 #define JSON_ARENA 8192
 /** HS256 and nothing else, so the digest has exactly one size. */
 #define JWT_HMAC_LEN 32
@@ -117,41 +129,52 @@ static int base64url_encode(const uint8_t *in, size_t in_len, char *out, size_t 
     return (int)(needed - 1);
 }
 
+/** Success, or the one warning that still means the text is complete and correct. */
+static int arnm_ok(arnm_result result)
+{
+    return result == ARNM_SUCCESS || result == ARNM_WARNING_ARENA_MEMORY_NOT_RECLAIMED;
+}
+
 int sc_jwt_sign_hs256(const sc_jwt_config *config, const char *claim, const char *value,
                       int64_t now, int64_t ttl, char *out, size_t out_size)
 {
     /* The header is the same twenty bytes every time, so it is spelled out rather than built:
      * {"alg":"HS256"} */
     static const char HEADER_B64[] = "eyJhbGciOiJIUzI1NiJ9";
-    char arena[JSON_ARENA];
-    yyjson_alc alc;
-    yyjson_mut_doc *doc;
-    yyjson_mut_val *root;
-    char payload[MAX_SEGMENT];
+    /* 8 byte aligned and a multiple of 8, which is what arnm_init_arena_borrow requires. */
+    _Alignas(8) uint8_t scratch[JSON_ARENA];
+    arnm allocator = {0};
+    arnm_json_writer writer;
+    arnm_memory_block payload;
     uint8_t signature[JWT_HMAC_LEN];
-    size_t payload_len = 0, written = 0;
-    char *payload_json;
+    size_t written = 0;
+    uint32_t payload_len = 0;
     int n;
 
-    yyjson_alc_pool_init(&alc, arena, sizeof(arena));
-    doc = yyjson_mut_doc_new(&alc);
-    root = yyjson_mut_obj(doc);
-    yyjson_mut_doc_set_root(doc, root);
-    /* Member order follows what the reference implementation produces, so two tokens differ in
-     * their timestamps and nothing else. */
-    yyjson_mut_obj_add_str(doc, root, claim, value);
-    yyjson_mut_obj_add_bool(doc, root, "urn:gradido:claim", true);
-    yyjson_mut_obj_add_sint(doc, root, "iat", now);
-    if (config->issuer != NULL)
-        yyjson_mut_obj_add_str(doc, root, "iss", config->issuer);
-    if (config->audience != NULL)
-        yyjson_mut_obj_add_str(doc, root, "aud", config->audience);
-    yyjson_mut_obj_add_sint(doc, root, "exp", now + ttl);
-
-    payload_json = yyjson_mut_write_opts(doc, 0, &alc, &payload_len, NULL);
-    if (payload_json == NULL || payload_len > sizeof(payload))
+    if (config == NULL || claim == NULL || value == NULL || out == NULL)
         return -1;
-    memcpy(payload, payload_json, payload_len);
+    if (!arnm_ok(arnm_init_arena_borrow(&allocator, scratch, sizeof(scratch))))
+        return -1;
+    if (!arnm_ok(arnm_json_writer_init(&writer, &allocator, ARNM_JSON_WRITE_DEFAULT)))
+        return -1;
+
+    /* Member order follows what the reference implementation produces, so two tokens differ in
+     * their timestamps and nothing else -- and a signature is only comparable over comparable
+     * bytes. The writer keeps the order fields are added in, which is what makes that hold.
+     *
+     * No test between the lines: the writer keeps the first error and does nothing after it, so
+     * the write below stands in for a check after every one of them. */
+    arnm_json_writer_add_string(&writer, claim, value);
+    arnm_json_writer_add_bool(&writer, "urn:gradido:claim", true);
+    arnm_json_writer_add_int64(&writer, "iat", now);
+    if (config->issuer != NULL)
+        arnm_json_writer_add_string(&writer, "iss", config->issuer);
+    if (config->audience != NULL)
+        arnm_json_writer_add_string(&writer, "aud", config->audience);
+    arnm_json_writer_add_int64(&writer, "exp", now + ttl);
+
+    if (!arnm_ok(arnm_json_writer_write(&writer, &allocator, &payload, &payload_len)))
+        return -1;
 
     if (sizeof(HEADER_B64) - 1 + 1 > out_size)
         return -1;
@@ -159,8 +182,7 @@ int sc_jwt_sign_hs256(const sc_jwt_config *config, const char *claim, const char
     written = sizeof(HEADER_B64) - 1;
     out[written++] = '.';
 
-    if ((n = base64url_encode((const uint8_t *)payload, payload_len, out + written,
-                              out_size - written)) < 0)
+    if ((n = base64url_encode(payload.data, payload_len, out + written, out_size - written)) < 0)
         return -1;
     written += (size_t)n;
     if (written + 1 > out_size)
@@ -179,28 +201,10 @@ int sc_jwt_sign_hs256(const sc_jwt_config *config, const char *claim, const char
     return (int)written;
 }
 
-/**
- * Parses a decoded segment in place. Insitu spares the copy: the buffer is ours, it is padded,
- * and nobody looks at it again afterwards.
- *
- * @return the root object, or NULL if the segment is not one
- */
-static yyjson_val *parse_segment(char *json, size_t json_len, yyjson_alc *alc, yyjson_doc **doc)
+/** @return non-zero if the member is a string equal to @p expected */
+static int member_is(arnm_json_reader *reader, const char *key, const char *expected)
 {
-    yyjson_val *root;
-
-    *doc = yyjson_read_opts(json, json_len, YYJSON_READ_INSITU, alc, NULL);
-    if (*doc == NULL)
-        return NULL;
-
-    root = yyjson_doc_get_root(*doc);
-    return yyjson_is_obj(root) ? root : NULL;
-}
-
-/** @return non-zero if the member is the expected string */
-static int member_is(yyjson_val *obj, const char *key, const char *expected)
-{
-    const char *value = yyjson_get_str(yyjson_obj_get(obj, key));
+    const char *value = arnm_json_reader_get_string(reader, key);
     return value != NULL && strcmp(value, expected) == 0;
 }
 
@@ -210,25 +214,36 @@ static int member_is(yyjson_val *obj, const char *key, const char *expected)
  *
  * @return non-zero if @p expected is among them
  */
-static int audience_matches(yyjson_val *payload, const char *expected)
+static int audience_matches(arnm_json_reader *reader, const char *expected)
 {
-    yyjson_val *aud = yyjson_obj_get(payload, "aud");
-    const char *value;
+    if (arnm_json_reader_type_of(reader, "aud") == ARNM_JSON_TYPE_ARRAY) {
+        /* enter hands back the value it left, and leave puts it back; the walk costs those two
+         * lines and no bookkeeping of its own. */
+        arnm_json_value *array = arnm_json_reader_enter(reader, "aud");
+        const uint32_t count = arnm_json_reader_count(reader);
+        int found = 0;
+        uint32_t i;
 
-    if (yyjson_is_arr(aud)) {
-        yyjson_val *item;
-        yyjson_arr_iter iter;
-        yyjson_arr_iter_init(aud, &iter);
-        while ((item = yyjson_arr_iter_next(&iter)) != NULL) {
-            value = yyjson_get_str(item);
-            if (value != NULL && strcmp(value, expected) == 0)
-                return 1;
+        for (i = 0; i != count && !found; ++i) {
+            arnm_json_value *element = arnm_json_reader_enter_at(reader, i);
+            /* Look before reading. A NULL key asks about the current value itself, and
+             * type_of records nothing -- where a getter on an element that is not a string
+             * would record the reader's first error, and from there every later getter
+             * answers its empty value. That would end this walk at the element rather than
+             * at the match, and it would carry on into the claim read below, which would
+             * then come back missing. An audience list with a number in it is malformed
+             * either way; it is not this file's job to turn that into a wrong answer about
+             * a different field. */
+            if (arnm_json_reader_type_of(reader, NULL) == ARNM_JSON_TYPE_STRING) {
+                const char *value = arnm_json_reader_get_string(reader, NULL);
+                found = value != NULL && strcmp(value, expected) == 0;
+            }
+            arnm_json_reader_leave(reader, element);
         }
-        return 0;
+        arnm_json_reader_leave(reader, array);
+        return found;
     }
-
-    value = yyjson_get_str(aud);
-    return value != NULL && strcmp(value, expected) == 0;
+    return member_is(reader, "aud", expected);
 }
 
 sc_jwt_result sc_jwt_verify_hs256(const sc_jwt_config *config, const char *token, size_t token_len,
@@ -237,19 +252,20 @@ sc_jwt_result sc_jwt_verify_hs256(const sc_jwt_config *config, const char *token
     const char *dot1;
     const char *dot2;
     const char *sig_b64;
-    size_t signed_len, sig_len, claim_len;
+    size_t signed_len, sig_len;
     uint8_t expected[JWT_HMAC_LEN];
     uint8_t actual[JWT_HMAC_LEN];
     int actual_len;
-    char arena[JSON_ARENA];
-    char header[MAX_SEGMENT + YYJSON_PADDING_SIZE];
-    char payload[MAX_SEGMENT + YYJSON_PADDING_SIZE];
+    /* 8 byte aligned and a multiple of 8, as arnm_init_arena_borrow requires. */
+    _Alignas(8) uint8_t scratch[JSON_ARENA];
+    arnm allocator = {0};
+    arnm_json_reader reader;
+    /* The insitu parse reads four bytes past the document and writes zeroes there, which is
+     * what lets its scanner run without a bounds test. The buffers carry that much slack. */
+    char header[MAX_SEGMENT + ARNM_JSON_READER_INSITU_PADDING];
+    char payload[MAX_SEGMENT + ARNM_JSON_READER_INSITU_PADDING];
     int header_len, payload_len;
-    yyjson_alc alc;
-    yyjson_doc *doc;
-    yyjson_val *root;
-    yyjson_val *exp;
-    yyjson_val *value;
+    uint32_t claim_len = 0;
     const char *claim_str;
 
     if (config == NULL || token == NULL || claim == NULL || out == NULL)
@@ -277,44 +293,53 @@ sc_jwt_result sc_jwt_verify_hs256(const sc_jwt_config *config, const char *token
     if (actual_len != JWT_HMAC_LEN || !hmac_equal(actual, expected))
         return SC_JWT_BAD_SIGNATURE;
 
-    /* Both segments are parsed in place, so they carry the padding yyjson wants at the end. The
-     * arena lives on this stack frame and is gone when the function returns, which is also why
-     * no document is ever freed here. */
     header_len = base64url_decode(token, (size_t)(dot1 - token), (uint8_t *)header, MAX_SEGMENT);
     if (header_len < 0)
         return SC_JWT_MALFORMED;
-
-    yyjson_alc_pool_init(&alc, arena, sizeof(arena));
-    if ((root = parse_segment(header, (size_t)header_len, &alc, &doc)) == NULL)
-        return SC_JWT_MALFORMED;
-    if (!member_is(root, "alg", "HS256"))
-        return SC_JWT_BAD_ALGORITHM;
-
     payload_len =
         base64url_decode(dot1 + 1, (size_t)(dot2 - dot1 - 1), (uint8_t *)payload, MAX_SEGMENT);
     if (payload_len < 0)
         return SC_JWT_MALFORMED;
 
-    /* The header is done with; the arena starts over rather than grow. */
-    yyjson_alc_pool_init(&alc, arena, sizeof(arena));
-    if ((root = parse_segment(payload, (size_t)payload_len, &alc, &doc)) == NULL)
+    if (!arnm_ok(arnm_init_arena_borrow(&allocator, scratch, sizeof(scratch))))
+        return SC_JWT_MALFORMED;
+    if (!arnm_ok(arnm_json_reader_init(&reader, &allocator, ARNM_JSON_READ_DEFAULT)))
         return SC_JWT_MALFORMED;
 
-    exp = yyjson_obj_get(root, "exp");
-    if (yyjson_is_num(exp) && (int64_t)yyjson_get_num(exp) <= now)
+    /* A parse that fails is the reader's first error, which is why it needs no test of its own:
+     * the alg that follows answers NULL and the status carries the reason. */
+    arnm_json_reader_parse_insitu(&reader, header, (uint32_t)header_len, sizeof(header));
+    if (arnm_json_reader_status(&reader) != ARNM_SUCCESS)
+        return SC_JWT_MALFORMED;
+    if (!member_is(&reader, "alg", "HS256"))
+        return SC_JWT_BAD_ALGORITHM;
+
+    /* The header is done with. Its document goes back before the arena is reset, in that order:
+     * resetting under a document the reader still holds would leave it pointing into ground the
+     * next parse is about to hand out again. */
+    arnm_json_reader_release(&reader);
+    if (!arnm_ok(arnm_init_arena_borrow(&allocator, scratch, sizeof(scratch))))
+        return SC_JWT_MALFORMED;
+
+    arnm_json_reader_parse_insitu(&reader, payload, (uint32_t)payload_len, sizeof(payload));
+    if (arnm_json_reader_status(&reader) != ARNM_SUCCESS)
+        return SC_JWT_MALFORMED;
+
+    /* Only an expiry that is there and is a number expires a token. A payload without one is
+     * not treated as expired -- the behavior this was ported with, and not this file's to
+     * change on its own. */
+    if (arnm_json_reader_type_of(&reader, "exp") == ARNM_JSON_TYPE_NUMBER &&
+        arnm_json_reader_get_int64(&reader, "exp") <= now)
         return SC_JWT_EXPIRED;
 
-    if (config->issuer != NULL && !member_is(root, "iss", config->issuer))
+    if (config->issuer != NULL && !member_is(&reader, "iss", config->issuer))
         return SC_JWT_BAD_ISSUER;
-    if (config->audience != NULL && !audience_matches(root, config->audience))
+    if (config->audience != NULL && !audience_matches(&reader, config->audience))
         return SC_JWT_BAD_AUDIENCE;
 
-    value = yyjson_obj_get(root, claim);
-    claim_str = yyjson_get_str(value);
+    claim_str = arnm_json_reader_get_string_length(&reader, claim, &claim_len);
     if (claim_str == NULL)
         return SC_JWT_MISSING_CLAIM;
-
-    claim_len = yyjson_get_len(value);
     if (claim_len == 0 || claim_len >= SC_JWT_MAX_CLAIM)
         return SC_JWT_MISSING_CLAIM;
     memcpy(out, claim_str, claim_len);

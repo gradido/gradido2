@@ -469,6 +469,7 @@ pub fn build(b: *std.Build) void {
     // else this defaults to on, because the fast path is what the fast servers are for.
     const enable_h2o = b.option(bool, "h2o", "Build the h2o HTTP backend; off selects the libuv+picohttpparser fallback (forced off on Windows: h2o has no Windows port)") orelse !is_windows;
     const enable_tests = b.option(bool, "tests", "Build the googletest unit tests and the integration probe") orelse false;
+    const enable_benchmarks = b.option(bool, "benchmarks", "Build the bench_* binaries") orelse false;
     const sanitize = b.option(SanitizeMode, "sanitize", "Instrument C sources: undefined_behavior (UBSan) or thread (TSan). AddressSanitizer needs the CMake build with -DFS_ENABLE_SANITIZERS=ON") orelse .off;
 
     if (enable_h2o and is_windows) {
@@ -522,6 +523,11 @@ pub fn build(b: *std.Build) void {
         .shared = false,
     });
     const sodium = sodium_dep.artifact(if (is_windows) "libsodium-static" else "sodium");
+    // libsodium reaches errno.h, so it needs the corrected libc description as much as the core
+    // does -- see nativeLibcFile. Without it a build that has not got the object in its cache
+    // already fails on asm/errno.h, which is how this line came to be missing for a while: the
+    // Debug build kept finding one and only a change of optimize mode asked for a fresh compile.
+    if (libc_file) |file| sodium.setLibCFile(file);
 
     // arnm carries the arena, the containers and the conversions the core is written against --
     // `arnm_result` is what a grd* call answers with, so its headers belong on the path of
@@ -540,11 +546,6 @@ pub fn build(b: *std.Build) void {
         compile.addIncludePath(gbc_dep.path("third_party"));
         compile.addIncludePath(arnm_dep.path("include"));
     }
-    // yyjson, the parser jwt.c reads a token's two segments with. Since arnm 0.7.2 it sits in
-    // arnm's tree and libarnm compiles it, and the core links libarnm -- so this is a header
-    // path and there is nothing here to compile or link. Private to service-core: no header of
-    // ours names yyjson, so nothing above it needs the path or learns which parser is under it.
-    service_core.addIncludePath(arnm_dep.path("third_party/yyjson/src"));
 
     const exe = b.addExecutable(.{
         .name = "fast-servers",
@@ -621,6 +622,40 @@ pub fn build(b: *std.Build) void {
 
     cdb_targets.append(b.allocator, exe) catch @panic("OOM");
     b.installArtifact(exe);
+
+    if (enable_benchmarks) {
+        // Linked exactly the way the server is, which is the point of building them here rather
+        // than by hand: what a JWT costs depends on which libsodium is underneath, and the one
+        // this build pins is not the one on the system.
+        //
+        // Built at whatever -Doptimize says, and a Debug build measures Debug. Use
+        // `--release=fast` for a number worth quoting.
+        const benchmarks = [_][]const u8{"bench_jwt"};
+        for (benchmarks) |name| {
+            const bench = b.addExecutable(.{
+                .name = name,
+                .root_module = b.createModule(.{
+                    .target = target,
+                    .optimize = optimize,
+                    .link_libc = true,
+                }),
+            });
+            applySanitize(bench.root_module, sanitize);
+            if (libc_file) |file| bench.setLibCFile(file);
+            addComponentIncludes(b, bench);
+            addMultiarchIncludeDir(b, bench, target);
+            bench.addIncludePath(arnm_dep.path("include"));
+            bench.addCSourceFiles(.{
+                .files = &.{b.fmt("benchmarks/{s}.c", .{name})},
+                .flags = &c_flags,
+            });
+            bench.linkLibrary(service_core);
+            bench.linkLibrary(gbc);
+            bench.linkLibrary(sodium);
+            cdb_targets.append(b.allocator, bench) catch @panic("OOM");
+            b.installArtifact(bench);
+        }
+    }
 
     // `zig build test` builds the unit tests and runs them. Without -Dtests it has nothing to
     // do and says so, rather than silently succeeding on an empty set.
