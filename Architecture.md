@@ -242,7 +242,12 @@ and make the difference between a mechanical port and a rewrite:
 packages/          TypeScript — reference implementation
   backend          runnable HTTP server (routes, wiring, startup)
   backend-core     backend domain code: data, logic, interactions, repositories
+                   plus the database connection, next to the repositories
   federation       federation server
+  service-core     process infrastructure shared by backend, federation and
+                   dht-node: logger, graceful shutdown, environment parsing,
+                   retry for things that are not up yet.
+                   No HTTP server, no database — see AGENTS.md section 2
   admin            admin frontend
   frontend         user frontend
   frontend-core    UI code shared by admin and frontend
@@ -269,6 +274,8 @@ contracts/         language-independent JSON contracts, see below
 
 The `-core` packages contain the domain implementation; the packages next to them
 are the deployable applications that wire it up. Business code belongs in `-core`.
+`service-core` is named the same way but is not one of them: it is infrastructure,
+which section *Four kinds of code* keeps per implementation and unmirrored.
 
 Empty directories are intentional. They describe where code belongs once it exists.
 
