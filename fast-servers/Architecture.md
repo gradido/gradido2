@@ -502,24 +502,83 @@ misses, twice as fast on inserts — and two to four nanoseconds slower on a hit
 table's worth. It decouples the table count from the memory, which is what makes "raise it to
 sixty-four for the locks" a free decision rather than a 96 MiB one.
 
-### An idea that does not fit here, recorded so it is not rediscovered
+### Time routing, and what reference counting settles about it
 
 A hard timeout on a token that is never refreshed means sessions expire in creation order,
 and the JWT carries `created_at`. A cache indexed by *time* — one table per minute, eleven of
 them, the table computed from the token rather than searched for — makes expiry stop being an
-operation: ten of eleven are immutable while they are read, and reclaiming a minute is a
-`memset` and a counter reset on a thread nobody waits for. `../../h20Test/bench_session_cache`
-measures 30 bulk reclaims where the hash-routed equivalent did 386 260 inline ones.
+operation: reclaiming a minute is one bulk pass on a thread nobody waits for.
+`../../h20Test/bench_session_cache` measures **30 bulk reclaims where the hash-routed
+equivalent did 386 260 inline ones**, and 8 to 21 % less time per request between sixteen
+thousand and a quarter million live sessions.
 
-It does not compose with the cache above, and the reason is worth stating: **these sessions
-are mutable and reference counted.** A table cannot be reclaimed in bulk while any entry in it
-still has a live reference, and the working set grows lazily inside the session, so its
-storage cannot simply be cleared. Time routing suits an immutable, append-only entry; a
-SessionContext is neither.
+This section used to reject the idea on the grounds that a shard cannot be reclaimed in bulk
+while an entry in it still has a live reference. **That was wrong, and the reference counting
+above is exactly why.** Dropping a shard is dropping the table's reference on everything in
+it: the slot is cleared, the count falls by one, and a session a request is still working on
+survives — owned by that request until it finishes. That is not a new mechanism, it is the
+one `sc_cache_destroy` already performs over the whole table; a minute-shard is the same loop
+over one eleventh of it. The second half of the old claim — that a lazily growing working set
+cannot simply be cleared — confused two storages: the shard holds a pointer, the working set
+lives inside the session, and clearing an index never touches it.
 
-What does carry over is the cheap half: **check `now - created_at >= SESSION_HARD_TIMEOUT_MS`
-against the token before the table is touched at all.** The JWT validation owes that check
-anyway, and doing it first keeps an expired session from ever reaching the cache.
+So the idea composes. Three things about it do change once entries are reference counted, and
+they are the reason this is recorded as a design to take rather than one already taken.
+
+**Reclaim is a walk, not a `memset`.** The benchmark clears in O(1) because it stores entries
+inline in a bucket vector; here a shard holds pointers, so the reclaimer walks its slots and
+decrements. One pass over one shard, once a minute, off the request path — the 30-against-386 260
+figure survives intact. What does not survive is the benchmark's memory column: half of that win
+came from the dense inline storage, and sessions are separate allocations in either design.
+
+**"Ten of eleven shards need no lock" is not free.** It is true that a finished shard is never
+written — but a reader takes a pointer out of a slot and then increments a counter in it, and the
+reclaimer is what can drive that counter to zero in between. This is the same race the table lock
+exists for, in one place instead of everywhere. The argument that closes it is short, and it is
+the one the eleventh shard was for:
+
+```text
+check now - created_at >= SESSION_HARD_TIMEOUT_MS against the token, first
+    => no valid token addresses the shard being reclaimed
+    => no reader can still ENTER it; only readers already inside it
+    => the reclaimer needs a grace period, not a lock on the read path
+```
+
+**Check `now - created_at >= SESSION_HARD_TIMEOUT_MS` against the token before the table is
+touched at all.** The JWT validation owes that check anyway. Under the hash-routed cache it was
+merely cheap — an expired session never reaching the table. Under time routing it is the first
+line of the safety argument above, which is a considerable promotion for a rule that costs one
+subtraction.
+
+The grace period is the open part, and the two candidates differ in cost: an epoch counter the
+reclaimer waits out, or a per-shard rwlock taken shared by lookups and exclusive by the reclaimer
+once a minute. The second is trivial to write and still writes a reader counter on every
+lookup — the cache line that *Splitting it later* says starts to matter above eight cores,
+except now spread over eleven counters rather than one. The first costs nothing on the read path
+and is real concurrent code. Neither is decided here.
+
+**The premise is `created_at`, and it has to be bounded on both sides.** A token from the past is
+already handled: the TTL check above rejects it. A token from the *future* — an issuer whose clock
+runs ahead — routes to a shard that currently holds a live minute and forces it to be reclaimed
+early. That is a bound in JWT validation (`created_at <= now + skew`), not something the cache can
+defend against, and it is the price of routing on a value the request supplies. It also means the
+design ends the day gradido issues refresh tokens: sessions would stop expiring in creation order
+and the whole premise with it.
+
+### What it is worth at the size this targets
+
+The benchmark's ladder starts at a thousand live sessions and time routing *loses* there —
+19.3 ns against 13.4. *The working set needs a number* puts this machine at 545 sessions in 8 MB,
+which is below the bottom of that ladder, and 11 index arrays sized as the benchmark sizes them
+are 2.75 MiB of floor against those same 8 MB.
+
+Neither figure is an argument against the design, and both are worth stating plainly rather than
+being quoted later as one. `TABLE_CAP` is a benchmark constant; a shard sized for a peak minute's
+creations rather than for 65536 slots removes the floor. And at 545 sessions the difference
+between 13 ns and 19 ns is not what makes a request slow. The reasons to take time routing are
+the two that do not appear in a single-threaded nanosecond column at all — expiry leaves the
+request path entirely, and ten of eleven shards are read-only for a minute at a time — and both
+of those only pay out under the threads this architecture is being built for.
 
 ### Open
 
