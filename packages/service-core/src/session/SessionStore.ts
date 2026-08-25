@@ -2,6 +2,7 @@ import * as v from 'valibot'
 import type { Logger } from '..'
 import {
   type SessionClaims,
+  type SessionStoreLimitsInput,
   sessionStoreLimitsSchema,
   sessionTokenSchema,
   sessionUserUuidSchema,
@@ -71,40 +72,7 @@ import {
  * ```
  */
 
-export type SessionStoreConfig = {
-  /**
-   * The ceiling: how many slots the store may ever hold at once.
-   *
-   * It is **not** a sizing decision. How many sessions live at once is the number of them
-   * created within one `hardTimeoutMs`, which depends on the community, the time of day and
-   * what the clients are doing, and the store finds it by itself: it appends a slot when it
-   * needs one and reuses the slots of sessions that have ended. Nothing is retired early
-   * below this line.
-   *
-   * This is what keeps a load nobody planned for from ending the process instead of the
-   * request. At the ceiling the oldest session is retired to make room, which its owner sees
-   * as one miss and a verification, and `session.context.evicted` says it happened.
-   *
-   * **The number itself is still open**, and it is a memory question rather than a session
-   * one: what a session costs in this runtime has to be measured before a machine's RAM can
-   * be divided by it. `Architecture.md`, *Session cache*, records how — {@link size} and
-   * {@link slotCount} beside the process's own resident memory, under a load that fills the
-   * store. Until that has been done, pick a number that is obviously survivable rather than
-   * one that looks precise.
-   */
-  maxSessions: number
-  /** `SESSION_HARD_TIMEOUT_MS`. A session is dropped this long after it was created, whatever it is doing. */
-  hardTimeoutMs: number
-  /**
-   * `JWT_TOKEN_REISSUE_AFTER_MS`. How old the newest token of a session has to be before
-   * {@link SessionStore.refreshToken} mints another one.
-   *
-   * It lives here rather than at the caller because it is what bounds the token set: one
-   * token per interval for as long as a session lives, so `hardTimeoutMs / this + 1` of
-   * them. Deciding it from the token's own `iat` instead would hand that bound to whoever
-   * writes the token.
-   */
-  tokenReissueAfterMs: number
+export type SessionStoreConfig = SessionStoreLimitsInput & {
   logger: Logger
   /** Injectable for tests. Wall clock, because `session_created_at` is compared against it. */
   now?: () => number
@@ -326,7 +294,7 @@ export class SessionStore<T> {
    *
    * ```text
    * the claim's age    a token whose session would be long dead never touches the store
-   * the slot           range-checked, because nothing here has been vouched for
+   * the slot           within the slots that exist; its shape came from the schema
    * the entry's age    the authoritative one: the claim above is only a filter
    * the user           a cheap comparison before the expensive one
    * the token          byte-identical to one this session was given, or nothing
@@ -338,13 +306,11 @@ export class SessionStore<T> {
    * two differ in exactly one case — a token whose session has timed out but whose slot
    * expiry has not reached yet — and that case is the reason the second check exists.
    *
-   * The slot is checked twice over, and both are wanted. `sessionClaimsSchema` in
-   * `input.schema.ts` is where an absent or malformed claim becomes a miss rather than slot 0, which is a valid
-   * slot and usually holds someone. The line below is what stands between the store and a
-   * caller who handed it the output of `JSON.parse` cast to the type — `any` defeats every
-   * guarantee the compiler could give — and it is worth having because it costs 6 ns where
-   * parsing again would cost 281. An index beyond the slots that exist can only be checked
-   * here, since it depends on how far the store has grown.
+   * **The slot is not checked for being a slot.** `SessionClaims` is what
+   * `sessionClaimsSchema` returned, so a whole number that is not negative is what arrived:
+   * an absent claim never became slot 0, and a `"3"` never became 3. Repeating those rules
+   * here would put a second copy of them somewhere nobody updates. What is left is the one
+   * bound the schema cannot know, because it depends on how far this store has grown.
    *
    * The `user_uuid` comparison covers the one case where a live token can address a slot
    * that now belongs to someone else, the store having reused it. The token comparison would
@@ -356,7 +322,7 @@ export class SessionStore<T> {
     if (!this.isWithinTimeout(claims.sessionCreatedAt, now)) {
       return undefined
     }
-    if (!Number.isInteger(claims.slot) || claims.slot < 0 || claims.slot >= this.slots.length) {
+    if (claims.slot >= this.slots.length) {
       return undefined
     }
     const entry = this.slots[claims.slot]

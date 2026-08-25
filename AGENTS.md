@@ -156,6 +156,28 @@ so `…/shared/schemas` is the barrel and `…/shared/data/GradidoUnit` is still
 the first entry, a folder subpath resolves for a bundler, which guesses extensions, and not
 for `tsgo`, which does not: the build goes green and the typecheck fails.
 
+### Valibot at the boundary
+
+What comes from outside — a request body, the claims of a token, an environment, a caller's
+config — becomes a typed value in one place: a valibot schema in `<name>.schema.ts`, beside
+the code that uses it. Every schema yields two types, in this order and with these names:
+
+```ts
+export type SessionClaimsInput = v.InferInput<typeof sessionClaimsSchema>
+export type SessionClaims = v.InferOutput<typeof sessionClaimsSchema>
+```
+
+`Input` first, because it is what exists first — the shape as it was written down. The output
+carries no postfix, because it is what the rest of the code works with.
+
+**A parameter typed with a schema's output has been through `v.parse`.** That is what the pair
+is for, and it has a consequence worth stating: the function does not check it again. A rule
+that is missing belongs *in the schema*, not in an `if` at the top of a function, where it
+would be a second copy of a rule in a place nobody updates when the first one changes.
+
+What stays behind is only what a schema cannot know. `claims.slot >= this.slots.length` in the
+session store is such a case: how far the store has grown is not a property of the claim.
+
 ---
 
 ## 3. Domain structure
