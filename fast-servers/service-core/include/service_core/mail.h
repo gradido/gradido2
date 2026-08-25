@@ -137,6 +137,17 @@ typedef struct sc_mail_config {
      *
      * NULL keeps the host's bundle, and then scan_ca_path below decides whether the directory
      * is walked as well.
+     *
+     * Two caveats, and neither has been re-measured:
+     *
+     *   The TLS underneath is mbedtls -- Architecture.md, *TLS*, says why. Both options work
+     *   there (CAINFO through mbedtls_x509_crt_parse_file, CAPATH through
+     *   mbedtls_x509_crt_parse_path); whether the directory costs the same 8,5 ms is unknown,
+     *   so the default stays off.
+     *
+     *   A *cross compiled* binary has no bundle to fall back on: curl auto-detects the host's
+     *   only for a native build. NULL then means "verify against nothing", which fails the
+     *   handshake rather than skipping it -- name cainfo on that deployment.
      */
     const char *cainfo;
     /*

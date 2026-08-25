@@ -24,12 +24,9 @@
             .hash = "N-V-__8AAGV3jgBL34nv4uUihxaCgroWLfj966-SVjBHn9RE",
         },
         // arnm: the arena, the containers and the conversions the core is written against, and
-        // since 0.7.2 the yyjson jwt.c parses a token with. Same pin and the same options the
-        // core requests, for the same reason libsodium is here.
-        //
-        // This replaces a yyjson pin of this build's own, which was correct while the core was
-        // at 0.16.0 and became a duplicate the moment 0.17.0 started linking libarnm -- two
-        // definitions of every yyjson_* symbol, and link order deciding between them.
+        // the JSON jwt.c parses a token with. Same pin and the same options the core requests,
+        // for the same reason libsodium is here -- and do not pin its vendored yyjson
+        // separately, which would be a second definition of every yyjson_* symbol.
         .arnm = .{
             .url = "https://github.com/gradido/arnm/archive/refs/tags/v0.7.2.tar.gz",
             .hash = "arnm-0.7.2-ZdhGsCwFGgA0uOWsPFL1vPE1tCGvc2TkG-A5oUQrPVgw",
@@ -45,24 +42,31 @@
             .url = "git+https://github.com/h2o/h2o#706842c0f8c0d9422efb97a4d8ef7d6ec9df87b7",
             .hash = "N-V-__8AACufnwFkhWbkiO3KxcVcasJKyoe9sYRvT0rp5-MI",
         },
-        // OpenSSL, and the pin curl carries rather than one of this build's own.
+        // LibreSSL: the TLS h2o is built against, and the TLS libpq speaks to the database.
         //
-        // h2o linked the *host's* libssl and libcrypto until this arrived, which is why
-        // `ldd fast-servers` used to name /lib/x86_64-linux-gnu/libssl.so.3. Two things ended
-        // that: the mail client needs libcurl, libcurl wants a TLS backend, and a statically
-        // built OpenSSL beside the host's dynamic one is two OpenSSLs in one process -- the
-        // yyjson situation below, with link order deciding which one signs.
+        // This was allyourcodebase/openssl until arm64 was measured against it. That package is
+        // x86_64-only by construction -- it ships pre-generated x86_64 assembly, adds it under
+        // `.x86_64 => ...` with `else => {}` beside it, and compiles crypto/bn/asm/x86_64-gcc.c
+        // for every target whatever the architecture is. An aarch64 build stops with 23 errors
+        // inside it, natively as much as cross, because that choice is made on cpu.arch and not
+        // on whether it is a cross build. No version fixes it: `aarch64` and `arm_arch` appear
+        // nowhere in that package's history, and its newest commit packs the same OpenSSL 3.3.2
+        // as its oldest.
         //
-        // So both link this, and the pin has to be the one curl names -- `cad7ccb`, not
-        // allyourcodebase/openssl's HEAD, whose content hashes differently and would therefore
-        // be a second package in the graph rather than the same one. When the curl pin moves,
-        // read its build.zig.zon and move this with it.
+        // LibreSSL is the same API from people who kept it portable: this package handles
+        // aarch64 in its config-header switch and adds assembly only where it has it. h2o knows
+        // the fork -- lib/common/socket.c branches on LIBRESSL_VERSION_NUMBER in four places.
         //
-        // Lazy: only the h2o path needs it. Windows builds the fallback backend and gives curl
-        // Schannel, and neither wants 42 MB of OpenSSL fetched to be ignored.
-        .openssl = .{
-            .url = "git+https://github.com/allyourcodebase/openssl#cad7ccba47e42fa608ca655ec14ae33202df86e1",
-            .hash = "openssl-3.3.2-TC9C3Wa3ZACgB1hZbrLOQCK9XccIBaW_F3imFfIeYP06",
+        // The pin is the commit allyourcodebase/libpq names, down to the hash, so that the
+        // database driver's `ssl = .LibreSSL` and h2o's TLS are one package in the graph rather
+        // than two exporting the same symbols. When this moves, read libpq's build.zig.zon and
+        // move it with them -- the .libpq entry says what breaks otherwise.
+        //
+        // Lazy: the Windows build has no h2o, gives curl Schannel and builds no libpq, so it
+        // wants none of this.
+        .libressl = .{
+            .url = "git+https://github.com/allyourcodebase/libressl?ref=master#8c63fadf71925d74942a847b9a6b3a28930792a3",
+            .hash = "libressl-4.0.0--kqV4FHUAABdqKrbT3i3K-m1m7s_HyZZMMoBpbHjCiNQ",
             .lazy = true,
         },
         // libcurl: the mail client speaks SMTP through it, and the outbound HTTP(S) this
@@ -75,6 +79,12 @@
         // Every protocol but SMTP and HTTP is switched off in build.zig, together with the four
         // system libraries curl reaches for by default (libpsl, libssh2, libidn2, nghttp2) --
         // none of which this build carries, and each of which would become a host dependency.
+        //
+        // Its TLS is mbedtls, which curl pins itself and fetches lazily. Not LibreSSL, although
+        // the rest of this build is: curl's package cannot take one -- `// TODO BoringSSL,
+        // AWS-LC, LibreSSL, and quictls` is what its build.zig says where the choice is made.
+        // Two libraries with the *same* API would be a link-order lottery; mbedtls has its own,
+        // so the two coexist in one process. Revisit when that TODO lands.
         .curl = .{
             .url = "git+https://github.com/allyourcodebase/curl.git#fc863d6cbc4a694ff5bb11fc59470142c8682e2b",
             .hash = "curl-8.18.0-mFDAWK_0AABsv8MPtSIjAPCVElXbt1vbzgBOs7plIlUJ",
@@ -84,8 +94,8 @@
         // host's, at which point one remaining system library would have kept the h2o path
         // pinned to the machine it builds on for no gain.
         //
-        // Same pin curl carries, for the reason the openssl entry gives: one package in the
-        // graph, not two that happen to contain the same code. Lazy, like openssl -- the
+        // Same pin curl carries, for the reason the libressl entry gives: one package in the
+        // graph, not two that happen to contain the same code. Lazy, like libressl -- the
         // fallback backend has no gzip handler and asks for neither.
         .zlib = .{
             .url = "git+https://github.com/allyourcodebase/zlib#c5115f4b69ef660f72a835c6638f80508ef284c7",
@@ -100,28 +110,19 @@
             .url = "git+https://github.com/allyourcodebase/libuv.git#c1ccce24e1077ae7780857c89fb4b3aeb9080315",
             .hash = "libuv-1.52.0-htqqvzNqAAAB6cHIx-wIffe_mqMW5GOKjHeDBJYHGwls",
         },
-        // libpq, the PostgreSQL client. Architecture.md, *Databases*, holds why it is this and
-        // not a protocol client of our own: 3,6 us of user CPU out of 48 is the entire budget a
-        // rewrite could compete for, and it would take on the wire protocol, TLS, SCRAM and
-        // failover to spend it differently.
+        // libpq, the PostgreSQL driver, built by allyourcodebase/libpq out of a pinned postgres
+        // checkout -- so this pin carries two, and 5.18.4 is PostgreSQL 18.4. Architecture.md,
+        // *Databases*, holds why the driver is libpq and not a protocol client of our own: 3,6
+        // us of user CPU out of 48 is the entire budget a rewrite could compete for.
         //
-        // The package builds libpq out of a pinned postgres checkout, so this pin carries two:
-        // 5.18.4 is PostgreSQL 18.4. That checkout is 155 MB and the reason this entry is lazy
-        // -- `-Dpostgres=false` never fetches it, which is what a SQLite-only deployment and a
-        // CI job that only needs the fallback want.
+        // Requested with `ssl = .LibreSSL`, which is the package's own default and, here, a
+        // requirement: it pins allyourcodebase/libressl at the commit and hash the .libressl
+        // entry above names, so both resolve to one package and the process carries one TLS
+        // library. Asking it for OpenSSL instead would fetch a second one exporting the same
+        // symbols as LibreSSL, and link order would decide which of them verifies a certificate.
         //
-        // Built with `ssl = .None`, and that is the one thing to read before changing it. The
-        // package pins allyourcodebase/openssl at 0ac6776 while curl -- and therefore this
-        // build -- pins cad7ccb, and two commits of that package hash differently, which makes
-        // them two packages in the graph and two OpenSSLs in one process. The .openssl entry
-        // above says what that costs; it does not become acceptable because a second dependency
-        // asked for it. What ssl = .None gives up is TLS *transport* to the database and
-        // nothing else: scram-sha-256 still authenticates, because the None branch compiles
-        // postgres' own sha2.c and hmac.c in place of the OpenSSL ones.
-        //
-        // So this is correct for the database on this host, over a Unix socket, which is what
-        // Architecture.md prescribes anyway -- and not yet correct for a database across a
-        // network. Closing that means the two openssl pins agreeing, not a second one.
+        // Lazy: the postgres checkout is 155 MB, and `-Dpostgres=false` never fetches it. Not
+        // built on Windows at all -- the package compiles postgres' posix src/port.
         .libpq = .{
             .url = "git+https://github.com/allyourcodebase/libpq#925fa037a81952343b255f88f795257a8006f27d",
             .hash = "libpq-5.18.4-QME6ad0UAQBVEzKd7H4tswrfCnTZB_1Kjw09tXeUKQK1",
