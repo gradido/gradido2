@@ -288,7 +288,7 @@ a Zig type, and that source is the contract.
 
 Non-negotiable wherever C runs, and more so where it was AI-generated:
 
-- ASan, UBSan and TSan in CI, not only locally. TSan matters most — the shared session map
+- ASan, UBSan and TSan in CI, not only locally. TSan matters most — the shared session store
   is the one defect class expert review does not catch.
 - Fuzzing for every parser that touches attacker-supplied bytes: JWT and JSON. The signature
   is verified before anything else is read; everything after it is hostile input.
@@ -307,65 +307,158 @@ Non-negotiable wherever C runs, and more so where it was AI-generated:
 
 ## Session cache
 
-The C implementation holds one session map shared by all threads. This is the structure the
+The C implementation holds one session store shared by all threads. This is the structure the
 whole architecture rests on, so its invariants are written down rather than left to the code.
+
+It is not a hash table. **The JWT carries the slot index, so a lookup is an array read.** Every
+part below follows from that one decision: there is no key to mix, no probe walk, no collision,
+no full-cache case that costs anything, and expiry is a comparison at a single known position
+instead of work spread over every walk.
+
+```text
+one bucket_vector of session pointers, indexed directly by the token
+one cursor           the oldest live entry; once full, also the next slot written
+reference counting   unchanged, and it is what makes releasing a slot safe
+```
+
+### The token carries the slot
+
+A hard timeout on a token that is never refreshed means sessions expire in creation order. The
+JWT already carries `created_at` for that; it now also carries the index of the slot its session
+was placed in. The read path is then:
+
+```text
+verify the signature                       <- everything after this is still hostile input
+require created_at, require the slot index <- absent is not the same as zero
+check created_at <= now + skew
+check now - created_at < SESSION_HARD_TIMEOUT_MS
+    => older than that: mint a new token and a fresh session, and never look the old one up
+read the slot; empty or out of range => miss
+take a reference
+check the entry's user_id against the token's
+    => mismatch: release, miss
+```
+
+The token is older than the timeout in exactly the case where its session is gone anyway, so the
+refresh and the eviction are the same event seen from two sides. A client that comes back after
+eleven minutes costs one insertion and no lookup; a client inside the window costs one bounds
+check and one load.
+
+**The index is attacker-supplied and it is trusted only because it is signed.** Nothing reads it
+before the signature verifies, and it is range-checked afterwards regardless — a signed index is
+protected against forgery, not against a bug that wrote the wrong one. *Safety net* says a claim
+that is absent is not a claim that passed; here that rule has a second edge. A missing index must
+be a miss, because the C default for a missing integer is zero and zero is a valid slot.
+
+**The `user_id` check is not a formality, it covers the one case where a slot can be reused under
+a live token.** Ordinarily it cannot: a slot is released only when its entry has timed out, and
+that entry's `created_at` is the token's, so any token addressing a released slot was already
+rejected two lines earlier. The exception is a store with no free slot left, where the oldest live
+entry is overwritten early — see *The cursor*. Then a valid token can address a slot that now
+holds someone else's session, and the `user_id` comparison is what turns that into a miss.
+
+Comparing `created_at` as well makes the match exact rather than merely safe: the entry holds it
+for the expiry check anyway, and with it a token can only ever find the session it was minted
+with. Without it, two live sessions of the same user can alias — harmless, because a session is a
+disposable working view (`AGENTS.md` section 7), but it costs one comparison not to have to argue
+that.
 
 ### Two lock layers, and they must stay apart
 
 ```text
-the table    which sessions exist       one reader/writer lock
+the store    which sessions exist       one reader/writer lock
 a session    what is inside one         one main rwlock + one per data set
 ```
 
 The primitive is `uv_rwlock_t`, from the platform layer above — `std::shared_mutex` would put
 C++ on the request path, which `AGENTS.md` section 2 reserves for leaf modules.
 
-They protect different things and are never held together. **The table lock is released
+They protect different things and are never held together. **The store lock is released
 before any session lock is taken.** Holding one while taking the other couples two
 structures that have nothing to do with each other and creates a deadlock across them.
 
 The order within the lookup is not a matter of taste:
 
 ```text
-take the table lock (shared)
-    find the slot
+take the store lock (shared)
+    read the slot
     increment the reference count      <- inside the lock, not after it
-release the table lock
+release the store lock
     work, using only the session's own locks
 ```
 
-Incrementing after the release is a use-after-free. In the gap another thread evicts the
+Incrementing after the release is a use-after-free. In the gap another thread releases the
 session, the count falls to zero, the memory goes back to the arena, and the increment then
-lands in it. Holding the shared lock keeps any evictor out, because eviction needs the
-exclusive one — and a session still in the table has a count of at least one, so it cannot
+lands in it. Holding the shared lock keeps the cursor walk out, because releasing a slot needs
+the exclusive one — and a session still in the store has a count of at least one, so it cannot
 be freed while it is being read.
 
-### The table
+Direct indexing makes this lock cheap enough to keep and small enough to remove later. It is held
+for two instructions, and *Open* records what it would take to drop it entirely.
+
+### The vector
 
 ```text
-open addressing, power-of-two capacity, probe length CACHE_PROBE (default 8, configurable)
-one shared_mutex for the table, one arena
+bucket_vector of pointers, chunks of a fixed size, chunks never move
+capacity        sized for the sessions created within one SESSION_HARD_TIMEOUT_MS
+8 bytes a slot  one arena for the sessions themselves
 ```
 
-The key hash selects the slot; the probe walks from there. The lock exists for a specific
-race: a reader takes a pointer out of a slot, an evicting writer drops that pointer and
-frees the session, and the reader then increments a counter in freed memory. Lookup and the
-increment that follows it therefore happen inside the same shared lock.
+A bucket vector rather than a flat one, for a reason that is about concurrency and not about
+allocation: growing a flat vector moves every element, and a reader holding a slot address across
+that move reads freed memory. Chunks that never move make growth a published pointer to a new
+chunk and nothing else — readers in existing chunks are untouched, and a reader whose index is
+beyond the current size takes a miss, which is already a case the read path handles.
 
-One lock is enough at the sizes this targets. Readers do not block readers, and writes only
-happen on a miss or an eviction, which are rare once the cache is warm.
+There is no hash here, and that removes a whole failure class rather than a line of code. *What
+was measured* records two reproductions where a colliding key set does not make a bounded-probe
+cache slow but makes it stop holding anything — correct answers, hit rate on the floor, nothing
+in the log. An index that the server itself handed out cannot collide, cannot be strided, and
+cannot be chosen by an attacker. The seeded splitmix mix and `CACHE_PROBE` stop being session
+concerns; they remain the rule for any cache that still derives a slot from a key.
 
-**Splitting it later means several independent tables, not several locks over one table.**
-Deriving the slot from the low bits of the hash and a lock from the high bits is broken —
-two keys can land in the same slot while selecting different locks, and a probe run walks
-past whatever boundary was drawn. If it is ever needed, the hash routes a key to one of N
-tables, each with its own slots, its own lock and its own arena, and a probe stays inside
-one by construction. Keep the routing line trivial so this stays an hour's work.
+### The cursor
 
-The reason to do it would not be threads waiting: a read lock still writes to the reader
-counter, and that cache line bounces between cores on every lookup. It starts to show
-somewhere above eight cores and never appears in a profiler as wait time. On a four-core
-machine it is not worth having.
+One cursor, and it is the only moving part of expiry. Because sessions are created in increasing
+time order and every one of them dies exactly `SESSION_HARD_TIMEOUT_MS` after its creation, the
+store is a ring in creation order: the live sessions occupy one contiguous run of it, the oldest
+at the cursor and the newest at the end of the run. Expiry therefore needs no sweeper thread, no
+walk of the whole store and no check on the read path. It needs one comparison, at one known
+position, paid by whoever creates a session.
+
+Creating a session:
+
+```text
+at the cursor, while the entry there has timed out:
+    drop the store's reference    <- the session is freed if the count reaches zero
+    clear the slot, advance the cursor
+write the new session at the end of the live run, and extend the run by one
+```
+
+The walk keeps going for as long as it finds timed-out entries, so a burst of expiries goes back
+to the arena at once rather than one insertion at a time; the cursor stops on the oldest entry
+that is still live, which is where the next insertion will start looking. Nothing else moves it.
+**Once the store is full the two positions are the same slot** — the entry the cursor stands on is
+the one written a full lap ago, so checking whether the oldest has timed out and finding room for
+the newest are one operation. That is the steady state, and it is the case the capacity is sized
+for.
+
+**Insertion never fails.** If the run has filled the ring and the entry at the cursor is still
+inside its timeout, the new session takes that slot anyway: the store drops its reference, and a
+session a request is still working on survives, owned by that request until it finishes. This is
+the only path that can retire a session before its timeout, it is the reason the `user_id` check
+exists on the read path, and it degrades as a cache miss rather than as an error. There is no
+full-store case to handle and no reason to grow.
+
+That makes the capacity a bound with a name: **the number of sessions created within one timeout
+window.** Below it nothing is ever evicted early; above it the excess turns into misses in
+creation order, which is what the oldest client's next request was going to cost anyway.
+
+The walk is short, it is bounded by the number of entries that expired since the last insertion,
+and it touches nothing but slots and reference counts — so it runs under the store's exclusive
+lock without holding it across anything that can block. Freeing a session whose count reaches zero
+returns arena memory and takes no other lock; *Two lock layers* is why that is allowed to happen
+there at all.
 
 ### Inside a session
 
@@ -391,43 +484,23 @@ but the backend does not depend on it not happening.
 ### Reference counting
 
 ```text
-the table pointer   is one reference
+the slot            is one reference
 a request using it  is one reference
-eviction            removes the pointer and gives up that reference
+the cursor walk     clears the slot and gives up that reference
 request end         gives up its reference
 freed               exactly when the counter reaches zero, never anywhere else
 ```
 
-Nothing is a special case. A session evicted while two requests are using it simply loses
-the table's reference and lives on, owned by those requests; the last of them to finish
-frees it.
+Nothing is a special case. A session released while two requests are using it simply loses
+the store's reference and lives on, owned by those requests; the last of them to finish
+frees it. Timing out, being overwritten in a full store, and shutdown are the same operation
+applied to one slot, one slot, and all of them.
 
-**Reaching zero implies unreachable.** The table no longer points at a session whose count
-is zero, so no lookup can revive it and the release path needs no lock — only `acq_rel` on
-the decrement, so that the last user's writes are visible before the memory is reused. The
-increment may be `relaxed`, but it must happen *inside* the shared lock: look up, release
-the lock, then increment is the same race with extra steps.
-
-### Insertion never fails
-
-An occupied slot is overwritten. If the session sitting there is unused it is freed
-immediately; if it is in use, only the pointer goes and the last user cleans up. There is
-therefore no full-cache error to handle, and no reason to grow the table.
-
-Among the CACHE_PROBE candidates, prefer in this order: free slot, expired entry, entry with
-no current user, otherwise the first. Preferring an idle victim keeps sessions that are
-actively serving requests inside the table, so less memory is held outside it.
-
-### Lazy expiry
-
-`SESSION_HARD_TIMEOUT_MS` is enforced during the probe walk, not by a sweeper thread.
-
-A reader holds only a shared lock and therefore does not mutate the table: it treats an
-expired entry as absent. The reclaim happens on the next `cache_put` that walks the same
-slot — which is imminent, because the miss the reader just took is what triggers that put.
-Expiry costs nothing beyond a comparison on a walk that happens anyway, and no background
-work exists to schedule, starve or shut down.
-
+**Reaching zero implies unreachable.** No slot points at a session whose count is zero, so no
+lookup can revive it and the release path needs no lock — only `acq_rel` on the decrement, so
+that the last user's writes are visible before the memory is reused. The increment may be
+`relaxed`, but it must happen *inside* the shared lock: read the slot, release the lock, then
+increment is the same race with extra steps.
 ### The working set needs a number
 
 Computed from `contracts/db`, strings held as arena offsets:
@@ -451,25 +524,32 @@ every mutex in the session together are under half a percent of it. The bound is
 not a tuning parameter, it is the design.
 
 Keep roughly two pages — `DEFAULT_PAGINATION_PAGE_SIZE` is 25, so about 50 — extend forward
-through the cursor, and read older windows from the database when someone actually pages
-back. That is the difference between 545 sessions and 57 on the same machine.
+through the pagination cursor, and read older windows from the database when someone actually
+pages back. That is the difference between 545 sessions and 57 on the same machine.
 
 The other lever is in `contracts/db/transactions.json`, recorded there as open: the two
 denormalised `varchar(512)` names and four uuids per row are 116 of the 288 bytes. Holding
 ids in the session and resolving names where they are rendered gives back another 40%.
 
+The index itself does not appear in this arithmetic and that is the point of it. 545 sessions
+at 8 bytes a slot are 4,4 KiB — one twentieth of a percent of what the sessions cost — so the
+capacity is sized for the peak minute of a bad day and not for the memory. Where the earlier
+designs had to weigh an index against the working set, this one has nothing to weigh.
+
 ### What was measured, and what it changes
 
-`../../h20Test/bench_cache` measures this structure directly: an open-addressed table with a
-hard timeout, a `uint16_t` slot index, and several ways to handle a full one. `rand` keys,
-one Ryzen 7 5700G, single threaded, nanoseconds per lookup. Three results bear on the design
-above.
+`../../h20Test/bench_cache` measures the design this one replaced: an open-addressed table with
+a hard timeout, a `uint16_t` slot index, and several ways to handle a full one. `rand` keys, one
+Ryzen 7 5700G, single threaded, nanoseconds per lookup. It is kept because three of its results
+are the reason the direct index is worth having, and because the numbers are the only defence
+against re-deriving a hash table here later.
 
 **Lazy expiry during the probe walk is not a shortcut, it is the reason to use open
 addressing at all.** A map-based cache cannot reclaim in passing and has to sweep; at a
 million live entries that is 1 730 ns per operation against 215 for the open-addressed one,
 and the whole difference is the sweep. Behind a shared lock that is the difference between a
-cache and a stall.
+cache and a stall. The cursor is the end of that line of argument: reclaim in passing became
+reclaim at one known position, and the walk it used to ride on is gone too.
 
 **"Several independent tables, not several locks over one table" is the right plan, and it
 buys more than lock parallelism.** Sixteen tables chosen by the key's hash, each growing its
@@ -483,6 +563,9 @@ own overflow table:
 A chained table makes every lookup walk the whole chain; routing keeps the walk to one
 sixteenth of it. Route with the **high** 32 bits of the hash and take the slot from the low
 16 — the two must not overlap, which is the same mistake as deriving both from the low bits.
+The row that matters now is the last one: the cost of overfilling a hash-routed cache is
+super-linear, where the cost of overfilling this one is a session evicted early, priced in
+*The cursor*.
 
 **The hash is the entire safety margin, and `CACHE_PROBE` is what makes that true.** A
 bounded probe means a colliding key set does not make the cache slow, it makes the cache stop
@@ -492,99 +575,124 @@ the table size, and `std::unordered_map` under libc++ *is* that masked table, be
 `reserve(65536)` yields a power-of-two bucket count indexed by masking. 19 ns became 25 µs.
 
 Mix the key — splitmix64 finalizer, two multiplies — **and seed the mix once per process**.
-The seed is what makes an adversarial key set unconstructible; it costs one XOR.
+The seed is what makes an adversarial key set unconstructible; it costs one XOR. **This is the
+result the current design retires rather than applies**, and it is the strongest single reason
+for the direct index: the failure it describes is silent, is reachable from outside, and cannot
+occur at all once the server hands out the slot instead of computing it. The rule stands
+wherever a slot is still derived from a key; the session store is no longer such a place.
 
-One layout note for when the table count is raised for lock parallelism: the slot can hold
-the entry (24 B) or a `uint16_t` index into a dense array of the entries that exist plus a
-16-bit fingerprint of the hash, so a probe step rejects a wrong candidate without
-dereferencing. At four bytes a slot that is 4 MiB where inline entries are 24, faster on
-misses, twice as fast on inserts — and two to four nanoseconds slower on a hit below one
-table's worth. It decouples the table count from the memory, which is what makes "raise it to
-sixty-four for the locks" a free decision rather than a 96 MiB one.
+The layout note from that work survives in a different form. A slot that holds an index into a
+dense array of entries plus a fingerprint was worth having because it decoupled the table count
+from the memory. Here the slot holds a pointer and there is no table count, so *The working set
+needs a number* can size the capacity for the worst minute rather than for the megabytes.
 
-### Time routing, and what reference counting settles about it
+### Where this design comes from
 
-A hard timeout on a token that is never refreshed means sessions expire in creation order,
-and the JWT carries `created_at`. A cache indexed by *time* — one table per minute, eleven of
-them, the table computed from the token rather than searched for — makes expiry stop being an
-operation: reclaiming a minute is one bulk pass on a thread nobody waits for.
-`../../h20Test/bench_session_cache` measures **30 bulk reclaims where the hash-routed
-equivalent did 386 260 inline ones**, and 8 to 21 % less time per request between sixteen
-thousand and a quarter million live sessions.
+It is time routing, taken to the position it was always heading for. That design — one table per
+minute, eleven of them, the table computed from the token rather than searched for — is recorded
+below, because two of its arguments carry over unchanged and one of its corrections is the reason
+this one is safe. `../../h20Test/bench_session_cache` measured **30 bulk reclaims where the
+hash-routed equivalent did 386 260 inline ones**, and 8 to 21 % less time per request between
+sixteen thousand and a quarter million live sessions.
 
-This section used to reject the idea on the grounds that a shard cannot be reclaimed in bulk
-while an entry in it still has a live reference. **That was wrong, and the reference counting
-above is exactly why.** Dropping a shard is dropping the table's reference on everything in
-it: the slot is cleared, the count falls by one, and a session a request is still working on
-survives — owned by that request until it finishes. That is not a new mechanism, it is the
-one `sc_cache_destroy` already performs over the whole table; a minute-shard is the same loop
-over one eleventh of it. The second half of the old claim — that a lazily growing working set
-cannot simply be cleared — confused two storages: the shard holds a pointer, the working set
-lives inside the session, and clearing an index never touches it.
+The step from there to here is to stop rounding. If the token can name the minute, it can name
+the session: one slot per session rather than one shard per minute, an array read rather than a
+routed lookup, a comparison at the cursor rather than a pass over a shard, and no clock skew
+inside the store at all. Everything time routing bought is bought here more cheaply — expiry off
+the request path, no lock contention on the common path, no sweeper — and the parts of it that
+were open stop being open:
 
-So the idea composes. Three things about it do change once entries are reference counted, and
-they are the reason this is recorded as a design to take rather than one already taken.
+```text
+time routing                      direct index
+one shard per minute              one slot per session
+reclaim = walk a shard, 1/minute  reclaim = one comparison, at the cursor
+11 index arrays, 2.75 MiB floor   one vector, 8 B a session
+skew moves a token between shards skew is a bound in JWT validation, nothing more
+refresh tokens end the design     a refresh mints a new slot, order is preserved
+```
 
-**Reclaim is a walk, not a `memset`.** The benchmark clears in O(1) because it stores entries
-inline in a bucket vector; here a shard holds pointers, so the reclaimer walks its slots and
-decrements. One pass over one shard, once a minute, off the request path — the 30-against-386 260
-figure survives intact. What does not survive is the benchmark's memory column: half of that win
-came from the dense inline storage, and sessions are separate allocations in either design.
+That last line is worth stating on its own. Time routing died the day gradido issued refresh
+tokens, because a refreshed token would no longer sit in the minute its session was created in.
+Here a refresh is a new session in a new slot, which is what the ten-minute rule already does
+every time a client comes back late — the creation order the ring depends on is maintained by
+construction rather than by the absence of a feature.
 
-**"Ten of eleven shards need no lock" is not free.** It is true that a finished shard is never
-written — but a reader takes a pointer out of a slot and then increments a counter in it, and the
-reclaimer is what can drive that counter to zero in between. This is the same race the table lock
-exists for, in one place instead of everywhere. The argument that closes it is short, and it is
-the one the eleventh shard was for:
+### What the shard design settled, and this one inherits
+
+An earlier version of this document rejected time routing on the grounds that a shard cannot be
+reclaimed in bulk while an entry in it still has a live reference. **That was wrong, and the
+reference counting above is exactly why.** Dropping a shard is dropping the table's reference on
+everything in it: the slot is cleared, the count falls by one, and a session a request is still
+working on survives — owned by that request until it finishes. The second half of the old claim —
+that a lazily growing working set cannot simply be cleared — confused two storages: the index
+holds a pointer, the working set lives inside the session, and clearing an index never touches
+it. Both corrections are load-bearing here: the cursor releasing a slot is the same operation the
+shard reclaimer would have performed, applied to one entry at a time.
+
+**Check `now - created_at >= SESSION_HARD_TIMEOUT_MS` against the token before the store is
+touched at all.** Under the hash-routed cache this was merely cheap — an expired session never
+reaching the table. Under time routing it became the first line of the safety argument. Under
+direct indexing it is that and more: it is what guarantees that no valid token can address a slot
+the cursor is about to release, which is the whole reason the read path can stay as short as it
+is.
 
 ```text
 check now - created_at >= SESSION_HARD_TIMEOUT_MS against the token, first
-    => no valid token addresses the shard being reclaimed
-    => no reader can still ENTER it; only readers already inside it
-    => the reclaimer needs a grace period, not a lock on the read path
+    => no valid token addresses a slot the cursor is releasing
+    => no reader can still ENTER such a slot; only readers already inside it
+    => what protects the read path is a grace period, not a lock
 ```
 
-**Check `now - created_at >= SESSION_HARD_TIMEOUT_MS` against the token before the table is
-touched at all.** The JWT validation owes that check anyway. Under the hash-routed cache it was
-merely cheap — an expired session never reaching the table. Under time routing it is the first
-line of the safety argument above, which is a considerable promotion for a rule that costs one
-subtraction.
-
-The grace period is the open part, and the two candidates differ in cost: an epoch counter the
-reclaimer waits out, or a per-shard rwlock taken shared by lookups and exclusive by the reclaimer
-once a minute. The second is trivial to write and still writes a reader counter on every
-lookup — the cache line that *Splitting it later* says starts to matter above eight cores,
-except now spread over eleven counters rather than one. The first costs nothing on the read path
-and is real concurrent code. Neither is decided here.
-
 **The premise is `created_at`, and it has to be bounded on both sides.** A token from the past is
-already handled: the TTL check above rejects it. A token from the *future* — an issuer whose clock
-runs ahead — routes to a shard that currently holds a live minute and forces it to be reclaimed
-early. That is a bound in JWT validation (`created_at <= now + skew`), not something the cache can
-defend against, and it is the price of routing on a value the request supplies. It also means the
-design ends the day gradido issues refresh tokens: sessions would stop expiring in creation order
-and the whole premise with it.
+handled by the TTL check above. A token from the *future* — an issuer whose clock runs ahead —
+outlives the slot it was given and can still be presented after the cursor has passed over it and
+handed the slot to someone else. That is a bound in JWT validation (`created_at <= now + skew`),
+not something the store can defend against, and it is why the `user_id` check on the read path is
+mandatory rather than defensive. Compared with time routing, where skew silently moved a token
+into the wrong shard, the failure is at least contained: one lookup, one mismatch, one miss.
 
 ### What it is worth at the size this targets
 
-The benchmark's ladder starts at a thousand live sessions and time routing *loses* there —
-19.3 ns against 13.4. *The working set needs a number* puts this machine at 545 sessions in 8 MB,
-which is below the bottom of that ladder, and 11 index arrays sized as the benchmark sizes them
-are 2.75 MiB of floor against those same 8 MB.
+The `bench_session_cache` ladder starts at a thousand live sessions and time routing *loses*
+there — 19.3 ns against 13.4 for the hash-routed table. *The working set needs a number* puts
+this machine at 545 sessions in 8 MB, below the bottom of that ladder.
 
-Neither figure is an argument against the design, and both are worth stating plainly rather than
-being quoted later as one. `TABLE_CAP` is a benchmark constant; a shard sized for a peak minute's
-creations rather than for 65536 slots removes the floor. And at 545 sessions the difference
-between 13 ns and 19 ns is not what makes a request slow. The reasons to take time routing are
-the two that do not appear in a single-threaded nanosecond column at all — expiry leaves the
-request path entirely, and ten of eleven shards are read-only for a minute at a time — and both
-of those only pay out under the threads this architecture is being built for.
+The direct index does not have that problem, and the reason is worth being precise about rather
+than assuming: what cost time routing its nanoseconds at small sizes was the extra indirection
+and the cold shard arrays, both of which are gone. A bounds check, a load and an atomic increment
+do not have a size at which they lose. But the honest version is that at 545 sessions none of
+this is what makes a request slow, and the reasons to take this design are the ones that do not
+appear in a single-threaded nanosecond column at all:
+
+- expiry leaves the request path entirely, and leaves the background too — there is no sweeper
+  and no per-minute pass, only a comparison paid by whoever creates a session
+- there is no hash, so the silent hit-rate collapse in *What was measured* is unreachable
+- the store lock is held for two instructions and is a candidate for removal, which the probe
+  walk never was
+- the index costs 8 bytes a session, so the capacity is a policy decision rather than a budget one
 
 ### Open
 
-Session working sets grow lazily while only a shared lock is held. Allocating from the table's
-arena at that moment races with the other readers. This is the unresolved part of the
-design, and the options differ enough to matter:
+**The grace period on the read path.** The safety argument above shows that no reader can enter a
+slot the cursor is releasing, which leaves exactly one window: a reader whose token passed the TTL
+check, and whose entry times out between that check and its increment. Three ways to close it,
+in the order they should be reached for:
+
+- the store rwlock, shared on lookup and exclusive for the cursor walk. Trivially correct, and
+  cheap here in a way it was not before: the walk runs once per session creation, not on every
+  miss. Its cost is the reader counter's cache line, which *What was measured* puts above eight
+  cores — and this machine has four.
+- release with a margin: let the cursor treat an entry as gone only at `created_at + timeout +
+  grace`. It makes the window seconds wide at the cost of nothing on the read path, but it is an
+  argument about scheduling, not a proof — a descheduled thread can outlast any margin.
+- an epoch counter the reclaimer waits out. Costs nothing on the read path and is correct, and it
+  is real concurrent code with real ways to get it wrong.
+
+Take the lock now, and let a profiler rather than this section decide whether it is ever removed.
+
+**Session working sets grow lazily while only a shared lock is held.** Allocating from the
+session's arena at that moment races with the other readers, and this is unchanged by anything
+above — the store's structure was never what made it hard. The options differ enough to matter:
 
 - a per-session sub-arena, reserved with a cap when the session is created
 - growth upgrades to the write lock

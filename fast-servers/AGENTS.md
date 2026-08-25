@@ -282,25 +282,31 @@ Read `Architecture.md`, *Session cache*, in full. The invariants there are not s
 preferences and each of them was a bug first:
 
 ```text
-the table pointer is a reference; freed exactly when the count reaches zero
-the reference count is incremented INSIDE the table lock, never after releasing it
-the table lock is released before any session lock is taken
+the slot is a reference; freed exactly when the count reaches zero
+the reference count is incremented INSIDE the store lock, never after releasing it
+the store lock is released before any session lock is taken
 data-set locks are acquired in a fixed order
 no lock upgrade — release shared, take exclusive, check again
 no session lock is ever held across a database call
-the key hash is mixed AND seeded per process; the slot comes from the low bits,
-    a table from the high ones, and the two never overlap
+the token's TTL is checked BEFORE the store is touched — it is what guarantees that
+    no valid token addresses a slot the cursor is releasing
+a missing slot index in the token is a miss, never slot 0; the index is range-checked
+    after the signature verifies, and the entry's user_id is compared to the token's
 ```
 
-The seeded mix is not paranoia. With a bounded probe walk a colliding key set does not make
-the cache slow, it makes it stop holding anything — correct answers, hit rate on the floor,
-nothing in the log. `Architecture.md`, *What was measured*, has the two reproductions.
+The store is not keyed and not hashed: the JWT carries the slot index and a lookup is an array
+read. Do not reintroduce a hash here. `Architecture.md`, *What was measured*, has the two
+reproductions of what that costs — a colliding key set does not make a bounded-probe cache slow,
+it makes it stop holding anything, with correct answers, the hit rate on the floor and nothing in
+the log. That failure is unreachable when the server hands out the slot; the seeded splitmix mix
+remains the rule for any cache that still derives a slot from a key.
 
-The table half of it is `service-core/src/cache.c`, and `service-core/tests/test_cache.cpp`
+The store half of it is `service-core/src/cache.c`, and `service-core/tests/test_cache.cpp`
 covers it. Run that under TSan and not only plain: its concurrent test proves little on its own,
-because a reference count incremented outside the table lock does not fail an assertion. What is
-still open — how a session's working set grows while only a shared lock is held — is in
-`Architecture.md`, *Open*, and nothing in the cache decides it.
+because a reference count incremented outside the store lock does not fail an assertion. Two
+things are still open — the grace period that protects the read path, and how a session's working
+set grows while only a shared lock is held. Both are in `Architecture.md`, *Open*, and nothing in
+the cache decides them.
 
 ---
 
