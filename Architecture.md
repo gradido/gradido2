@@ -360,7 +360,7 @@ going to create a session anyway:
 ```text
 parse the claims, verifying nothing: session_created_at, user_uuid, slot
 now - session_created_at < SESSION_HARD_TIMEOUT_MS   else -> verify
-0 <= slot < the slots that exist, and present at all else -> verify
+slot < the slots that exist                          else -> verify
 the slot holds a session                             else -> verify
 that session is itself inside the hard timeout       else -> verify
 its user_uuid equals the claim                       else -> verify
@@ -391,8 +391,11 @@ The claims are read through a schema — `sessionClaimsSchema`, valibot, in
 that is not tidiness: it is where *a claim that is absent is not a claim that passed* stops
 being a rule someone has to remember. A missing `slot` becomes a miss instead of slot 0, a
 `user_uuid` that is not a uuid never reaches the store, and the wire's `snake_case` meets the
-code's `camelCase` in exactly one place. Both implementations have to reject the same
-payloads, which makes this a candidate for the first entry in `contracts/test-vectors`.
+code's `camelCase` in exactly one place. Nothing downstream repeats those checks: what is
+typed as the schema's output has been through it, which is why the store asks only what the
+schema cannot know — whether the slot is one it has already handed out. Both implementations
+have to reject the same payloads, which makes this a candidate for the first entry in
+`contracts/test-vectors`.
 
 The rule that makes the second decision safe is one line, and every step above keeps it:
 
