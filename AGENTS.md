@@ -89,6 +89,13 @@ contracts/         language-independent JSON contracts, see section 5
                    has its own AGENTS.md for the file formats
 ```
 
+**Every workspace package is `@gradido/<directory>`.** The directory keeps the plain name,
+the package does not: `shared`, `frontend`, `backend` and `service-core` are all taken on the
+npm registry, and an unscoped workspace name is one resolution slip away from pulling a
+stranger's package instead of ours — section 13 is about exactly that class of accident. It
+also makes an import say where the code came from: `@gradido/shared` is ours, `valibot` is
+not. Turbo addresses packages by name too, so a filter is `--filter=@gradido/backend`.
+
 Business logic belongs in the `-core` packages. The packages next to them are the
 deployable applications that wire that logic up.
 
@@ -105,6 +112,49 @@ therefore lives in `backend-core`, next to the repositories that use it.
 
 Route definitions belong in `packages/shared` so frontend, admin and frontend-core can
 import their types via Eden Treaty.
+
+### One index.ts per folder
+
+Every folder of TypeScript modules has an `index.ts` that re-exports what is in it, and code
+imports through those barrels rather than reaching into another folder's files:
+
+```text
+the same folder     ./SessionStore     the file itself, never the folder's own index
+one level up        ..                 the parent folder's barrel
+a sibling folder    ../logging         that folder's barrel, not ../logging/logger
+another package     '@gradido/service-core'   the package root
+```
+
+Four things follow, and two of them have already cost something:
+
+- **A folder never imports its own `index.ts`.** That is a cycle with itself.
+- **Going up through `..` prefers `import type`.** A *value* imported from `..` closes a real
+  cycle — package index → folder → package index. ESM tolerates it while the value is only
+  used when something is called, and breaks when it is needed while the module is still
+  being evaluated. Where a value is needed at evaluation time, import the sibling folder's
+  barrel instead: `../logging` has no way back to you.
+- **An application's `src/` is an entry point, not a barrel.** `backend` starts a process
+  there and `frontend` mounts an app there; their folders still get barrels, their `src/`
+  does not.
+- **Across packages, import the package root — unless that root reaches something the
+  consumer cannot load.** `shared`'s root barrel re-exports `const` and `crypto`, and both
+  call `shared-native`; a browser bundle cannot parse a `.node` binary. The frontend
+  therefore imports `@gradido/shared/schemas`, one folder deep. This is not a special case to
+  remember, it is *do not import what you cannot load* — and it was not theoretical: until
+  the frontend stopped importing the root, `bun run build` in `packages/frontend` died on
+  the native addon.
+
+A subpath like `@gradido/shared/schemas` reaches the folder's barrel because the workspace
+packages map it there:
+
+```json
+"exports": { ".": "./src/index.ts", "./*": ["./src/*/index.ts", "./src/*.ts", "./src/*"] }
+```
+
+The folder barrel is tried first, then the module of that name, then the path as written —
+so `…/shared/schemas` is the barrel and `…/shared/data/GradidoUnit` is still the file. Without
+the first entry, a folder subpath resolves for a bundler, which guesses extensions, and not
+for `tsgo`, which does not: the build goes green and the typecheck fails.
 
 ---
 
@@ -391,7 +441,7 @@ zig    pinned by c-cpp-zig-build, which builds shared-native.
        own build. A floor is not a pin and does not settle the above.
 ```
 
-`bun install` followed by `turbo backend#start` is enough — do not install a toolchain
+`bun install` followed by `turbo @gradido/backend#start` is enough — do not install a toolchain
 manually and do not add one to the instructions.
 
 ### Run everything from the repository root
@@ -400,7 +450,7 @@ manually and do not add one to the instructions.
 bun run lint        bun run lint:fix
 bun run typecheck
 bun run test
-bun install && turbo backend#start
+bun install && turbo @gradido/backend#start
 ```
 
 Each of these goes through turbo, and turbo is what knows the dependency graph. `test`
@@ -408,10 +458,10 @@ depends on `^build`, so `shared-native` — determinism-critical C behind N-API 
 before anything that imports it runs.
 
 **Do not `cd` into a package and run `bun test` there.** It bypasses that graph: with
-`shared-native` unbuilt, the tests of `shared` fail with `Export named 'hashGeneric' not
+`shared-native` unbuilt, the tests of `@gradido/shared` fail with `Export named 'hashGeneric' not
 found in module .../index.cjs`, which reads like broken code and is not. The same holds for
 `bun run typecheck` and `bun run lint` — run them at the root, and use
-`turbo test --filter=<package>` when a single package is what you want.
+`turbo test --filter=@gradido/<package>` when a single package is what you want.
 
 A task cached by turbo is not a task skipped: a cache hit restores the outputs, so the
 build artifact is there either way. If you suspect the cache rather than the code, `--force`
@@ -428,6 +478,10 @@ Gradido moves money. Every package added here runs with the same rights as the c
 handles balances, and the npm registry has seen a steady run of compromised releases —
 usually a maintainer account taken over and a malicious patch version published, caught
 within days but shipped to everyone who resolved a range in the meantime.
+
+**Our own packages are scoped, `@gradido/…`, and that is a security rule rather than a
+cosmetic one** — section 2 has it. An unscoped `shared` or `frontend` in a workspace is a
+name the registry also answers to.
 
 **Pin the exact version.** No `^`, no `~`, no ranges — in `package.json` and in
 `build.zig.zon` alike.

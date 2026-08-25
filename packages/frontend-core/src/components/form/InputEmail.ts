@@ -1,5 +1,5 @@
 import m from 'mithril'
-import type { FormField } from '../../form/FormField'
+import type { FormField } from '../..'
 import { t } from '../../i18n'
 import { ValidatedInput } from './ValidatedInput'
 

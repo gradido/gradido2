@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import pino from 'pino'
-import type { ServiceEnv } from '../config/schema'
+import type { ServiceEnv } from '..'
 
 /**
  * The closed category set of contracts/logging.json. A category names a place in the

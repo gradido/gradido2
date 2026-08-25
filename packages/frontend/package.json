@@ -1,5 +1,5 @@
 {
-  "name": "frontend",
+  "name": "@gradido/frontend",
   "type": "module",
   "private": true,
   "version": "0.0.1",
@@ -19,10 +19,10 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
+    "@gradido/frontend-core": "workspace:*",
+    "@gradido/shared": "workspace:*",
     "bootstrap": "5.3.8",
-    "frontend-core": "workspace:*",
     "mithril": "2.3.8",
-    "shared": "workspace:*",
     "valibot": "1.4.2"
   },
   "devDependencies": {

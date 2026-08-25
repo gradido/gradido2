@@ -163,7 +163,7 @@
     "pattern": "<category>.<subject>.<outcome>",
     "rules": [
       "Lowercase, dot separated, no verbs in the past tense beyond the outcome.",
-      "The outcome is the last segment: created, failed, denied, expired, refreshed, started, stopped.",
+      "The outcome is the last segment: created, failed, denied, expired, evicted, refreshed, started, stopped.",
       "An event id never changes once it exists — see AGENTS.md, names are stable forever. To retire one, stop emitting it; do not rename it.",
       "One event id means one shape: the same keys in data every time it is emitted, on both paths."
     ],
@@ -286,6 +286,23 @@
           }
         ],
         "note": "Hard timeout, SESSION_HARD_TIMEOUT_MS."
+      },
+      {
+        "event": "session.context.evicted",
+        "cat": "session",
+        "level": "warn",
+        "data": [
+          {
+            "name": "ageMs",
+            "type": "uint64"
+          },
+          {
+            "name": "capacity",
+            "type": "uint32",
+            "description": "The configured maximum number of sessions -- the ceiling that was hit, not the number of slots in use."
+          }
+        ],
+        "note": "The session store reached the ceiling it is configured with and retired its oldest session before that session's hard timeout. The owner's next request is a miss, a signature verification and a fresh session, so this is not an error -- it is the one signal that the store was not allowed to grow to the load it actually has, and warn rather than debug because nobody goes looking for it. Below the ceiling the store grows instead and this line never appears."
       },
       {
         "event": "http.request.failed",

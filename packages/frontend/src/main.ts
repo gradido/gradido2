@@ -1,11 +1,9 @@
 import './styles/index.scss'
 
-import { setLocale, storedLocale, t } from 'frontend-core'
+import { setLocale, storedLocale, t } from '@gradido/frontend-core'
 import m from 'mithril'
-import { AuthLayout } from './layouts/AuthLayout'
-import { Login } from './pages/Login'
-import { Placeholder } from './pages/Placeholder'
-import { Register } from './pages/Register'
+import { AuthLayout } from './layouts'
+import { Login, Placeholder, Register } from './pages'
 import { ROUTES } from './routes'
 
 const root = document.getElementById('app')

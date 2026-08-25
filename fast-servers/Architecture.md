@@ -338,7 +338,9 @@ Non-negotiable wherever C runs, and more so where it was AI-generated:
 - **A claim that is absent is not a claim that passed.** The verifier in `../../h20Test` checks
   `exp` only when the field is present and numeric, so a correctly signed token without `exp`,
   or with `"exp": null`, never expires — reproduced, all four cases accepted. Require the
-  claim, then check it. The hard session timeout is only as hard as that one line.
+  claim, then check it. The hard session timeout is only as hard as that one line — and it is
+  checked on the verify path, because the hit path checks no claim at all. See *Session cache*
+  for why it does not have to.
 - Contract vectors as a merge gate, green on both implementations.
 - The Rust module is not exempt. Safe Rust ends at the `extern "C"` line: the pointers, the
   lengths and the lifetimes on the C side of `dht-node` are as unchecked as any other FFI
@@ -479,7 +481,8 @@ flush empties everything at once — `clear()` keeps the buckets warm and the ar
 resets wholesale, so a round costs no allocation. Retry rules that out: a mail that comes back
 has to outlive the round it failed in, so there is never a moment when everything is dead
 together, and an append-only container consumed continuously grows without bound — which is what
-the house's fixed-size rule exists to prevent. A bounded FIFO is a ring. The shared arena became an `arnm_fixed_arena_pool` for the same reason:
+the house's fixed-size rule exists to prevent. A bounded FIFO is a ring, and the shared arena is
+an `arnm_fixed_arena_pool` for the same reason:
 an arena frees only at its tail, and the pool hands one arena per queued message out and takes it
 back in any order.
 
@@ -528,58 +531,114 @@ per mail of Nagle and delayed ACK. Measure before believing an advertisement.
 The C implementation holds one session store shared by all threads. This is the structure the
 whole architecture rests on, so its invariants are written down rather than left to the code.
 
-It is not a hash table. **The JWT carries the slot index, so a lookup is an array read.** Every
-part below follows from that one decision: there is no key to mix, no probe walk, no collision,
-no full-cache case that costs anything, and expiry is a comparison at a single known position
-instead of work spread over every walk.
+It is not a hash table. **The JWT carries the slot index, so a lookup is an array read.** There
+is no key to mix, no probe walk, no collision, no full-cache case that costs anything, and expiry
+is a comparison at a single known position instead of work spread over every walk.
+
+And it is not behind the JWT verifier but in front of it. **A session holds every token it has
+been issued, so a hit is a comparison rather than a signature check** — `sc_jwt_verify_hs256` is
+a base64 decode, a JSON parse and an HMAC over the whole token, against a subtraction, a bounds
+check, a load and two comparisons here. The store is therefore asked first, on claims nobody has
+vouched for yet, and the signature is verified only when it answers nothing.
+
+`benchmarks/bench_jwt.c` is what measures the first half of that, and its number belongs in this
+file once someone has run it. The reference path's numbers are already in `../Architecture.md`,
+*Session cache*, and the ordering they establish carries over: the signature is the **smaller**
+half of what a hit saves. The larger half is the session a hit does not have to build, which
+here is *Where a query's time goes* — 37 to 48 µs before anything is answered.
 
 ```text
-one bucket_vector of session pointers, indexed directly by the token
-one cursor           the oldest live entry; once full, also the next slot written
+one bucket_vector of session pointers, indexed directly by the token, and it grows
+one queue            the slots in creation order; expiry walks it from the front
+one free list        slots whose session has ended, ready to be handed out again
+one token set        per session; what a hit is decided by, instead of the signature
 reference counting   unchanged, and it is what makes releasing a slot safe
 ```
 
-### The token carries the slot
+The store is not told how large it should be. How many sessions live at once is the number
+created within one `SESSION_HARD_TIMEOUT_MS`, which depends on the community and the hour, so
+the store grows a slot at a time and reuses the slot of every session that ends. The
+configured maximum is a crash guard — see *The queue and the ceiling*.
+
+### The token carries the slot, and the session carries the token
 
 A hard timeout on a token that is never refreshed means sessions expire in creation order. The
-JWT already carries `created_at` for that; it now also carries the index of the slot its session
-was placed in. The read path is then:
+JWT carries `session_created_at` for that, the index of the slot its session was placed in, and
+the `user_uuid` it belongs to. A re-issued token copies all three unchanged; the policy around
+that — one new token per minute, a login of thirty — is in `../Architecture.md`, *Tokens and the
+login*, and not here.
 
 ```text
-verify the signature                       <- everything after this is still hostile input
-require created_at, require the slot index <- absent is not the same as zero
-check created_at <= now + skew
-check now - created_at < SESSION_HARD_TIMEOUT_MS
-    => older than that: mint a new token and a fresh session, and never look the old one up
-read the slot; empty or out of range => miss
-take a reference
-check the entry's user_id against the token's
-    => mismatch: release, miss
+read the claims, verifying nothing: session_created_at, user_uuid, slot
+require every one of them                       <- absent is not the same as zero
+check now - session_created_at < SESSION_HARD_TIMEOUT_MS    else -> verify
+range-check the slot against the slots that exist          else -> verify
+
+under the store lock, shared:
+    read the slot; empty => verify
+    check the ENTRY's own session_created_at against the timeout   else -> verify
+    check the entry's user_uuid against the claim                  else -> verify
+    take a reference
+release the store lock
+
+under the session's lock, shared:
+    is the token one of the tokens this session was issued?
+        no  => release the reference, verify
+        yes => a hit, and nothing had to be verified to reach it
+
+verify: the signature, then the claims, then exp -- and then create a session
 ```
 
-The token is older than the timeout in exactly the case where its session is gone anyway, so the
-refresh and the eviction are the same event seen from two sides. A client that comes back after
-eleven minutes costs one insertion and no lookup; a client inside the window costs one bounds
-check and one load.
+**Nothing the token says is trusted as data.** The claims address a candidate; every decision is
+made against what the store itself holds. A token is accepted because it is byte-identical to one
+this process minted and still holds, which is exactly what the signature would have proven,
+established by equality instead of by arithmetic. That is also why the token comparison is last:
+everything before it narrows the search and none of it may decide anything on its own.
 
-**The index is attacker-supplied and it is trusted only because it is signed.** Nothing reads it
-before the signature verifies, and it is range-checked afterwards regardless — a signed index is
-protected against forgery, not against a bug that wrote the wrong one. *Safety net* says a claim
-that is absent is not a claim that passed; here that rule has a second edge. A missing index must
-be a miss, because the C default for a missing integer is zero and zero is a valid slot.
+The claim's age is checked first because it is free and keeps a long-dead token off the store
+entirely. It is **not** what ends a session — the entry's own `session_created_at` is, because
+that is the one this process wrote. The two differ in exactly one case, a session whose timeout
+has passed while the expiry walk has not yet reached its slot, and under the previous design, where
+the signature was verified before anything was read, one check did both jobs. It does not any
+more, and that is the single most important consequence of looking before verifying.
 
-**The `user_id` check is not a formality, it covers the one case where a slot can be reused under
-a live token.** Ordinarily it cannot: a slot is released only when its entry has timed out, and
-that entry's `created_at` is the token's, so any token addressing a released slot was already
-rejected two lines earlier. The exception is a store with no free slot left, where the oldest live
-entry is overwritten early — see *The cursor*. Then a valid token can address a slot that now
-holds someone else's session, and the `user_id` comparison is what turns that into a miss.
+A client that comes back after eleven minutes costs one verification and one insertion; a client
+inside the window costs a bounds check, a load and two comparisons, and never touches libsodium.
 
-Comparing `created_at` as well makes the match exact rather than merely safe: the entry holds it
-for the expiry check anyway, and with it a token can only ever find the session it was minted
-with. Without it, two live sessions of the same user can alias — harmless, because a session is a
-disposable working view (`AGENTS.md` section 7), but it costs one comparison not to have to argue
-that.
+**A missing claim must be a miss, because the C default for a missing integer is zero and zero is
+a valid slot.** *Safety net* says a claim that is absent is not a claim that passed; on this path
+that rule covers every claim there is, since none of them has been vouched for.
+
+TypeScript declares those rules as a schema — `sessionClaimsSchema` in
+`packages/service-core/src/session/input.schema.ts` — and this path has to reject exactly what it
+rejects: an absent claim, a slot that is not a whole non-negative number, a `user_uuid` that is
+not a uuid. The arnm reader makes that easy to get wrong in one particular way, recorded in
+`AGENTS.md` section 6: it keeps its first error and every getter after it answers empty, so a
+claim of the wrong type silences the reads that follow, in another field entirely. Ask
+`arnm_json_reader_type_of()` or `_has()` where a claim may legitimately be absent. Two
+implementations disagreeing about which payloads are nonsense is a bug neither of them reports,
+which makes this the natural first entry in `contracts/test-vectors`.
+
+**The `user_uuid` check is not a formality, it covers the one case where a slot can be reused
+under a live token**: a slot is reused as soon as its session is gone, and at the ceiling the
+oldest live one is retired to make room — see *The queue and the ceiling*. The token comparison would catch that too. The uuid comes first because 36 bytes are
+cheaper to reject than a walk over a token set, and because the entry's identity is readable
+under the store lock while the token set is not.
+
+**Where the two locks fall is decided by what changes.** `user_uuid` and `session_created_at`
+are written once when the entry is created and never again, so they are read under the store
+lock. The token set grows whenever a token is re-issued, so it is the session's own data and is
+read under the session's lock and written under it exclusively — *Two lock layers* forbids
+holding the store lock across that, and nothing here needs to. Re-issuing a token touches the
+session and never the store.
+
+**The token set is what a session pays for this**, and it is bounded by the re-issue interval:
+one token per `JWT_TOKEN_REISSUE_AFTER_MS` for as long as a session lives, so eleven at most.
+Whether a token is due is decided from the server's clock and never from the token's `iat` —
+believing an unverified `iat` would hand the size of that set to whoever writes the token. `exp`
+is not checked on the hit path and does not need to be: a token in a live session's set was
+issued no earlier than that session began, the session is younger than ten minutes, and thirty
+is longer than ten.
 
 ### Two lock layers, and they must stay apart
 
@@ -605,9 +664,13 @@ release the store lock
     work, using only the session's own locks
 ```
 
+The first of that work is the read path's own last step: the token comparison reads the session's
+token set, which grows when a token is re-issued and is therefore the session's data, not the
+store's.
+
 Incrementing after the release is a use-after-free. In the gap another thread releases the
 session, the count falls to zero, the memory goes back to the arena, and the increment then
-lands in it. Holding the shared lock keeps the cursor walk out, because releasing a slot needs
+lands in it. Holding the shared lock keeps the expiry walk out, because releasing a slot needs
 the exclusive one — and a session still in the store has a count of at least one, so it cannot
 be freed while it is being read.
 
@@ -618,15 +681,20 @@ for two instructions, and *Open* records what it would take to drop it entirely.
 
 ```text
 bucket_vector of pointers, chunks of a fixed size, chunks never move
-capacity        sized for the sessions created within one SESSION_HARD_TIMEOUT_MS
+size            what the load turned out to be; it grows, and it does not shrink
 8 bytes a slot  one arena for the sessions themselves
+free list       intrusive: an empty slot holds the index of the next free one,
+                so reuse costs no memory of its own
 ```
 
 A bucket vector rather than a flat one, for a reason that is about concurrency and not about
-allocation: growing a flat vector moves every element, and a reader holding a slot address across
-that move reads freed memory. Chunks that never move make growth a published pointer to a new
-chunk and nothing else — readers in existing chunks are untouched, and a reader whose index is
-beyond the current size takes a miss, which is already a case the read path handles.
+allocation, and it is the same reason growth is possible at all here: growing a flat vector
+moves every element, a reader holding a slot address across that move reads freed memory — and
+worse, every slot number already out in a token would name something else. Chunks that never
+move make growth a published pointer to a new chunk and nothing else. Readers in existing chunks
+are untouched, a reader whose index is beyond the current size takes a miss, which is already a
+case the read path handles, and **a live session is never moved, because its index is out in the
+world inside tokens this process signed.**
 
 There is no hash here, and that removes a whole failure class rather than a line of code. *What
 was measured* records two reproductions where a colliding key set does not make a bounded-probe
@@ -635,48 +703,60 @@ in the log. An index that the server itself handed out cannot collide, cannot be
 cannot be chosen by an attacker. The seeded splitmix mix and `CACHE_PROBE` stop being session
 concerns; they remain the rule for any cache that still derives a slot from a key.
 
-### The cursor
+### The queue and the ceiling
 
-One cursor, and it is the only moving part of expiry. Because sessions are created in increasing
-time order and every one of them dies exactly `SESSION_HARD_TIMEOUT_MS` after its creation, the
-store is a ring in creation order: the live sessions occupy one contiguous run of it, the oldest
-at the cursor and the newest at the end of the run. Expiry therefore needs no sweeper thread, no
-walk of the whole store and no check on the read path. It needs one comparison, at one known
-position, paid by whoever creates a session.
+One queue of slot indices in creation order, and its front is the only moving part of expiry.
+Every session dies exactly `SESSION_HARD_TIMEOUT_MS` after its creation and they are pushed in
+the order they were created, so the oldest live one is always at the front. Expiry therefore
+needs no sweeper thread, no walk of the whole store and no check on the read path. It needs one
+comparison, at one known position, paid by whoever creates a session.
 
 Creating a session:
 
 ```text
-at the cursor, while the entry there has timed out:
-    drop the store's reference    <- the session is freed if the count reaches zero
-    clear the slot, advance the cursor
-write the new session at the end of the live run, and extend the run by one
+at the front of the queue, while the entry there has timed out or is already empty:
+    drop the store's reference  <- the session is freed if the count reaches zero
+    clear the slot, push it onto the free list, advance the front
+take a slot: the free list if it has one, otherwise append one to the vector
+write the session, push the slot onto the back of the queue
 ```
 
 The walk keeps going for as long as it finds timed-out entries, so a burst of expiries goes back
-to the arena at once rather than one insertion at a time; the cursor stops on the oldest entry
-that is still live, which is where the next insertion will start looking. Nothing else moves it.
-**Once the store is full the two positions are the same slot** — the entry the cursor stands on is
-the one written a full lap ago, so checking whether the oldest has timed out and finding room for
-the newest are one operation. That is the steady state, and it is the case the capacity is sized
-for.
+to the arena at once rather than one insertion at a time; it stops on the oldest entry that is
+still live, and nothing else moves the front. In the steady state the slots it frees are exactly
+the ones the next insertions take, and the store neither grows nor shrinks.
 
-**Insertion never fails.** If the run has filled the ring and the entry at the cursor is still
-inside its timeout, the new session takes that slot anyway: the store drops its reference, and a
-session a request is still working on survives, owned by that request until it finishes. This is
-the only path that can retire a session before its timeout, it is the reason the `user_id` check
-exists on the read path, and it degrades as a cache miss rather than as an error. There is no
-full-store case to handle and no reason to grow.
+**The queue cannot be read off the vector.** A slot is reused as soon as its session is gone, so
+slot order stops being creation order the first time that happens — and creation order is the
+one premise expiry has. Four bytes an entry, and the free list is intrusive, so the pair costs
+one `uint32` a slot and no allocation.
 
-That makes the capacity a bound with a name: **the number of sessions created within one timeout
-window.** Below it nothing is ever evicted early; above it the excess turns into misses in
-creation order, which is what the oldest client's next request was going to cost anyway.
+**The store is not sized in advance, it grows into its load.** How many sessions live at once is
+the number created within one timeout window; nobody knows it in advance, it differs per
+community and per hour, and it is exactly what appending a slot when none is free discovers.
+What the vector settles at is the answer, and it stays there because slots come back.
+
+**The ceiling is a crash guard, not a size.** Below it nothing is ever retired early. At it, and
+only there, the oldest live session is retired to make room: the store drops its reference, a
+session a request is still working on survives, owned by that request until it finishes, and its
+owner's next request costs one verification and a fresh session. This is the only path that can
+retire a session before its timeout, it is the reason the `user_uuid` check exists on the read
+path, and it degrades as a cache miss rather than as an error. **Insertion never fails.**
+
+**What that number should be is open, and it is a memory question.** *The working set needs a
+number* has what a session costs; what it does not have is a measurement of the whole process
+under a load that fills the store. That is the experiment: resident memory against the number
+of live sessions and the number of slots ever needed, both of which the store already knows.
+Bytes per session is the slope, the ceiling is the memory the machine can spare divided by it
+with room left over, and it belongs in configuration rather than in `contracts/const.json` —
+the two implementations do not spend the same memory on the same session and must not share a
+number that pretends they do.
 
 The walk is short, it is bounded by the number of entries that expired since the last insertion,
-and it touches nothing but slots and reference counts — so it runs under the store's exclusive
-lock without holding it across anything that can block. Freeing a session whose count reaches zero
-returns arena memory and takes no other lock; *Two lock layers* is why that is allowed to happen
-there at all.
+and it touches nothing but slots, the queue, the free list and reference counts — so it runs
+under the store's exclusive lock without holding it across anything that can block. Freeing a
+session whose count reaches zero returns arena memory and takes no other lock; *Two lock layers*
+is why that is allowed to happen there at all.
 
 ### Inside a session
 
@@ -704,7 +784,7 @@ but the backend does not depend on it not happening.
 ```text
 the slot            is one reference
 a request using it  is one reference
-the cursor walk     clears the slot and gives up that reference
+the expiry walk     clears the slot and gives up that reference
 request end         gives up its reference
 freed               exactly when the counter reaches zero, never anywhere else
 ```
@@ -728,14 +808,14 @@ identity  (user + email contact + role)          414 B
 a transaction row  208 B struct + ~80 B strings  288 B
 ```
 
-Against 8 MB available for sessions on a 15 MB target machine:
+What one session costs, by how much of a ledger it is allowed to hold:
 
-| transactions per session | session | sessions in 8 MB |
-|---|---|---|
-| 25 (one page) | 8,0 KiB | 1026 |
-| 50 | 15,0 KiB | 545 |
-| 200 | 57,2 KiB | 143 |
-| 500 | 141,6 KiB | 57 |
+| transactions per session | session |
+|---|---|
+| 25 (one page) | 8,0 KiB |
+| 50 | 15,0 KiB |
+| 200 | 57,2 KiB |
+| 500 | 141,6 KiB |
 
 Unbounded, the ledger is the entire footprint: at 500 transactions the identity data and
 every mutex in the session together are under half a percent of it. The bound is therefore
@@ -743,16 +823,38 @@ not a tuning parameter, it is the design.
 
 Keep roughly two pages — `DEFAULT_PAGINATION_PAGE_SIZE` is 25, so about 50 — extend forward
 through the pagination cursor, and read older windows from the database when someone actually
-pages back. That is the difference between 545 sessions and 57 on the same machine.
+pages back. That is 15 KiB a session against 142 — nine times as many of them in the same
+memory, for a ledger nobody asked to see.
 
 The other lever is in `contracts/db/transactions.json`, recorded there as open: the two
 denormalised `varchar(512)` names and four uuids per row are 116 of the 288 bytes. Holding
 ids in the session and resolving names where they are rendered gives back another 40%.
 
-The index itself does not appear in this arithmetic and that is the point of it. 545 sessions
-at 8 bytes a slot are 4,4 KiB — one twentieth of a percent of what the sessions cost — so the
-capacity is sized for the peak minute of a bad day and not for the memory: there is nothing to
-weigh an index against.
+The tokens do appear in it. A session holds up to eleven of them — *The token carries the slot,
+and the session carries the token* has the arithmetic — at a few hundred bytes each, so a few
+kilobytes on top of every row above. At 25 transactions that is roughly a third of the session,
+which is the honest price of not verifying a signature on every request, and it is charged only
+to sessions that live long enough to be refreshed ten times.
+
+Two ways to bring it down, both open. Keep only the newest two tokens rather than all of them:
+the client uses the newest it was given, and the older ones only matter for requests that were
+already in flight when it was refreshed — at the cost that a client which keeps presenting an
+older one gets a new session on every request instead of a hit, which is correct and slow.
+Or hold a digest instead of the token, which is cheap in memory and needs an argument the token
+comparison does not: a digest small enough to be worth it is a keyed hash whose forgery
+resistance has to be justified, and a cryptographic one costs about what the HMAC being avoided
+costs.
+
+The index itself barely appears in this arithmetic and that is the point of it. A thousand
+sessions at twelve bytes a slot — the pointer, plus four for the queue entry — are 12 KiB, a
+tenth of a percent of what those sessions cost. Growing therefore costs nothing worth counting,
+and the ceiling can be read off the sessions alone: there is nothing to weigh an index
+against.
+
+Which makes this table the closest thing there is to a ceiling until the experiment in *The
+queue and the ceiling* has been run — and a C number: the TypeScript path spends several times
+as much on the same session, which is exactly why the ceiling is configuration rather than a
+shared constant.
 
 ### What was measured, and what it changes
 
@@ -766,7 +868,7 @@ holds for any cache in this project that does still derive a slot from a key.
 addressing at all.** A map-based cache cannot reclaim in passing and has to sweep; at a
 million live entries that is 1 730 ns per operation against 215 for the open-addressed one,
 and the whole difference is the sweep. Behind a shared lock that is the difference between a
-cache and a stall. The cursor is the end of that line of argument: reclaim happens at one known
+cache and a stall. The queue is the end of that line of argument: reclaim happens at one known
 position, with no walk to ride on.
 
 **"Several independent tables, not several locks over one table" is the right plan, and it
@@ -782,8 +884,8 @@ A chained table makes every lookup walk the whole chain; routing keeps the walk 
 sixteenth of it. Route with the **high** 32 bits of the hash and take the slot from the low
 16 — the two must not overlap, which is the same mistake as deriving both from the low bits.
 The row that matters now is the last one: the cost of overfilling a hash-routed cache is
-super-linear, where the cost of overfilling this one is a session evicted early, priced in
-*The cursor*.
+super-linear, where this one does not overfill — it grows to the load, and only at the ceiling
+does it cost a session retired early, priced in *The queue and the ceiling*.
 
 **The hash is the entire safety margin, and `CACHE_PROBE` is what makes that true.** A
 bounded probe means a colliding key set does not make the cache slow, it makes the cache stop
@@ -798,67 +900,98 @@ binds every cache here that derives a slot from a key.** The session store is no
 and this result is the strongest single reason why: the failure is silent, is reachable from
 outside, and cannot occur at all once the server hands out the slot instead of computing it.
 
+The slot holds a pointer and there is no table count to size against the memory: the store grows
+to whatever the load turns out to be, and the only number left to decide is the ceiling, which
+*The working set needs a number* is the beginning of.
+
 ### What the store guarantees, and what it needs from the token
+
+`../../h20Test/bench_session_cache` measured **30 bulk reclaims where a hash-routed equivalent
+did 386 260 inline ones**, and 8 to 21 % less time per request between sixteen thousand and a
+quarter million live sessions. Expiry is off the request path and out of the background: no
+sweeper, no per-minute pass, one comparison at the front of the queue.
+
+A refreshed token copies `session_created_at` and the slot, so it addresses the session it
+already had and the store never learns that anything happened. The only thing that creates a
+session is a genuine miss, which is what keeps creation order — the order the queue depends on —
+maintained by construction rather than by anything the refresh path has to remember.
 
 Dropping a slot is dropping the store's own reference to what is in it: the slot is cleared, the
 count falls by one, and a session a request is still working on survives, owned by that request
 until it finishes. Clearing the index never touches the working set either — the index holds a
 pointer, the working set lives inside the session.
 
-**Check `now - created_at >= SESSION_HARD_TIMEOUT_MS` against the token before the store is
-touched at all.** It is the first line of the safety argument and the reason the read path can
-stay as short as it is:
+**Check `now - session_created_at >= SESSION_HARD_TIMEOUT_MS` against the token before the store
+is touched at all.** What that check is worth changed when the store started being asked before
+the signature is verified:
 
 ```text
-check now - created_at >= SESSION_HARD_TIMEOUT_MS against the token, first
-    => no valid token addresses a slot the cursor is releasing
+what it proved while the signature was checked first
+    check now - session_created_at >= SESSION_HARD_TIMEOUT_MS against the token, first
+    => no valid token addresses a slot expiry is releasing
     => no reader can still ENTER such a slot; only readers already inside it
     => what protects the read path is a grace period, not a lock
+
+what it proves now that the store is asked before the signature is verified
+    => a forged claim can name any slot at any time, for free
+    => the check is a filter that keeps dead tokens off the store, nothing more
+    => what protects the read path is the store lock, and the entry's own
+       session_created_at is what ends a session
 ```
 
-**The premise is `created_at`, and it has to be bounded on both sides.** A token from the past is
-handled by the TTL check above. A token from the *future* — an issuer whose clock runs ahead —
-outlives the slot it was given and can still be presented after the cursor has passed over it and
-handed the slot to someone else. That is a bound in JWT validation (`created_at <= now + skew`),
-not something the store can defend against, and it is why the `user_id` check on the read path is
-mandatory rather than defensive. The failure it contains is one lookup, one mismatch, one miss.
+**That is the price of looking before verifying, and it is worth paying.** The lock was going to
+be taken anyway — *Open* below already argued for it and the walk it protects runs once per
+session creation — while the saving is an HMAC on every request that hits. What is gone is the
+option of removing the lock in favour of a grace period; the epoch counter remains, because it
+does not depend on anything a token says.
 
-A refresh mints a new session in a new slot, which is what the ten-minute rule does every time a
-client comes back late. The creation order the ring depends on is therefore maintained by
-construction rather than by anything the refresh path has to remember.
+**A claim from the future costs nothing to write, so nothing may rest on it.** An issuer whose
+clock runs ahead produces one honestly, and anyone at all produces one by typing it: on the read
+path the claim carries no signature. `session_created_at <= now + skew` therefore stays where it
+can mean something, in JWT validation on the verify path, and the read path defends itself
+instead — the entry's own creation time, the `user_uuid` and the token comparison are each
+against something this process wrote. The failure that leaves is contained to one lookup, one
+mismatch and one verification.
 
 ### What it is worth at the size this targets
 
-The `bench_session_cache` ladder starts at a thousand live sessions; *The working set needs a
-number* puts this machine at 545 in 8 MB, below the bottom of it. A bounds check, a load and an
-atomic increment have no size at which they lose, but the honest version is that at 545 sessions
+The `bench_session_cache` ladder starts at a thousand live sessions, and one community's live
+sessions can sit anywhere below the bottom of it; since the store grows to its load there is no
+configured size to hold up against it either. A bounds check, a load and an atomic increment have
+no size at which they lose, but the honest version is that at the sizes one community reaches,
 none of this is what makes a request slow. The reasons to take this design are the ones that do
 not appear in a single-threaded nanosecond column at all:
 
 - expiry leaves the request path entirely, and leaves the background too — there is no sweeper
   and no per-minute pass, only a comparison paid by whoever creates a session
 - there is no hash, so the silent hit-rate collapse in *What was measured* is unreachable
-- the store lock is held for two instructions and is a candidate for removal, which the probe
-  walk never was
-- the index costs 8 bytes a session, so the capacity is a policy decision rather than a budget one
+- the store lock is held for a handful of instructions, which the probe walk never was. It is
+  no longer a candidate for removal — asking the store before verifying is what took the grace
+  period off the table, see *Open* — but an epoch counter still is
+- the index costs 8 bytes a session and the queue four more, so growing into the load is cheap
+  and the ceiling is a safety bound rather than a size anybody has to guess
+- a request that hits verifies no signature, which is the largest single item this design saves
+  and the only one that grows with the number of requests rather than with the number of sessions
 
 ### Open
 
-**The grace period on the read path.** The safety argument above shows that no reader can enter a
-slot the cursor is releasing, which leaves exactly one window: a reader whose token passed the TTL
-check, and whose entry times out between that check and its increment. Three ways to close it,
-in the order they should be reached for:
+**Protecting the read path against the expiry walk.** A reader must not be inside a slot while
+the walk frees it. Two ways to ensure that, and the third that the previous design had is gone:
 
-- the store rwlock, shared on lookup and exclusive for the cursor walk. Trivially correct, and
-  cheap here: the walk runs once per session creation, not on every miss. Its cost is the reader counter's cache line, which *What was measured* puts above eight
+- the store rwlock, shared on lookup and exclusive for the expiry walk. Trivially correct, and
+  cheap here: the walk runs once per session creation, not on every miss. Its cost is the reader
+  counter's cache line, which *What was measured* puts above eight
   cores — and this machine has four.
-- release with a margin: let the cursor treat an entry as gone only at `created_at + timeout +
-  grace`. It makes the window seconds wide at the cost of nothing on the read path, but it is an
-  argument about scheduling, not a proof — a descheduled thread can outlast any margin.
 - an epoch counter the reclaimer waits out. Costs nothing on the read path and is correct, and it
   is real concurrent code with real ways to get it wrong.
+- ~~release with a margin~~, letting the walk treat an entry as gone only at `session_created_at
+  + timeout + grace`. This rested on the token's TTL check keeping every reader out of a slot
+  about to be released, and that argument died with the signature check moving behind the lookup:
+  a forged claim reaches any slot at any time. It was never a proof anyway — a descheduled thread
+  outlasts any margin — but now it is not even an approximation.
 
-Take the lock now, and let a profiler rather than this section decide whether it is ever removed.
+Take the lock now, and let a profiler rather than this section decide whether the epoch counter is
+ever worth its risk.
 
 **Session working sets grow lazily while only a shared lock is held.** Allocating from the
 session's arena at that moment races with the other readers, and this is unchanged by anything

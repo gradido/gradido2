@@ -1,6 +1,6 @@
-import { databaseErrorMessage, waitForDatabase } from 'backend-core'
+import { databaseErrorMessage, waitForDatabase } from '@gradido/backend-core'
+import { Logger, setupGracefulShutdown } from '@gradido/service-core'
 import { Elysia } from 'elysia'
-import { Logger, setupGracefulShutdown } from 'service-core'
 import { AppContext } from './AppContext'
 import { CONFIG } from './config'
 

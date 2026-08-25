@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { stubIcons } from 'frontend-core/testing/icons'
+import { stubIcons } from '@gradido/frontend-core/testing/icons'
 
 stubIcons()
 const { nextSlide } = await import('./AuthCarousel')

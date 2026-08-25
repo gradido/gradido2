@@ -1,4 +1,4 @@
-import type { Logger } from './logging/logger'
+import type { Logger } from './logging'
 
 /**
  * What every Gradido service has, whatever else it has.

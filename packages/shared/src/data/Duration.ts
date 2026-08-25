@@ -1,5 +1,5 @@
 import { inspect } from 'node:util'
-import { durationToString } from 'shared-native'
+import { durationToString } from '@gradido/shared-native'
 
 /**
  * Immutable time duration represented in seconds (bigint precision).

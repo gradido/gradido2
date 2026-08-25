@@ -1,4 +1,4 @@
-import { hashGeneric as nativeHashGeneric } from 'shared-native'
+import { hashGeneric as nativeHashGeneric } from '@gradido/shared-native'
 
 export function hashGeneric(data: string | Buffer): Buffer {
   let localData: Uint8Array | undefined

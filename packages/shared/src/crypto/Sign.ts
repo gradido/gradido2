@@ -3,7 +3,7 @@ import {
   signKeyPairDeriveAccountFromCommunity,
   signKeyPairDeriveUuid,
   signKeyPairGenerateFromSeed,
-} from 'shared-native'
+} from '@gradido/shared-native'
 
 import { hashGeneric } from './hash'
 

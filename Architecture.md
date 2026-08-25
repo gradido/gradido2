@@ -240,6 +240,7 @@ and make the difference between a mechanical port and a rewrite:
 
 ```text
 packages/          TypeScript — reference implementation
+                   every package is @gradido/<directory>; see AGENTS.md section 2
   backend          runnable HTTP server (routes, wiring, startup)
   backend-core     backend domain code: data, logic, interactions, repositories
                    plus the database connection, next to the repositories
@@ -271,6 +272,12 @@ fast-servers/      C — fast implementation, mirrors the domain structure
 
 contracts/         language-independent JSON contracts, see below
 ```
+
+Every folder of TypeScript modules carries an `index.ts` that re-exports it, so a file
+reaches its neighbours through barrels — `..` for one level up, `../logging` for a sibling —
+instead of naming another folder's files. `AGENTS.md` section 2 has the rule and the two
+places it bites: a value imported from `..` closes a cycle through the package index, and a
+package root that reaches native code cannot be imported from a browser bundle.
 
 The `-core` packages contain the domain implementation; the packages next to them
 are the deployable applications that wire it up. Business code belongs in `-core`.
@@ -318,7 +325,8 @@ into business functions.
 
 It holds the working set currently useful to one user, for example:
 
-- jwt keys for fast verification (worth measuring)
+- every JWT this session has been issued — what a request is compared against instead of
+  having its signature verified, see *Session cache*
 - the authenticated user with contact data, role(s) and permissions
 - transactions, contributions, transaction_links, contribution_links, contribution_messages that have already been loaded
 - the last known id of those tables at the time they were selected, so it can be compared against the id in the AppContext and refreshed when that data is requested again
@@ -328,16 +336,175 @@ Data is loaded **lazily**, when needed.
 
 The session should have a bounded working set so that one unusual request cannot turn it into an accidental copy of a large part of the database.
 
-The session stores its creation time and is dropped after 10 minutes (const). This is a
-backstop against cache-invalidation bugs: even a session that missed an update cannot
-stay wrong for long.
+The session stores its creation time — `session_created_at`, which every token of it carries
+— and is dropped `SESSION_HARD_TIMEOUT_MS` (10 minutes) after it, whatever it is doing. This
+is a backstop against cache-invalidation bugs: even a session that missed an update cannot
+stay wrong for long. Refreshing the login does not move it; see *Tokens and the login*.
 
 ## Session cache
 
-TypeScript holds sessions in a `Map<id, Session>`; garbage collection ends them, so the hard
-timeout is the only lifetime rule that needs writing down. The C implementation manages its
-own memory and therefore has a good deal more to say — all of it in
-[fast-servers/Architecture.md](fast-servers/Architecture.md#session-cache).
+Both implementations hold sessions the same way, and two decisions carry the rest of it.
+
+**The token carries the slot its session sits in, so a lookup is an array read.** There is no
+key to hash, so there is no collision, no probe walk, no full-store case that costs anything,
+and none of the silent hit-rate collapse that a cache suffers when the keys it routes on can
+be chosen from outside. The measurements that argued the earlier designs away are in
+[fast-servers/Architecture.md](fast-servers/Architecture.md#session-cache) and are not
+repeated here.
+
+**A session keeps every token it has been issued, so a hit costs a comparison instead of a
+signature check.** So the store is asked *first*, with the claims read but not yet vouched
+for, and the signature is verified only when the store answers nothing — on the path that was
+going to create a session anyway:
+
+```text
+parse the claims, verifying nothing: session_created_at, user_uuid, slot
+now - session_created_at < SESSION_HARD_TIMEOUT_MS   else -> verify
+0 <= slot < the slots that exist, and present at all else -> verify
+the slot holds a session                             else -> verify
+that session is itself inside the hard timeout       else -> verify
+its user_uuid equals the claim                       else -> verify
+the token is one of the tokens that session was given -> hit
+
+verify: check the signature, the claims and exp, then create a session and mint a token
+```
+
+What that is worth, measured on the reference path — Ryzen 7 5700G, bun 1.3.14,
+`packages/service-core`:
+
+```text
+1051 ns  base64 decode + JSON.parse of the payload   both paths pay this
+ 281 ns  the claims through their valibot schema     both paths pay this
+   6 ns  bounds check, array read, two comparisons   the hit path, all of it
+ 852 ns  HMAC-SHA256 verify                          the miss path only
+```
+
+**The signature is the smaller half of what a hit saves, and the honest reason to look first
+is the other half:** a miss does not merely verify, it loads a user, its roles and its first
+page of data to build a session with. On the fast path those are two queries and 37 to 48 µs
+before anything is answered — see
+[fast-servers/Architecture.md](fast-servers/Architecture.md#where-a-querys-time-goes) — which
+is fifty times the microsecond this ordering saves on the token itself.
+
+The claims are read through a schema — `sessionClaimsSchema`, valibot, in
+`packages/service-core/src/session/input.schema.ts` — rather than by hand, and
+that is not tidiness: it is where *a claim that is absent is not a claim that passed* stops
+being a rule someone has to remember. A missing `slot` becomes a miss instead of slot 0, a
+`user_uuid` that is not a uuid never reaches the store, and the wire's `snake_case` meets the
+code's `camelCase` in exactly one place. Both implementations have to reject the same
+payloads, which makes this a candidate for the first entry in `contracts/test-vectors`.
+
+The rule that makes the second decision safe is one line, and every step above keeps it:
+
+> **Nothing an unverified token says is trusted as data.** The claims select a candidate;
+> every decision is made against what the store itself holds.
+
+A token is accepted because it is byte-identical to one this process minted and still holds.
+That is what the signature would have proven, established by equality rather than by
+arithmetic — and it is why the token comparison is last rather than first: the cheap
+comparisons before it only narrow the search. Two consequences are worth naming. Tokens in
+memory are credentials, so they are never logged (`contracts/logging.json` already says so)
+and never handed to anything but a comparison. And a session that is gone takes its tokens
+with it: after a restart, on another instance, or ten minutes on, the only way in is the
+signature. Ending a session ends every token of it at once, which is what makes logout and
+revocation work at all; what a rotated signing key cannot do is invalidate anything faster
+than the hard timeout.
+
+The claim's age is checked first because it is free and keeps a long-dead token off the store
+entirely, but it is not what makes the timeout hold — the session's own creation time is,
+because it is the one this process wrote. The two differ in exactly one case, a session that
+has timed out while expiry has not yet reached its slot, and that case is the reason both
+checks exist.
+
+### Tokens and the login
+
+```text
+slot, user_uuid, session_created_at   the session's identity; a re-issued token
+                                      copies all three, unchanged
+iat, exp                              the token's own, in seconds because RFC 7519
+                                      says so; session_created_at is unix
+                                      milliseconds like every other time here
+```
+
+A token is valid for `JWT_TOKEN_EXPIRATION_MS` from the moment it was issued, and a request
+gets a fresh one only once the newest token of its session is older than
+`JWT_TOKEN_REISSUE_AFTER_MS`. The login therefore slides in whole minutes rather than on every
+request, and ends between 29 and 30 minutes after the last one.
+
+**The session does not slide with it.** A re-issued token copies `session_created_at`, so the
+hard timeout keeps counting through any number of refreshes — which is what makes it a
+backstop against cache-invalidation bugs rather than a login timeout. A token that could stamp
+itself afresh would keep a stale working set alive indefinitely, and the backstop would be
+worth nothing.
+
+Whether a token is due for re-issue is decided from the store's clock and never from the
+token's own `iat`, and that is not pedantry: `iat` is unverified on this path, and believing
+it would let whoever writes the token decide how many tokens a session accumulates. With the
+interval enforced by the store, a session holds `SESSION_HARD_TIMEOUT_MS /
+JWT_TOKEN_REISSUE_AFTER_MS + 1` of them at most — eleven, a few kilobytes beside a working set
+measured below in tens.
+
+`exp` is not checked on the hit path, and does not need to be: a token in a live session's set
+was issued no earlier than that session began, the session is younger than ten minutes, and
+thirty is longer than ten. On the verify path it is checked like every other claim, and a
+claim that is absent is not a claim that passed.
+
+### Expiry, and how big the store gets
+
+Sessions are created in time order and each dies exactly `SESSION_HARD_TIMEOUT_MS` after it
+was created, so their slots, kept in creation order, expire from the front. Whoever creates a
+session releases everything at that front that has timed out — a burst at once, not one per
+insertion — and then takes one of the slots that just came free. Expiry is therefore a
+comparison at one known position: no sweeper, no timer, nothing on the read path, and nothing
+running when nobody is asking.
+
+**How many sessions live at once is not a number this design wants to be told.** It is the
+number created within one hard-timeout window, it depends on the community and the hour of
+the day, and the store finds it by itself: it appends a slot when it has none free and reuses
+the slot of every session that ends. What it settles at is the load, and it stays there.
+
+Three structures, because one is not enough once slots are reused:
+
+```text
+slots   the sessions. Appended to, never reordered: a slot number that went out
+        inside a token has to keep meaning what it meant.
+order   the slots in creation order — what expiry walks. It cannot be read off the
+        slots themselves, because a reused slot is out of turn.
+free    slots whose session is gone, ready to be handed out again.
+```
+
+**The configured maximum is a crash guard, not a sizing decision.** Below it nothing is ever
+retired early. At it, the oldest session is retired to make room — its owner's next request
+is one miss, one verification and a fresh session, and `session.context.evicted` is the line
+that says the store was not allowed to grow to the load it actually has. What it protects
+against is a load nobody planned for taking the process down instead of the request.
+
+**The number itself is open, and it is a memory question rather than a session one.** The
+figures under *The working set* are the C path's; a session in V8 costs a multiple of them,
+and neither is measured. What settles it is an experiment rather than an estimate: put a load
+on one instance that fills the store, and read the process's resident memory against the two
+numbers the store reports — how many sessions are alive, and how many slots it has ever
+needed. Bytes per session is the slope of that, and the ceiling is the memory a machine can
+spare divided by it, with room left over. Until then the honest configuration is a number
+that is obviously survivable rather than one that looks precise, and the two implementations
+do not share it: this is deployment configuration, not a contract.
+
+Ending one session early — a logout, or a change that must not be allowed to linger in a
+working set — empties its slot but does not hand it back yet: it is still standing in the
+creation order, and freeing it twice would put the same slot in two sessions. It returns when
+expiry reaches it, which costs one slot for the rest of a window and saves the store from
+having to search for its own bugs.
+
+The TypeScript store is `packages/service-core/src/session/SessionStore.ts`, with everything
+that arrives from outside it declared next door in `input.schema.ts`. What the fast
+path needs there and TypeScript does not: reference counting, because the garbage collector
+already keeps a session that a request is still working with alive after the store has let go
+of it; and the store's lock, because every method is synchronous, so no second request can
+observe the store between two of their statements. What carries over unchanged is everything
+that was never about threads — the order of the read path, and the `user_uuid` comparison that
+turns a reused slot into a miss rather than into someone else's session.
+
+### The working set
 
 The rule that matters at this level is the same for both: **the working set must be
 bounded.** A session holds roughly two pages of a data set —
@@ -346,8 +513,9 @@ reads older windows from the database when someone actually pages back.
 
 That bound is not tuning. Measured from `contracts/db`, a transaction row is about 288 bytes
 in packed form, so an unbounded ledger is the entire footprint of a session: at 500
-transactions everything else in it is under half a percent. On a small machine the same
-memory holds either 545 bounded sessions or 57 unbounded ones.
+transactions everything else in it is under half a percent — 15 KiB for a session that keeps
+two pages against 142 KiB for one that keeps five hundred rows, so the same memory holds nine
+times as many of them.
 
 
 ## AppContext
@@ -359,7 +527,7 @@ memory holds either 545 bounded sessions or 57 unbounded ones.
   - config
   - last 500 (const) contributions (public data set) (for display contribution infos from other)
 - last known id of transaction and similar tables
-- Map with sessionContexts by user id
+- the SessionStore: the sessions, found by the slot their token carries — see *Session cache*
 - APIs (server connections to external services)
 - basically everything that was a singleton in gradido legacy
 
@@ -473,7 +641,7 @@ native code, are in [fast-servers/Architecture.md](fast-servers/Architecture.md)
 
 Rust is the third toolchain and it is worth being honest about the cost: the fast path now
 needs zig *and* cargo, where before it needed zig. What it does not do is reach the
-TypeScript path — `bun install` and `turbo backend#start` are unchanged, because
+TypeScript path — `bun install` and `turbo @gradido/backend#start` are unchanged, because
 `packages/dht-node` is js-libp2p and nothing in `packages/` links the Rust module. That is
 the droppability rule paying for itself: a toolchain the fast path needs is a toolchain the
 fallback must not.
@@ -483,7 +651,7 @@ fallback must not.
 The native module is built by [`c-cpp-zig-build`](https://www.npmjs.com/package/c-cpp-zig-build)
 (`github.com/gradido/c_cpp_zig_build`), which downloads the pinned Zig toolchain and the Node
 headers for the current platform. A TypeScript developer runs `bun install` followed by
-`turbo backend#start` and needs to know nothing about any of it.
+`turbo @gradido/backend#start` and needs to know nothing about any of it.
 
 This is part of the continuity plan, not a convenience: the TypeScript fallback path is not
 C-free, so it stays viable exactly as long as it keeps building itself. That the build lives
@@ -530,7 +698,11 @@ Cache invalidation is part of the business semantics of an operation and should 
 - Max 64 rights per domain, so a domain's rights fit into the bits of a uint64
 - Global cache for role rights, max TTL 10 minutes, invalidated when an admin edits a role
 - Routes that need no permission (login, viewing community info, ...) are grouped in one file
-- Every non-public request with a JWT creates a new token, so an active user's session timeout keeps moving. The session context is still dropped after 10 minutes (hard timeout).
+- A request whose token is older than `JWT_TOKEN_REISSUE_AFTER_MS` (1 minute) is answered
+  with a fresh one, so an active user's login keeps moving in whole minutes and ends
+  `JWT_TOKEN_EXPIRATION_MS` (30 minutes) after their last request. The session context is
+  dropped 10 minutes after it was created regardless, because the fresh token copies
+  `session_created_at` — see *Session cache*.
 
 Tables:
 

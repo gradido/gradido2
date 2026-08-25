@@ -1,5 +1,5 @@
 {
-  "name": "shared-native",
+  "name": "@gradido/shared-native",
   "description": "Determinism-critical C: GradidoUnit arithmetic, decay, signing, transaction types. Used by the TypeScript reference implementation through N-API and linked directly by fast-servers.",
   "private": true,
   "license": "Apache-2.0",

@@ -1,9 +1,8 @@
-import { Form, FormField, InputEmail, InputPassword, t, toaster } from 'frontend-core'
+import { Form, FormField, InputEmail, InputPassword, t, toaster } from '@gradido/frontend-core'
+import { emailPrevalidateSchema, emailSchema, loginPasswordSchema } from '@gradido/shared/schemas'
 import m from 'mithril'
-import { emailPrevalidateSchema, emailSchema, loginPasswordSchema } from 'shared'
-import { LoginError, LoginErrorCode, login } from '../client/authClient'
-import { Message } from '../components/Message'
-import { RouterLink } from '../components/RouterLink'
+import { LoginError, LoginErrorCode, login } from '../client'
+import { Message, RouterLink } from '../components'
 import { CONFIG } from '../config'
 import { ROUTES } from '../routes'
 

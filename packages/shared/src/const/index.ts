@@ -1,4 +1,4 @@
-import { getDecayRespiteCent, getDecayStartTime } from 'shared-native'
+import { getDecayRespiteCent, getDecayStartTime } from '@gradido/shared-native'
 
 /**
  * The moment decay begins. Before it, a balance does not shrink at all -- the chain

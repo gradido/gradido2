@@ -1,4 +1,4 @@
-import { type Logger, retry } from 'service-core'
+import { type Logger, retry } from '@gradido/service-core'
 import type { DatabaseConnection } from './connect'
 
 /* A database and the service that uses it start together, and the database is the slower

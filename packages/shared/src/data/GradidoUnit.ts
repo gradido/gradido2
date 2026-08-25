@@ -4,7 +4,7 @@ import {
   gradidoUnitFromString,
   gradidoUnitToString,
   toDecimalPlaces as toDecimalPlacesNative,
-} from 'shared-native'
+} from '@gradido/shared-native'
 import { DECAY_START_TIME } from '../const'
 import type { Decay } from './Decay'
 import { Duration } from './Duration'

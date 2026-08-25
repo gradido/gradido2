@@ -1,15 +1,19 @@
 {
-  "name": "backend-core",
+  "name": "@gradido/backend-core",
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./*": "./src/*"
+    "./*": [
+      "./src/*/index.ts",
+      "./src/*.ts",
+      "./src/*"
+    ]
   },
   "dependencies": {
+    "@gradido/service-core": "workspace:*",
     "drizzle-orm": "0.45.2",
-    "service-core": "workspace:*",
     "valibot": "1.4.2"
   },
   "devDependencies": {

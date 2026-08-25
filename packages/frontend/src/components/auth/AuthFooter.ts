@@ -1,4 +1,4 @@
-import { currentLocale, t } from 'frontend-core'
+import { currentLocale, t } from '@gradido/frontend-core'
 import m from 'mithril'
 import facebookIcon from '~icons/bi/facebook'
 import telegramIcon from '~icons/bi/telegram'

@@ -153,6 +153,22 @@
       "description": "10 minutes. Legacy stored this as the string '10m'; expressed here as a number so both implementations parse nothing.",
       "source": "shared/src/const/index.ts (REDEEM_JWT_TOKEN_EXPIRATION)"
     },
+    "JWT_TOKEN_EXPIRATION_MS": {
+      "group": "auth",
+      "type": "uint64",
+      "unit": "milliseconds",
+      "value": "1800000",
+      "description": "30 minutes. How long a login token stays valid, counted from the moment it was issued. A token is re-issued on activity, but only once per JWT_TOKEN_REISSUE_AFTER_MS, so a login ends between 29 and 30 minutes after the last request rather than exactly 30.",
+      "source": "gradido2 Architecture.md"
+    },
+    "JWT_TOKEN_REISSUE_AFTER_MS": {
+      "group": "auth",
+      "type": "uint64",
+      "unit": "milliseconds",
+      "value": "60000",
+      "description": "1 minute. A request whose token is younger than this gets no new one: the login slides in whole minutes instead of on every request. It also bounds what a session carries -- one token per interval for as long as the session lives, so SESSION_HARD_TIMEOUT_MS / this + 1 of them -- and that bound is what makes it safe to keep them for the comparison that replaces verifying the signature. See gradido2 Architecture.md, Session cache.",
+      "source": "gradido2 Architecture.md"
+    },
     "FEDERATION_AUTHENTICATION_TIMEOUT_MS": {
       "group": "auth",
       "type": "uint64",
@@ -187,7 +203,7 @@
       "type": "uint64",
       "unit": "milliseconds",
       "value": "600000",
-      "description": "A SessionContext is dropped this long after creation regardless of activity. Backstop against cache-invalidation bugs, not a login timeout.",
+      "description": "A SessionContext is dropped this long after creation regardless of activity. Backstop against cache-invalidation bugs, not a login timeout: a re-issued token copies session_created_at unchanged, so refreshing a login never extends a session. The login itself is JWT_TOKEN_EXPIRATION_MS.",
       "source": "gradido2 Architecture.md"
     },
     "ROLE_RIGHTS_CACHE_TTL_MS": {

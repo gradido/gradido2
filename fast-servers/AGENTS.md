@@ -228,7 +228,8 @@ one, because a consumer that pins around its own library is pinning twice.
 
 **Reach for arnm's surface, not for what is under it.** `arnm/json_reader.h` and
 `arnm/json_writer.h` let no yyjson type, constant or include path through, so the parser
-underneath can be replaced without this repository hearing about it. The same holds for the allocator and the conversions. Going around
+underneath can be replaced without this repository hearing about it. The same holds for the
+allocator and the conversions. Going around
 them to the vendored source is how a build ends up pinned to an implementation detail of a
 dependency of a dependency.
 
@@ -325,10 +326,21 @@ the store lock is released before any session lock is taken
 data-set locks are acquired in a fixed order
 no lock upgrade — release shared, take exclusive, check again
 no session lock is ever held across a database call
-the token's TTL is checked BEFORE the store is touched — it is what guarantees that
-    no valid token addresses a slot the cursor is releasing
+the store is asked BEFORE the signature is verified, because verifying costs more than
+    looking, and nothing an unverified token says is trusted as data
+the claim's TTL is checked before the store is touched — a filter, not a guarantee; the
+    ENTRY's own session_created_at is what ends a session
 a missing slot index in the token is a miss, never slot 0; the index is range-checked
-    after the signature verifies, and the entry's user_id is compared to the token's
+    against the slots that exist, and the entry's user_uuid is compared to the claim
+the token itself is compared against the set of tokens the session was issued, under the
+    SESSION's lock and after the store lock is released — a hit is that comparison
+the signature is verified only on the miss path, which is the path that creates a session
+creation order lives in a queue of slot indices, never in the order of the slots — a slot
+    is reused as soon as its session ends, and is then out of turn
+a LIVE session is never moved: its slot number is out in the world, inside tokens this
+    process signed. The vector grows by appending, and reuse goes through the free list
+the configured maximum is a crash guard, not a size. Below it nothing is retired early;
+    at it the oldest live session is, and session.context.evicted says so
 ```
 
 The store is not keyed and not hashed: the JWT carries the slot index and a lookup is an array
@@ -340,10 +352,15 @@ remains the rule for any cache that still derives a slot from a key.
 
 The store half of it is `service-core/src/cache.c`, and `service-core/tests/test_cache.cpp`
 covers it. Run that under TSan and not only plain: its concurrent test proves little on its own,
-because a reference count incremented outside the store lock does not fail an assertion. Two
-things are still open — the grace period that protects the read path, and how a session's working
-set grows while only a shared lock is held. Both are in `Architecture.md`, *Open*, and nothing in
-the cache decides them.
+because a reference count incremented outside the store lock does not fail an assertion.
+
+**That file is still the hash-routed table this design replaced.** It keys entries by a digest of
+the token, probes, and knows nothing about slots or token sets — the document is ahead of it, and
+where they disagree the document is right. Whoever brings it up to date writes the direct index,
+not a fix to the hashing.
+
+One thing is still open: how a session's working set grows while only a shared lock is held. It
+is in `Architecture.md`, *Open*, and nothing in the cache decides it.
 
 ---
 
@@ -403,7 +420,9 @@ pg     do not hand-write row extraction. structs and from_row/bind_params
        are generated from contracts/db — 330 columns is not a review task.
        Query construction stays hand-written; that part is business logic.
 jwt    require the claim before checking it. `exp` absent, or null, or a
-       string, is not `exp` valid — see Architecture.md, Safety net
+       string, is not `exp` valid — see Architecture.md, Safety net. That
+       is the verify path; the session hit path checks no claim at all and
+       must not start, see section 5
 zig    a host build needs addHostSystemPaths on every artifact that includes
        uv.h, a libpq header or anything of h2o's
 zig    -Dtarget=x86_64-linux-gnu is NOT the native target as far as zig is

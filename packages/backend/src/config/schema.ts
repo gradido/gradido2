@@ -1,5 +1,5 @@
-import { dbSchema } from 'backend-core'
-import { envPort, serviceSchema } from 'service-core'
+import { dbSchema } from '@gradido/backend-core'
+import { envPort, serviceSchema } from '@gradido/service-core'
 import * as v from 'valibot'
 
 export const configSchema = v.object({

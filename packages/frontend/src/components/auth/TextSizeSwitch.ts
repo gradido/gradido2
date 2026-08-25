@@ -1,4 +1,4 @@
-import { t } from 'frontend-core'
+import { t } from '@gradido/frontend-core'
 import m from 'mithril'
 import { asset } from '../../utils/asset'
 

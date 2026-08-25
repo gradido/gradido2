@@ -1,5 +1,5 @@
 {
-  "name": "backend",
+  "name": "@gradido/backend",
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -11,10 +11,10 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "backend-core": "workspace:*",
+    "@gradido/backend-core": "workspace:*",
+    "@gradido/service-core": "workspace:*",
     "dotenv": "17.4.2",
     "elysia": "1.4.29",
-    "service-core": "workspace:*",
     "valibot": "1.4.2"
   },
   "devDependencies": {

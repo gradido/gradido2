@@ -7,8 +7,7 @@ import {
   toaster,
   ValidatedCheckbox,
   ValidatedInput,
-} from 'frontend-core'
-import m from 'mithril'
+} from '@gradido/frontend-core'
 import {
   emailPrevalidateSchema,
   emailSchema,
@@ -17,10 +16,10 @@ import {
   lastNamePrevalidateSchema,
   lastNameSchema,
   privacyConsentSchema,
-} from 'shared'
-import { register } from '../client/authClient'
-import { Message } from '../components/Message'
-import { RouterLink } from '../components/RouterLink'
+} from '@gradido/shared/schemas'
+import m from 'mithril'
+import { register } from '../client'
+import { Message, RouterLink } from '../components'
 import { CONFIG } from '../config'
 import { ROUTES } from '../routes'
 

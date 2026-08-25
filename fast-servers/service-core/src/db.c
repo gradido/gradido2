@@ -268,12 +268,14 @@ sc_status sc_db_open(const sc_db_config *cfg, sc_db **out)
 
     status = open_once(cfg, out, reason, sizeof(reason));
     if (status != SC_OK) {
-        sc_log_error(SC_CAT_DB, "db.connection.failed", "%s: %s", sc_db_kind_name(cfg->kind),
-                     reason);
-        return status;
+        /* warn and not error, and contracts/logging.json says why: a database that is still
+         * starting up is expected. The line that says it never came at all is
+         * startup.database.failed, and the caller writes it -- only the caller knows whether
+         * this process may continue without a database. */
+        sc_log_warn(SC_CAT_DB, "db.connection.failed", "%s, attempt 1 of 1: %s",
+                    sc_db_kind_name(cfg->kind), reason);
     }
-    sc_log_info(SC_CAT_DB, "db.connection.opened", "%s", sc_db_kind_name(cfg->kind));
-    return SC_OK;
+    return status;
 }
 
 sc_status sc_db_probe(sc_db *db)
@@ -323,10 +325,13 @@ sc_status sc_db_open_waiting(const sc_db_config *cfg, const sc_quit_flag *quit, 
     reason[0] = '\0';
     for (attempt = 1; attempt <= attempts; ++attempt) {
         status = open_once(cfg, out, reason, sizeof(reason));
-        if (status == SC_OK) {
-            sc_log_info(SC_CAT_DB, "db.connection.opened", "%s", sc_db_kind_name(cfg->kind));
+        if (status == SC_OK)
             return SC_OK;
-        }
+        /* One line per failed attempt, the last one included -- contracts/logging.json,
+         * db.connection.failed. Nothing is logged on success: the contract has no event for it,
+         * and startup.server.started already reports which database this process opened. */
+        sc_log_warn(SC_CAT_DB, "db.connection.failed", "%s, attempt %u of %u: %s",
+                    sc_db_kind_name(cfg->kind), (unsigned)attempt, (unsigned)attempts, reason);
         /* Only "the database did not answer" is worth another attempt. A wrong password, a
          * database that does not exist and a refusal by pg_hba.conf all answer something else,
          * and waiting does not turn any of them into a connection. */
@@ -334,19 +339,12 @@ sc_status sc_db_open_waiting(const sc_db_config *cfg, const sc_quit_flag *quit, 
             break;
         if (attempt == attempts)
             break;
-        /* One line per attempt, at warn: during a startup wait this is the expected case, and
-         * thirty error lines for a database that came up in four seconds is a log that has
-         * cried wolf. The failure that ends the wait is the one logged at error, below. */
-        sc_log_warn(SC_CAT_DB, "db.connection.failed",
-                    "database not reachable yet, attempt %u of %u, retrying in %lld ms: %s",
-                    (unsigned)attempt, (unsigned)attempts, (long long)delay_ms, reason);
         if (wait_or_quit(delay_ms, quit)) {
             sc_log_info(SC_CAT_DB, "db.connection.failed",
                         "shutdown requested while waiting for the database");
             return SC_ERR_NETWORK;
         }
     }
-    sc_log_error(SC_CAT_DB, "db.connection.failed", "%s: %s", sc_db_kind_name(cfg->kind), reason);
     return status;
 }
 

@@ -1,4 +1,4 @@
-import { envPort } from 'service-core'
+import { envPort } from '@gradido/service-core'
 import * as v from 'valibot'
 
 /**

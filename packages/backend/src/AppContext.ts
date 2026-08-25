@@ -1,5 +1,5 @@
-import { connectDatabase, type DatabaseConnection } from 'backend-core'
-import type { Logger, ServiceContext } from 'service-core'
+import { connectDatabase, type DatabaseConnection } from '@gradido/backend-core'
+import type { Logger, ServiceContext } from '@gradido/service-core'
 import { CONFIG } from './config'
 
 /**

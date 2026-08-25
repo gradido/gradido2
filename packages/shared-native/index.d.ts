@@ -138,7 +138,7 @@ export function hashGeneric(data: Uint8Array): Uint8Array
  * via the `grdt*ToString` helper functions declared below.
  *
  * Usage as function parameter:
- *   import { GrdtTransactionType } from 'shared-native'
+ *   import { GrdtTransactionType } from '@gradido/shared-native'
  *   function processTransaction(type: GrdtTransactionType) {
  *     // TypeScript ensures only valid transaction type strings can be passed
  *   }
@@ -146,7 +146,7 @@ export function hashGeneric(data: Uint8Array): Uint8Array
  *   processTransaction('INVALID_TYPE')               // TypeScript error
  *
  * Usage with runtime validation:
- *   import { GRDT_TRANSACTION_TYPES, isGrdtTransactionType } from 'shared-native'
+ *   import { GRDT_TRANSACTION_TYPES, isGrdtTransactionType } from '@gradido/shared-native'
  *   if (isGrdtTransactionType(someString)) {
  *     // someString is now typed as GrdtTransactionType
  *   }
