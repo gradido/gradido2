@@ -418,9 +418,7 @@ Nothing allocates after startup. Four blocks are taken at create — the mailer,
 the retry ring and one arena per queued message — and the host is not asked again. The ceiling is
 `queue_max * message_max` plus about 600 bytes of entry per slot, and whichever runs out first
 answers `SC_ERR_QUEUE_FULL`. That answer goes to the caller on purpose: only the caller knows
-whether this mail may be dropped or the work behind it has to stop. What that ceiling leaves for the
-session store on a small machine is the other half of the same budget — see *The working set
-needs a number*, where the two currently do not fit together.
+whether this mail may be dropped or the work behind it has to stop.
 
 **The queue is a ring, and it was an `arnm_bvec` first.** The bucket vector was the right
 structure while a flush emptied everything at once: `clear()` kept the buckets warm for the next
@@ -754,31 +752,23 @@ identity  (user + email contact + role)          414 B
 a transaction row  208 B struct + ~80 B strings  288 B
 ```
 
-Against 8 MB available for sessions on a 15 MB target machine:
+What one session costs, by how much of a ledger it is allowed to hold:
 
-| transactions per session | session | sessions in 8 MB |
-|---|---|---|
-| 25 (one page) | 8,0 KiB | 1026 |
-| 50 | 15,0 KiB | 545 |
-| 200 | 57,2 KiB | 143 |
-| 500 | 141,6 KiB | 57 |
+| transactions per session | session |
+|---|---|
+| 25 (one page) | 8,0 KiB |
+| 50 | 15,0 KiB |
+| 200 | 57,2 KiB |
+| 500 | 141,6 KiB |
 
 Unbounded, the ledger is the entire footprint: at 500 transactions the identity data and
 every mutex in the session together are under half a percent of it. The bound is therefore
 not a tuning parameter, it is the design.
 
-**That 8 MB was worked out before the mailer existed, and the mailer takes its share first.**
-*What the queue costs, exactly* allocates `queue_max * (message_max + 600)` at startup and
-never asks the host again — at the defaults, 256 messages of 32 KiB, that is 8,5 MiB. On the
-same 15 MB machine that is the entire session budget and a little more, so the two numbers as
-they stand cannot both be right. Either a machine that small runs a smaller queue — 32
-messages cost a megabyte — or it is not a 15 MB machine. That is a deployment decision and it
-is recorded here rather than settled: neither number may be quietly adjusted to make the other
-fit.
-
 Keep roughly two pages — `DEFAULT_PAGINATION_PAGE_SIZE` is 25, so about 50 — extend forward
 through the pagination cursor, and read older windows from the database when someone actually
-pages back. That is the difference between 545 sessions and 57 on the same machine.
+pages back. That is 15 KiB a session against 142 — nine times as many of them in the same
+memory, for a ledger nobody asked to see.
 
 The other lever is in `contracts/db/transactions.json`, recorded there as open: the two
 denormalised `varchar(512)` names and four uuids per row are 116 of the 288 bytes. Holding
@@ -943,14 +933,15 @@ verification.
 ### What it is worth at the size this targets
 
 The `bench_session_cache` ladder starts at a thousand live sessions and time routing *loses*
-there — 19.3 ns against 13.4 for the hash-routed table. *The working set needs a number* puts
-this machine at 545 sessions in 8 MB, below the bottom of that ladder.
+there — 19.3 ns against 13.4 for the hash-routed table. One community's live sessions can sit
+anywhere below the bottom of that ladder, and since the store grows to its load there is no
+configured size to hold up against it either.
 
 The direct index does not have that problem, and the reason is worth being precise about rather
 than assuming: what cost time routing its nanoseconds at small sizes was the extra indirection
 and the cold shard arrays, both of which are gone. A bounds check, a load and an atomic increment
-do not have a size at which they lose. But the honest version is that at 545 sessions none of
-this is what makes a request slow, and the reasons to take this design are the ones that do not
+do not have a size at which they lose. But the honest version is that at the sizes one
+community reaches, none of this is what makes a request slow, and the reasons to take this design are the ones that do not
 appear in a single-threaded nanosecond column at all:
 
 - expiry leaves the request path entirely, and leaves the background too — there is no sweeper

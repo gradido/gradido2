@@ -513,8 +513,9 @@ reads older windows from the database when someone actually pages back.
 
 That bound is not tuning. Measured from `contracts/db`, a transaction row is about 288 bytes
 in packed form, so an unbounded ledger is the entire footprint of a session: at 500
-transactions everything else in it is under half a percent. On a small machine the same
-memory holds either 545 bounded sessions or 57 unbounded ones.
+transactions everything else in it is under half a percent — 15 KiB for a session that keeps
+two pages against 142 KiB for one that keeps five hundred rows, so the same memory holds nine
+times as many of them.
 
 
 ## AppContext
