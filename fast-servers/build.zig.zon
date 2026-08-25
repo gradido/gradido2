@@ -45,6 +45,53 @@
             .url = "git+https://github.com/h2o/h2o#706842c0f8c0d9422efb97a4d8ef7d6ec9df87b7",
             .hash = "N-V-__8AACufnwFkhWbkiO3KxcVcasJKyoe9sYRvT0rp5-MI",
         },
+        // OpenSSL, and the pin curl carries rather than one of this build's own.
+        //
+        // h2o linked the *host's* libssl and libcrypto until this arrived, which is why
+        // `ldd fast-servers` used to name /lib/x86_64-linux-gnu/libssl.so.3. Two things ended
+        // that: the mail client needs libcurl, libcurl wants a TLS backend, and a statically
+        // built OpenSSL beside the host's dynamic one is two OpenSSLs in one process -- the
+        // yyjson situation below, with link order deciding which one signs.
+        //
+        // So both link this, and the pin has to be the one curl names -- `cad7ccb`, not
+        // allyourcodebase/openssl's HEAD, whose content hashes differently and would therefore
+        // be a second package in the graph rather than the same one. When the curl pin moves,
+        // read its build.zig.zon and move this with it.
+        //
+        // Lazy: only the h2o path needs it. Windows builds the fallback backend and gives curl
+        // Schannel, and neither wants 42 MB of OpenSSL fetched to be ignored.
+        .openssl = .{
+            .url = "git+https://github.com/allyourcodebase/openssl#cad7ccba47e42fa608ca655ec14ae33202df86e1",
+            .hash = "openssl-3.3.2-TC9C3Wa3ZACgB1hZbrLOQCK9XccIBaW_F3imFfIeYP06",
+            .lazy = true,
+        },
+        // libcurl: the mail client speaks SMTP through it, and the outbound HTTP(S) this
+        // project will need later goes the same way rather than through a second library.
+        //
+        // Pinned at fc863d6 and not at HEAD, because HEAD declares minimum_zig_version 0.16.0
+        // and this build is on 0.15.1; fc863d6 is the last commit that still says 0.15.1, and
+        // it carries curl 8.18.0. Moving it means moving the toolchain first.
+        //
+        // Every protocol but SMTP and HTTP is switched off in build.zig, together with the four
+        // system libraries curl reaches for by default (libpsl, libssh2, libidn2, nghttp2) --
+        // none of which this build carries, and each of which would become a host dependency.
+        .curl = .{
+            .url = "git+https://github.com/allyourcodebase/curl.git#fc863d6cbc4a694ff5bb11fc59470142c8682e2b",
+            .hash = "curl-8.18.0-mFDAWK_0AABsv8MPtSIjAPCVElXbt1vbzgBOs7plIlUJ",
+        },
+        // zlib, for h2o's gzip handler -- lib/handler/compress/gzip.c is in the source list
+        // above and includes <zlib.h>. It was the host's -lz until OpenSSL stopped being the
+        // host's, at which point one remaining system library would have kept the h2o path
+        // pinned to the machine it builds on for no gain.
+        //
+        // Same pin curl carries, for the reason the openssl entry gives: one package in the
+        // graph, not two that happen to contain the same code. Lazy, like openssl -- the
+        // fallback backend has no gzip handler and asks for neither.
+        .zlib = .{
+            .url = "git+https://github.com/allyourcodebase/zlib#c5115f4b69ef660f72a835c6638f80508ef284c7",
+            .hash = "zlib-1.3.1-1-ZZQ7ldENAAA7qJjUXP6E6xnRuV-jDL9dyoJFc_eb3zQ6",
+            .lazy = true,
+        },
         // The platform layer: threads and synchronisation now, filesystem, DNS and child
         // processes as they are needed. Not lazy, because every build uses the loop-free half
         // -- see AGENTS.md section 3a. It is also the platform half of the fallback HTTP

@@ -307,6 +307,171 @@ Non-negotiable wherever C runs, and more so where it was AI-generated:
 
 ---
 
+## Mail
+
+Sending a mail is one of the few things a request can trigger that reaches outside the process,
+and the measurements say it costs either 85 µs or 100 ms depending on decisions that have very
+little to do with the mail. The h2o prototype's `smtp_client` measured the difference; this
+section is what came of it.
+
+### libcurl, and why not two hundred lines of socket code
+
+SMTP is a line protocol and a client for it is a weekend. It is still not what is here, for two
+reasons that only show up later. The first is TLS: STARTTLS and SMTPS mean certificate
+verification, hostname checking and a handshake, and none of that is a weekend. The second is
+that the same library dials the outbound HTTP this project will need — a server that already
+carries one HTTP implementation has no business growing a second client stack beside it.
+
+What it costs is a dependency that arrives with opinions. Every protocol but SMTP and HTTP is
+switched off in `build.zig`, along with the four system libraries curl looks for by default, and
+the reasoning is in the comment there rather than repeated here.
+
+### One TLS stack, and it is not a preference
+
+h2o cannot be built without OpenSSL. `<openssl/ssl.h>` sits in `h2o.h` and `h2o/socket.h` with
+no `#ifdef` around it, `st_h2o_socket_t` carries the SSL pointer as its second field, and
+`lib/common/socket.c` branches on it 238 times — TLS is *in* the socket rather than a layer over
+it. There is no `H2O_NO_SSL`, and the two macros with OpenSSL in the name switch a callback and
+a deprecation warning.
+
+So OpenSSL stays as long as h2o does, and once libcurl needed a TLS backend the question was
+only whether the process holds one or two. It holds one: both link the same packaged OpenSSL,
+pinned to the commit curl pins so the build graph memoizes a single instance. A statically
+linked OpenSSL beside the host's dynamic one would be two copies of the same state with link
+order deciding between them, which is the yyjson problem this build already learned once.
+
+Windows gets Schannel and no OpenSSL at all. h2o has no Windows port, so that build serves over
+the fallback backend and nothing on it wants OpenSSL — the mail client works there, which is the
+point of the arrangement.
+
+### The connection is held; the socket is curl's business
+
+| | per mail |
+|---|---:|
+| kept connection, sink on loopback | 85 µs |
+| new connection per mail | 225 µs |
+| kept connection, MailDev | 864 µs |
+| new connection per mail, MailDev | 102 800 µs |
+
+MailDev's 100 ms is a `setTimeout` before its greeting — `smtp-connection.js`, commented "Keep
+a small delay for detecting early talkers". Anything measured against it measures that timer,
+which is worth knowing before someone concludes from a staging environment that mail is slow.
+
+One `CURL *` lives as long as the worker that owns it, and nothing in this codebase reconnects. curl replaces
+a connection idle for two minutes (`conn_max_idle_ms = 118 * 1000`), and rejects one that is
+dead or has unread input pending — which is what a `421` goodbye looks like — before reusing it.
+A mail after an hour of silence therefore arrives, over a connection nobody asked for. The
+handle is permanent, the connection is not, and the difference is invisible from the outside.
+
+### The workers, and why not libuv's thread pool
+
+One worker is permanent and sleeps on a condition variable when there is nothing to do. Others
+are started only when the first cannot keep up — when it has been busy without a pause for
+`spawn_after_ms` and `spawn_backlog` mails are still waiting — and retire after `linger_ms` of
+idleness. The ceiling is half the machine's cores minus one, never below one.
+
+A worker *is* a connection. A `CURL *` belongs to one thread, so "another worker" and "another
+session to the relay" are the same act, and the pool shrinking again is what gives a relay its
+connection slots back. That matters against a remote relay and nowhere else: at 30 ms RTT a
+connection is idle 99.9 % of the time and mails per second scale linearly with how many are open
+— 8/s at one, 127/s at sixteen — while against a local relay one worker is already worth 11 000
+mails/s and the second buys nothing. Which is why they are not started up front.
+
+The decision to grow is asked in two places, and the second one is the one that was missing at
+first: after a push, and again each time a worker picks up its next mail. A producer that drops
+two hundred mails at once and then goes quiet satisfies the backlog half immediately and the
+"busy a while" half never — at the moment of the last push nobody has been busy long enough yet,
+and nothing would ask again. Growth has to be something the workers notice while they work.
+
+**Not libuv's thread pool**, although it is the obvious answer. `uv_queue_work` needs a
+`uv_loop_t`, and on the h2o path this process has none: h2o runs its own event loop
+(`H2O_USE_LIBUV=0`) and the only `uv_loop_t` in the tree belongs to the fallback HTTP backend,
+which a given build may not even compile. Coupling the mailer to a backend that is a build option
+is worse than owning two threads. AGENTS.md section 3a draws exactly this line — the loop-free
+half of libuv is usable beside h2o's evloop, the loop-bound half needs a loop of its own — and a
+pool would in any case have no way to express the one thing asked of the arrangement: a worker
+that stays.
+
+### Retry: once, after a pause, and then it is written down
+
+A failed mail is tried once more after `retry_delay_ms` and then given up on, logged at error
+with its recipient and its `Message-ID`. No third attempt and no growing backoff.
+
+That is a deliberate floor rather than a first version. An unbounded retry is how a dead relay
+turns into a hot loop, and a queue that keeps trying is a queue that fills up and then refuses
+new mail because of old mail — the failure spreads instead of staying where it was. One retry
+covers what retries are actually good for: the connection that died between two mails, the relay
+that was restarting. Anything beyond that is not a transport problem and is not solved by asking
+again sooner.
+
+The `Message-ID` is assigned when the mail is rendered and survives the retry. Nothing depends on
+it today, because a failed attempt is not known to have been half-delivered; it matters the
+moment a retry follows an attempt that timed out *after* `DATA`, where the relay may well have
+taken the mail. A stable id is what keeps that from becoming a duplicate in someone's inbox.
+
+A first failure is neither sent nor failed in the counters. It is on the retry ring, and the
+second attempt decides which it becomes.
+
+### What the queue costs, exactly
+
+Nothing allocates after startup. Four blocks are taken at create — the mailer, the queue ring,
+the retry ring and one arena per queued message — and the host is not asked again. The ceiling is
+`queue_max * message_max` plus about 600 bytes of entry per slot, and whichever runs out first
+answers `SC_ERR_QUEUE_FULL`. That answer goes to the caller on purpose: only the caller knows
+whether this mail may be dropped or the work behind it has to stop. What that ceiling leaves for the
+session store on a small machine is the other half of the same budget — see *The working set
+needs a number*, where the two currently do not fit together.
+
+**The queue is a ring, and it was an `arnm_bvec` first.** The bucket vector was the right
+structure while a flush emptied everything at once: `clear()` kept the buckets warm for the next
+round and the arena behind it could be reset wholesale, so a round cost no allocation at all.
+Retry ended that. A mail that comes back has to outlive the round it failed in, so there is no
+longer a moment when everything is dead together — and an append-only container consumed
+continuously grows without bound, which is what the house's fixed-size rule exists to prevent. A
+bounded FIFO is a ring. The shared arena became an `arnm_fixed_arena_pool` for the same reason:
+an arena frees only at its tail, and the pool hands one arena per queued message out and takes it
+back in any order.
+
+The retry ring holds `queue_max` entries, the same as the queue, so it cannot refuse — every mail
+that could possibly be in flight fits. It also comes out ordered by its due time for free,
+because every retry waits the same delay, which is what lets a worker decide whether anything is
+due by looking at the head alone.
+
+### One lock, and where it is not held
+
+`lock` covers both rings, the arena pool, the counters and every worker's bookkeeping. There is
+no second lock, and it is never held across `curl_easy_perform()` — a worker takes its mail,
+releases the lock, sends for as long as the relay takes, and takes the lock again to book the
+outcome.
+
+Rendering is outside it too. The arena is borrowed under the lock and belongs to that thread
+alone from then on, so several producers render at once and only the push itself is serialised.
+Holding the queue lock across a copy of the body would put every producer behind the largest
+mail.
+
+The pool is the reason borrowing is inside: `arnm_fixed_arena_pool` says in its own header that
+one pool used from two threads is a data race, and a pool per thread is not the shape here.
+
+### What is deliberately absent
+
+**Persistence.** A mail waiting in the queue when the process dies is gone, and so is one that
+exhausted its retry — the error line is the only record it existed. This belongs in the database
+and is not built yet. What it has to do when it is: a mail is written down before it is handed to
+the mailer, the queue holds a reference rather than the only copy, and the outcome — sent, or
+given up on — is written back. That also gives the retry somewhere to live across a restart,
+which is the one thing the in-memory version cannot offer at any number of attempts. Until it
+exists, anything that must not be lost has to be written down by its caller first.
+
+**Pipelining.** RFC 2920 lets a client put `MAIL`, `RCPT` and `DATA` in one write instead of
+waiting for each reply, and it is worth about a third on loopback and half against a remote
+relay. libcurl will not do it — its SMTP dialogue is strictly one command per round trip — so it
+would have to be written by hand, against a server whose sockets are configured for it. MailDev
+advertises `PIPELINING` and never calls `setNoDelay`, which turns a pipelined batch into 44 ms
+per mail of Nagle and delayed ACK. Measure before believing an advertisement.
+
+**Several recipients per message.** See *One recipient*.
+
+
 ## Session cache
 
 The C implementation holds one session store shared by all threads. This is the structure the
@@ -601,6 +766,15 @@ Against 8 MB available for sessions on a 15 MB target machine:
 Unbounded, the ledger is the entire footprint: at 500 transactions the identity data and
 every mutex in the session together are under half a percent of it. The bound is therefore
 not a tuning parameter, it is the design.
+
+**That 8 MB was worked out before the mailer existed, and the mailer takes its share first.**
+*What the queue costs, exactly* allocates `queue_max * (message_max + 600)` at startup and
+never asks the host again — at the defaults, 256 messages of 32 KiB, that is 8,5 MiB. On the
+same 15 MB machine that is the entire session budget and a little more, so the two numbers as
+they stand cannot both be right. Either a machine that small runs a smaller queue — 32
+messages cost a megabyte — or it is not a 15 MB machine. That is a deployment decision and it
+is recorded here rather than settled: neither number may be quietly adjusted to make the other
+fit.
 
 Keep roughly two pages — `DEFAULT_PAGINATION_PAGE_SIZE` is 25, so about 50 — extend forward
 through the pagination cursor, and read older windows from the database when someone actually

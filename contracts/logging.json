@@ -152,6 +152,10 @@
       {
         "name": "startup",
         "description": "configuration and boot"
+      },
+      {
+        "name": "mail",
+        "description": "outbound mail: the session to the relay, and what was sent through it"
       }
     ]
   },

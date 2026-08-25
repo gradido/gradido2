@@ -142,6 +142,17 @@ arnm               the arena, the containers, the conversions and the JSON
                    was hostmem until arnm 0.5.0 renamed every symbol.
 h2o                the fast HTTP backend, and the picohttpparser the other
                    backend compiles. Fetched by every build for that reason.
+curl               libcurl, for service-core's mail client and for the
+                   outbound HTTP this project will grow. Pinned at the last
+                   commit of allyourcodebase/curl that still declares zig
+                   0.15.1; everything after it wants 0.16.
+openssl     lazy   h2o cannot be built without it -- <openssl/ssl.h> is in
+                   h2o.h with no #ifdef around it -- and libcurl then has to
+                   speak the same one. Pinned to the commit curl pins, not to
+                   that package's HEAD: a different commit hashes differently
+                   and would be a second OpenSSL in one process. Not fetched
+                   on Windows, where h2o is off and curl gets Schannel.
+zlib        lazy   h2o's gzip handler. Same pin as curl's, same reason.
 libuv              the platform layer — see below. Every build links it.
 googletest  lazy   the unit tests.
 compile_commands   feeds compile_commands.json.

@@ -23,7 +23,10 @@ typedef enum sc_status {
     /* compiled out: the build selected a backend that cannot do this */
     SC_ERR_UNAVAILABLE = -6,
     /* the value was there but is not what its type says it is */
-    SC_ERR_MALFORMED = -7
+    SC_ERR_MALFORMED = -7,
+    /* a bounded queue is at its limit. Not an error the callee can resolve: only the caller
+     * knows whether the work behind the entry may be dropped or has to stop. */
+    SC_ERR_QUEUE_FULL = -8
 } sc_status;
 
 /** Human-readable name of @p status, for a log line. Never NULL. */
