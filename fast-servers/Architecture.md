@@ -181,7 +181,7 @@ is tried again, while a server that answered and *refused* ends the startup at o
 publishes no SQLSTATE for a connection failure, so `PQping` stands in for the SQLSTATE classes
 the TypeScript path reads.
 
-Three things are deliberately absent, and each has a reason rather than a date:
+Two things are deliberately absent, and each has a reason rather than a date:
 
 ```text
 no query surface     the dialects differ; a repository that has to know which one it is
@@ -190,13 +190,11 @@ no query surface     the dialects differ; a repository that has to know which on
 no async path        sc_db_open blocks, which is right for a startup and wrong for a request.
                      PQsocket / PQconsumeInput / PQisBusy on h2o's loop is a second entry
                      point beside it, and arrives with the first repository that needs it.
-no TLS to postgres   the libpq package pins a different allyourcodebase/openssl than curl
-                     does, and two of those in one process is what the openssl pin exists to
-                     prevent, so it is built with ssl = None. scram-sha-256 still
-                     authenticates; what is missing is transport encryption, which the Unix
-                     socket this section prescribes does not need and a database across a
-                     network does. Closing it means the two pins agreeing.
 ```
+
+TLS to the database is not on that list: libpq is built with `ssl = .LibreSSL`, the same
+package h2o is built against, so a database on another machine is reached over an encrypted
+connection. The Unix socket this section prescribes needs none of it.
 
 Nothing opens a connection yet: no role reads a row, and a server that refuses to start over a
 database it never queries would be a regression dressed as progress. `--version` reports which
@@ -371,22 +369,35 @@ What it costs is a dependency that arrives with opinions. Every protocol but SMT
 switched off in `build.zig`, along with the four system libraries curl looks for by default, and
 the reasoning is in the comment there rather than repeated here.
 
-### One TLS stack, and it is not a preference
+### TLS: LibreSSL for the server, mbedtls for the client
 
-h2o cannot be built without OpenSSL. `<openssl/ssl.h>` sits in `h2o.h` and `h2o/socket.h` with
-no `#ifdef` around it, `st_h2o_socket_t` carries the SSL pointer as its second field, and
-`lib/common/socket.c` branches on it 238 times — TLS is *in* the socket rather than a layer over
-it. There is no `H2O_NO_SSL`, and the two macros with OpenSSL in the name switch a callback and
-a deprecation warning.
+h2o cannot be built without an OpenSSL *API*. `<openssl/ssl.h>` sits in `h2o.h` and
+`h2o/socket.h` with no `#ifdef` around it, `st_h2o_socket_t` carries the SSL pointer as its
+second field, and `lib/common/socket.c` branches on it 238 times — TLS is *in* the socket rather
+than a layer over it. There is no `H2O_NO_SSL`, and the two macros with OpenSSL in the name
+switch a callback and a deprecation warning.
 
-So OpenSSL stays as long as h2o does, and once libcurl needed a TLS backend the question was
-only whether the process holds one or two. It holds one: both link the same packaged OpenSSL,
-pinned to the commit curl pins so the build graph memoizes a single instance. A statically
-linked OpenSSL beside the host's dynamic one would be two copies of the same state with link
-order deciding between them, which is the yyjson problem this build already learned once.
+That API is LibreSSL's, and the reason is arm64: `allyourcodebase/openssl` builds for x86_64
+only. It ships pre-generated x86_64 assembly, adds it under `.x86_64 => ...` with `else => {}`
+beside it, and compiles `crypto/bn/asm/x86_64-gcc.c` whatever the target is, so an aarch64 build
+stops with 23 errors inside it — natively as much as cross, because the choice is made on
+`cpu.arch`. h2o is portable C and compiles for aarch64 without a complaint; only the TLS package
+stood in the way, and arm64 is what a small server is now.
 
-Windows gets Schannel and no OpenSSL at all. h2o has no Windows port, so that build serves over
-the fallback backend and nothing on it wants OpenSSL — the mail client works there, which is the
+LibreSSL is the same API kept portable, and h2o knows the fork: `socket.c` branches on
+`LIBRESSL_VERSION_NUMBER` in four places. `allyourcodebase/libpq` pins the same commit, hash
+included, so the database driver and the HTTP server are one package in the build graph and the
+process holds one library rather than two that both export `SSL_new`.
+
+libcurl is the exception, and a temporary one. Its package cannot be handed a LibreSSL — where
+it chooses a backend, its `build.zig` reads `// TODO BoringSSL, AWS-LC, LibreSSL, and quictls` —
+so the mail client speaks **mbedtls**, which curl pins itself. Two libraries with the *same*
+symbols would be a link-order lottery; `mbedtls_*` is not `SSL_*`, so these two coexist. It is
+still one library more than this project wants to keep patched. **When curl's package grows
+LibreSSL, move libcurl onto it and this section loses a paragraph.**
+
+Windows gets Schannel and neither of them. h2o has no Windows port, so that build serves over
+the fallback backend, and libpq is not built there either — the mail client works, which is the
 point of the arrangement.
 
 ### The connection is held; the socket is curl's business
@@ -465,13 +476,13 @@ the retry ring and one arena per queued message — and the host is not asked ag
 answers `SC_ERR_QUEUE_FULL`. That answer goes to the caller on purpose: only the caller knows
 whether this mail may be dropped or the work behind it has to stop.
 
-**The queue is a ring, and it was an `arnm_bvec` first.** The bucket vector was the right
-structure while a flush emptied everything at once: `clear()` kept the buckets warm for the next
-round and the arena behind it could be reset wholesale, so a round cost no allocation at all.
-Retry ended that. A mail that comes back has to outlive the round it failed in, so there is no
-longer a moment when everything is dead together — and an append-only container consumed
-continuously grows without bound, which is what the house's fixed-size rule exists to prevent. A
-bounded FIFO is a ring. The shared arena became an `arnm_fixed_arena_pool` for the same reason:
+**The queue is a ring, and not a bucket vector.** A bucket vector is the right structure while a
+flush empties everything at once — `clear()` keeps the buckets warm and the arena behind it
+resets wholesale, so a round costs no allocation. Retry rules that out: a mail that comes back
+has to outlive the round it failed in, so there is never a moment when everything is dead
+together, and an append-only container consumed continuously grows without bound — which is what
+the house's fixed-size rule exists to prevent. A bounded FIFO is a ring, and the shared arena is
+an `arnm_fixed_arena_pool` for the same reason:
 an arena frees only at its tail, and the pool hands one arena per queued message out and takes it
 back in any order.
 
@@ -837,8 +848,8 @@ costs.
 The index itself barely appears in this arithmetic and that is the point of it. A thousand
 sessions at twelve bytes a slot — the pointer, plus four for the queue entry — are 12 KiB, a
 tenth of a percent of what those sessions cost. Growing therefore costs nothing worth counting,
-and the ceiling can be read off the sessions alone. Where the earlier designs had to weigh an
-index against the working set, this one has nothing to weigh.
+and the ceiling can be read off the sessions alone: there is nothing to weigh an index
+against.
 
 Which makes this table the closest thing there is to a ceiling until the experiment in *The
 queue and the ceiling* has been run — and a C number: the TypeScript path spends several times
@@ -847,18 +858,18 @@ shared constant.
 
 ### What was measured, and what it changes
 
-`../../h20Test/bench_cache` measures the design this one replaced: an open-addressed table with
-a hard timeout, a `uint16_t` slot index, and several ways to handle a full one. `rand` keys, one
-Ryzen 7 5700G, single threaded, nanoseconds per lookup. It is kept because three of its results
-are the reason the direct index is worth having, and because the numbers are the only defence
-against re-deriving a hash table here later.
+`../../h20Test/bench_cache` measures hash-based caches: an open-addressed table with a hard
+timeout, a `uint16_t` slot index, and several ways to handle a full one. `rand` keys, one
+Ryzen 7 5700G, single threaded, nanoseconds per lookup. Three of its results are why the session
+store has no hash at all, and they are the defence against re-deriving one here later. The rest
+holds for any cache in this project that does still derive a slot from a key.
 
 **Lazy expiry during the probe walk is not a shortcut, it is the reason to use open
 addressing at all.** A map-based cache cannot reclaim in passing and has to sweep; at a
 million live entries that is 1 730 ns per operation against 215 for the open-addressed one,
 and the whole difference is the sweep. Behind a shared lock that is the difference between a
-cache and a stall. The queue is the end of that line of argument: reclaim in passing became
-reclaim at one known position, and the walk it used to ride on is gone too.
+cache and a stall. The queue is the end of that line of argument: reclaim happens at one known
+position, with no walk to ride on.
 
 **"Several independent tables, not several locks over one table" is the right plan, and it
 buys more than lock parallelism.** Sixteen tables chosen by the key's hash, each growing its
@@ -884,67 +895,35 @@ the table size, and `std::unordered_map` under libc++ *is* that masked table, be
 `reserve(65536)` yields a power-of-two bucket count indexed by masking. 19 ns became 25 µs.
 
 Mix the key — splitmix64 finalizer, two multiplies — **and seed the mix once per process**.
-The seed is what makes an adversarial key set unconstructible; it costs one XOR. **This is the
-result the current design retires rather than applies**, and it is the strongest single reason
-for the direct index: the failure it describes is silent, is reachable from outside, and cannot
-occur at all once the server hands out the slot instead of computing it. The rule stands
-wherever a slot is still derived from a key; the session store is no longer such a place.
+The seed is what makes an adversarial key set unconstructible; it costs one XOR. **That rule
+binds every cache here that derives a slot from a key.** The session store is not one of them,
+and this result is the strongest single reason why: the failure is silent, is reachable from
+outside, and cannot occur at all once the server hands out the slot instead of computing it.
 
-The layout note from that work survives in a different form. A slot that holds an index into a
-dense array of entries plus a fingerprint was worth having because it decoupled the table count
-from the memory. Here the slot holds a pointer and there is no table count to decouple from —
-the store grows to whatever the load turns out to be, and the only number left to decide is the
-ceiling, which *The working set needs a number* is the beginning of.
+The slot holds a pointer and there is no table count to size against the memory: the store grows
+to whatever the load turns out to be, and the only number left to decide is the ceiling, which
+*The working set needs a number* is the beginning of.
 
-### Where this design comes from
+### What the store guarantees, and what it needs from the token
 
-It is time routing, taken to the position it was always heading for. That design — one table per
-minute, eleven of them, the table computed from the token rather than searched for — is recorded
-below, because two of its arguments carry over unchanged and one of its corrections is the reason
-this one is safe. `../../h20Test/bench_session_cache` measured **30 bulk reclaims where the
-hash-routed equivalent did 386 260 inline ones**, and 8 to 21 % less time per request between
-sixteen thousand and a quarter million live sessions.
+`../../h20Test/bench_session_cache` measured **30 bulk reclaims where a hash-routed equivalent
+did 386 260 inline ones**, and 8 to 21 % less time per request between sixteen thousand and a
+quarter million live sessions. Expiry is off the request path and out of the background: no
+sweeper, no per-minute pass, one comparison at the front of the queue.
 
-The step from there to here is to stop rounding. If the token can name the minute, it can name
-the session: one slot per session rather than one shard per minute, an array read rather than a
-routed lookup, a comparison at the front of a queue rather than a pass over a shard, and no clock skew
-inside the store at all. Everything time routing bought is bought here more cheaply — expiry off
-the request path, no lock contention on the common path, no sweeper — and the parts of it that
-were open stop being open:
+A refreshed token copies `session_created_at` and the slot, so it addresses the session it
+already had and the store never learns that anything happened. The only thing that creates a
+session is a genuine miss, which is what keeps creation order — the order the queue depends on —
+maintained by construction rather than by anything the refresh path has to remember.
 
-```text
-time routing                      direct index
-one shard per minute              one slot per session
-reclaim = walk a shard, 1/minute  reclaim = one comparison, at the queue's front
-11 index arrays, 2.75 MiB floor   one vector that grows to the load, 12 B a session
-skew moves a token between shards skew is a bound in JWT validation, nothing more
-refresh tokens end the design     a refresh adds a token to the session it has
-```
-
-That last line is worth stating on its own. Time routing died the day gradido issued refresh
-tokens, because a refreshed token would no longer sit in the minute its session was created in.
-Here a refreshed token copies `session_created_at` and the slot, so it addresses the session it
-already had and the store never learns that anything happened: the only thing that creates a
-session is a genuine miss, and creation order is maintained by construction rather than by the
-absence of a feature.
-
-### What the shard design settled, and this one inherits
-
-An earlier version of this document rejected time routing on the grounds that a shard cannot be
-reclaimed in bulk while an entry in it still has a live reference. **That was wrong, and the
-reference counting above is exactly why.** Dropping a shard is dropping the table's reference on
-everything in it: the slot is cleared, the count falls by one, and a session a request is still
-working on survives — owned by that request until it finishes. The second half of the old claim —
-that a lazily growing working set cannot simply be cleared — confused two storages: the index
-holds a pointer, the working set lives inside the session, and clearing an index never touches
-it. Both corrections are load-bearing here: expiry releasing a slot is the same operation the
-shard reclaimer would have performed, applied to one entry at a time.
+Dropping a slot is dropping the store's own reference to what is in it: the slot is cleared, the
+count falls by one, and a session a request is still working on survives, owned by that request
+until it finishes. Clearing the index never touches the working set either — the index holds a
+pointer, the working set lives inside the session.
 
 **Check `now - session_created_at >= SESSION_HARD_TIMEOUT_MS` against the token before the store
-is touched at all.** Under the hash-routed cache this was merely cheap — an expired session never
-reaching the table. Under time routing it became the first line of the safety argument. Under
-direct indexing, while the signature was still verified before anything was read, it was more than
-that: it guaranteed that no valid token could address a slot expiry was about to release.
+is touched at all.** What that check is worth changed when the store started being asked before
+the signature is verified:
 
 ```text
 what it proved while the signature was checked first
@@ -971,23 +950,17 @@ clock runs ahead produces one honestly, and anyone at all produces one by typing
 path the claim carries no signature. `session_created_at <= now + skew` therefore stays where it
 can mean something, in JWT validation on the verify path, and the read path defends itself
 instead — the entry's own creation time, the `user_uuid` and the token comparison are each
-against something this process wrote. Compared with time routing, where skew silently moved a
-token into the wrong shard, the failure is contained to one lookup, one mismatch and one
-verification.
+against something this process wrote. The failure that leaves is contained to one lookup, one
+mismatch and one verification.
 
 ### What it is worth at the size this targets
 
-The `bench_session_cache` ladder starts at a thousand live sessions and time routing *loses*
-there — 19.3 ns against 13.4 for the hash-routed table. One community's live sessions can sit
-anywhere below the bottom of that ladder, and since the store grows to its load there is no
-configured size to hold up against it either.
-
-The direct index does not have that problem, and the reason is worth being precise about rather
-than assuming: what cost time routing its nanoseconds at small sizes was the extra indirection
-and the cold shard arrays, both of which are gone. A bounds check, a load and an atomic increment
-do not have a size at which they lose. But the honest version is that at the sizes one
-community reaches, none of this is what makes a request slow, and the reasons to take this design are the ones that do not
-appear in a single-threaded nanosecond column at all:
+The `bench_session_cache` ladder starts at a thousand live sessions, and one community's live
+sessions can sit anywhere below the bottom of it; since the store grows to its load there is no
+configured size to hold up against it either. A bounds check, a load and an atomic increment have
+no size at which they lose, but the honest version is that at the sizes one community reaches,
+none of this is what makes a request slow. The reasons to take this design are the ones that do
+not appear in a single-threaded nanosecond column at all:
 
 - expiry leaves the request path entirely, and leaves the background too — there is no sweeper
   and no per-minute pass, only a comparison paid by whoever creates a session
@@ -1006,8 +979,8 @@ appear in a single-threaded nanosecond column at all:
 the walk frees it. Two ways to ensure that, and the third that the previous design had is gone:
 
 - the store rwlock, shared on lookup and exclusive for the expiry walk. Trivially correct, and
-  cheap here in a way it was not before: the walk runs once per session creation, not on every
-  miss. Its cost is the reader counter's cache line, which *What was measured* puts above eight
+  cheap here: the walk runs once per session creation, not on every miss. Its cost is the reader
+  counter's cache line, which *What was measured* puts above eight
   cores — and this machine has four.
 - an epoch counter the reclaimer waits out. Costs nothing on the read path and is correct, and it
   is real concurrent code with real ways to get it wrong.

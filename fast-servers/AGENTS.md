@@ -138,20 +138,24 @@ libsodium          HS256, for the JWT. Same pin and the same options the
                    core requests, or the build gets two instances of it.
 arnm               the arena, the containers, the conversions and the JSON
                    the core is written against — arnm_result is what a grd*
-                   call answers with. Same pin and options as the core. It
-                   was hostmem until arnm 0.5.0 renamed every symbol.
+                   call answers with. Same pin and options as the core.
 h2o                the fast HTTP backend, and the picohttpparser the other
                    backend compiles. Fetched by every build for that reason.
 curl               libcurl, for service-core's mail client and for the
                    outbound HTTP this project will grow. Pinned at the last
                    commit of allyourcodebase/curl that still declares zig
-                   0.15.1; everything after it wants 0.16.
-openssl     lazy   h2o cannot be built without it -- <openssl/ssl.h> is in
-                   h2o.h with no #ifdef around it -- and libcurl then has to
-                   speak the same one. Pinned to the commit curl pins, not to
-                   that package's HEAD: a different commit hashes differently
-                   and would be a second OpenSSL in one process. Not fetched
-                   on Windows, where h2o is off and curl gets Schannel.
+                   0.15.1; everything after it wants 0.16. Its TLS is mbedtls,
+                   which curl pins itself -- see the note below.
+libressl    lazy   the TLS h2o is built against and the TLS libpq speaks to
+                   the database. h2o cannot be built without an OpenSSL *API*
+                   -- <openssl/ssl.h> is in h2o.h with no #ifdef around it --
+                   and LibreSSL is one; socket.c branches on
+                   LIBRESSL_VERSION_NUMBER in four places. Not
+                   allyourcodebase/openssl: that package is x86_64-only by
+                   construction, which costs every arm64 build. Pinned to the
+                   commit libpq names, hash included, so the two are one
+                   package in the graph. Not fetched on Windows, where h2o is
+                   off, curl gets Schannel and libpq is not built.
 zlib        lazy   h2o's gzip handler. Same pin as curl's, same reason.
 libuv              the platform layer — see below. Every build links it.
 googletest  lazy   the unit tests.
@@ -159,12 +163,10 @@ compile_commands   feeds compile_commands.json.
 libpq       lazy   the PostgreSQL driver, built by allyourcodebase/libpq out
                    of a pinned postgres checkout — so that pin carries two,
                    and 5.18.4 is PostgreSQL 18.4. Requested with `ssl =
-                   .None`, which is not a preference: the package pins a
-                   different allyourcodebase/openssl than curl does, and two
-                   commits of it hash differently, so asking for OpenSSL here
-                   is asking for a second one in the process. What that gives
-                   up is TLS *transport* to the database — scram-sha-256 still
-                   authenticates. Lazy: the postgres checkout is 155 MB and
+                   .LibreSSL`, its own default, which is also the entry above:
+                   both resolve to one package, so the process holds one
+                   OpenSSL-API library and not two that export the same
+                   symbols. Lazy: the postgres checkout is 155 MB and
                    `-Dpostgres=false` never fetches it. Not built on Windows —
                    the package has no port for it, and `-Dpostgres=true` there
                    stops the build with that sentence rather than with 92
@@ -176,6 +178,15 @@ sqlite3            SQLite, as sqlite.org's amalgamation. One C file, compiled
 ```
 
 `lazy` means a build that does not select that path never downloads it.
+
+**Two TLS libraries, and it is a waiting position rather than a design.** h2o and libpq speak
+LibreSSL; libcurl speaks mbedtls, because curl's package cannot be handed a LibreSSL — where it
+chooses, its `build.zig` reads `// TODO BoringSSL, AWS-LC, LibreSSL, and quictls`. Two libraries
+with the *same* API would be the yyjson problem again, with link order deciding which one
+verifies a certificate; mbedtls has an API and a symbol namespace of its own, so the two
+coexist. **When that TODO lands, move libcurl onto LibreSSL and delete this paragraph** — one
+TLS library is the intended state, and the second one is here because a package is not finished
+yet, not because the mail client wants a different stack from the server.
 
 ### libuv is the platform layer
 
@@ -204,10 +215,10 @@ What libuv does not offer stays ours: `service_core/atomic.h` is four functions 
 compiler's builtins, because libuv has no atomics and `<stdatomic.h>` is behind an experimental
 switch on MSVC, which the CMake build has to compile.
 
-**Fetch, do not vendor.** picohttpparser was a copy under `third_party/` before it was a
-dependency, and the copy lost: two files nobody would ever diff against the original again are
-worse than a download the Windows build does not compile. If something looks too small to be
-worth pinning, that is an argument for not depending on it at all, not for copying it in.
+**Fetch, do not vendor.** Two files nobody would ever diff against the original again are worse
+than a download — which is why picohttpparser is taken out of the pinned h2o checkout rather
+than copied in. If something looks too small to be worth pinning, that is an argument for not
+depending on it at all, not for copying it in.
 
 **Watch what the core starts carrying.** This build pinned yyjson itself while blockchain-core
 was at 0.16.0 and had no parser; 0.17.0 began linking libarnm, which carries one, and the pin
@@ -216,9 +227,9 @@ the core takes on a dependency this build also names, one of the two has to go �
 one, because a consumer that pins around its own library is pinning twice.
 
 **Reach for arnm's surface, not for what is under it.** `arnm/json_reader.h` and
-`arnm/json_writer.h` let no yyjson type, constant or include path through, so `jwt.c` names one
-library where it used to name two and the parser underneath can be replaced without this
-repository hearing about it. The same holds for the allocator and the conversions. Going around
+`arnm/json_writer.h` let no yyjson type, constant or include path through, so the parser
+underneath can be replaced without this repository hearing about it. The same holds for the
+allocator and the conversions. Going around
 them to the vendored source is how a build ends up pinned to an implementation detail of a
 dependency of a dependency.
 
@@ -376,8 +387,7 @@ h2o    it sends `Server: h2o/<version>` on every response until globalconf
        "2.3.0-DEV", which announces an unreleased build. Not a vulnerability
        and not a defence: fingerprinting works on header order anyway. It
        denies the scanner that shortlists by banner, and costs one line.
-       The fallback never sent one, so this was also a divergence the suite
-       had not thought to assert. It does now.
+       Neither backend sends one; the integration suite asserts that.
 http   the Windows fallback is libuv + picohttpparser + ~100 lines, not a
        second HTTP library. Owning the accept loop is what keeps the
        handler signature single. Mongoose is GPLv2/commercial — do not

@@ -133,14 +133,12 @@ FetchContent_MakeAvailable(blockchain_core)
 # is needed here is where it landed. FetchContent records that globally, which is what makes it
 # readable from this scope although another CMakeLists did the populating.
 #
-# This build pinned yyjson itself until blockchain-core 0.17.0, which was correct while the core
-# did not carry it. Do not bring that back: two definitions of every yyjson_* symbol is a
-# link-order lottery.
+# Do not pin yyjson here: two definitions of every yyjson_* symbol is a link-order lottery.
 FetchContent_GetProperties(arnm)
 if(NOT arnm_SOURCE_DIR)
   message(FATAL_ERROR
-    "gradido-blockchain-core did not populate arnm. It has since 0.17.0; if a newer one stopped, "
-    "service-core needs another source for arnm/ and for yyjson.h.")
+    "gradido-blockchain-core did not populate arnm. If a newer one stops, service-core needs "
+    "another source for arnm/ and for yyjson.h.")
 endif()
 message(STATUS "arnm from ${arnm_SOURCE_DIR}")
 
