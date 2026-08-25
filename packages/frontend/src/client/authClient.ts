@@ -1,4 +1,4 @@
-import type { LoginInput, RegisterInput } from 'shared'
+import type { LoginInput, RegisterInput } from '@gradido/shared/schemas'
 import { CONFIG } from '../config'
 
 /**

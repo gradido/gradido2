@@ -5,7 +5,7 @@ import {
   type Locale,
   SUPPORTED_LOCALES,
   setLocale,
-} from 'frontend-core'
+} from '@gradido/frontend-core'
 import m from 'mithril'
 import caretIcon from '~icons/bi/caret-down-fill'
 import checkIcon from '~icons/bi/check'

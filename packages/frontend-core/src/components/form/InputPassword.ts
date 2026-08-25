@@ -1,7 +1,7 @@
 import m from 'mithril'
 import eyeIcon from '~icons/bi/eye'
 import eyeSlashIcon from '~icons/bi/eye-slash'
-import type { FormField } from '../../form/FormField'
+import type { FormField } from '../..'
 import { t } from '../../i18n'
 import { ValidatedInput } from './ValidatedInput'
 

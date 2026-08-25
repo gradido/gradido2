@@ -1,6 +1,6 @@
-import { t } from 'frontend-core'
+import { t } from '@gradido/frontend-core'
 import m from 'mithril'
-import { Message } from '../components/Message'
+import { Message } from '../components'
 import { ROUTES } from '../routes'
 
 export interface PlaceholderAttrs {

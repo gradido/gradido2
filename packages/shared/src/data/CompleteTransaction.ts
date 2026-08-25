@@ -5,7 +5,7 @@ import {
   type LedgerAnchor,
   NativeCompleteTransaction,
   type VoidResult,
-} from 'shared-native'
+} from '@gradido/shared-native'
 import { Duration } from './Duration'
 import { GradidoUnit } from './GradidoUnit'
 import { TemporalGradidoUnit } from './TemporalGradidoUnit'

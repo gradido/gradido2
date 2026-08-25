@@ -1,4 +1,4 @@
-import { currentLocale, t, toaster } from 'frontend-core'
+import { currentLocale, t, toaster } from '@gradido/frontend-core'
 import m from 'mithril'
 import { AuthCarousel } from '../components/auth/AuthCarousel'
 import { AuthFooter } from '../components/auth/AuthFooter'

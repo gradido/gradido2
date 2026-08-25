@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { Logger } from 'service-core'
+import { Logger } from '@gradido/service-core'
 import type { DatabaseConnection } from './connect'
 import { databaseErrorMessage, isDatabaseStartingUp, waitForDatabase } from './wait'
 

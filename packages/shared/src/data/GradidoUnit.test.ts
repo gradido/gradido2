@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { calculateDecay as calculateDecayNative, getDecayStartTime } from 'shared-native'
+import { calculateDecay as calculateDecayNative, getDecayStartTime } from '@gradido/shared-native'
 import { Duration } from './Duration'
 import { GradidoUnit } from './GradidoUnit'
 import { TemporalGradidoUnit } from './TemporalGradidoUnit'

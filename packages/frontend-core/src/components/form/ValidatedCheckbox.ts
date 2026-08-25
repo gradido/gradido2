@@ -1,5 +1,5 @@
 import m from 'mithril'
-import type { FormField } from '../../form/FormField'
+import type { FormField } from '../..'
 import { translateIssue } from '../../i18n'
 
 export interface ValidatedCheckboxAttrs {

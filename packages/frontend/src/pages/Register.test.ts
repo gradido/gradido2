@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { attrsOf, byTag, classesOf, deepRender, find, findAll, textOf } from 'frontend-core/testing'
-import { stubIcons } from 'frontend-core/testing/icons'
+import {
+  attrsOf,
+  byTag,
+  classesOf,
+  deepRender,
+  find,
+  findAll,
+  textOf,
+} from '@gradido/frontend-core/testing'
+import { stubIcons } from '@gradido/frontend-core/testing/icons'
 
 stubIcons()
 const { Register } = await import('./Register')

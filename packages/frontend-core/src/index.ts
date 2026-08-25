@@ -1,8 +1,11 @@
-export { InputEmail } from './components/form/InputEmail'
-export { InputPassword } from './components/form/InputPassword'
-export { ValidatedCheckbox } from './components/form/ValidatedCheckbox'
-export { ValidatedInput } from './components/form/ValidatedInput'
-export { Toaster, toaster } from './components/Toaster'
-export { Form, FormField } from './form/FormField'
+export {
+  InputEmail,
+  InputPassword,
+  Toaster,
+  toaster,
+  ValidatedCheckbox,
+  ValidatedInput,
+} from './components'
+export { Form, FormField } from './form'
 export * from './i18n'
 export { icon } from './icon'

@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import { attrsOf, byTag, classesOf, deepRender, find, findAll } from 'frontend-core/testing'
-import { stubIcons } from 'frontend-core/testing/icons'
+import {
+  attrsOf,
+  byTag,
+  classesOf,
+  deepRender,
+  find,
+  findAll,
+} from '@gradido/frontend-core/testing'
+import { stubIcons } from '@gradido/frontend-core/testing/icons'
 
 stubIcons()
 

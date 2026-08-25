@@ -1,5 +1,5 @@
 import { createInterface } from 'node:readline'
-import type { ServiceContext } from '../ServiceContext'
+import type { ServiceContext } from '..'
 
 /**
  * How long a shutdown may take before the process is killed anyway. A request that hangs
