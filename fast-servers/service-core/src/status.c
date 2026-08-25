@@ -19,6 +19,8 @@ const char *sc_status_name(sc_status status)
         return "unavailable";
     case SC_ERR_MALFORMED:
         return "malformed";
+    case SC_ERR_QUEUE_FULL:
+        return "queue_full";
     }
     return "unknown";
 }

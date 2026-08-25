@@ -10,3 +10,11 @@ target_link_libraries(test_cache PRIVATE service_core GTest::gtest)
 # to fix, so the test targets do not inherit them.
 
 add_test(NAME service_core.cache COMMAND test_cache)
+
+add_executable(test_mail test_mail.cpp)
+target_include_directories(test_mail PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_link_libraries(test_mail PRIVATE service_core GTest::gtest)
+
+# Skips its one live test unless SC_MAIL_TEST_URL names a listening SMTP server; everything
+# else it checks is refusal, and refusal needs no network.
+add_test(NAME service_core.mail COMMAND test_mail)

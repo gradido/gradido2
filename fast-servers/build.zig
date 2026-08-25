@@ -385,11 +385,22 @@ const h2o_c_flags = [_][]const u8{
 
 /// Builds libh2o-evloop from the upstream h2o checkout, which arrives without a build.zig and
 /// without any sign of remorse about it. Lifted from the h2o prototype, where it was written.
+///
+/// @p openssl and @p zlib are the two libraries h2o cannot be built without, and both used to
+/// come from the host. They are parameters rather than fetched here so that the *same* two
+/// artifacts reach libcurl and the executable -- see the openssl entry in build.zig.zon for
+/// what a second instance of OpenSSL in one process would mean.
+///
+/// Linking them here is also what puts their headers on h2o's search path: both install their
+/// include directories, and `linkLibrary` carries those to whatever links the result. That is
+/// why `#include <openssl/ssl.h>` in h2o/socket.h resolves without a single addIncludePath.
 fn buildH2o(
     b: *std.Build,
     dep: *std.Build.Dependency,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    openssl: *std.Build.Step.Compile,
+    zlib: *std.Build.Step.Compile,
 ) *std.Build.Step.Compile {
     const lib = b.addLibrary(.{
         .name = "h2o-evloop",
@@ -402,6 +413,8 @@ fn buildH2o(
     });
 
     addHostSystemPaths(b, lib, target);
+    lib.linkLibrary(openssl);
+    lib.linkLibrary(zlib);
     for (h2o_include_dirs) |dir| lib.addIncludePath(dep.path(dir));
 
     // The evloop backend, so libuv remains a stranger
@@ -514,15 +527,22 @@ pub fn build(b: *std.Build) void {
         std.debug.panic("-Dh2o=true does not build for Windows: h2o is a posix event loop. " ++
             "Leave it off and the binary serves over libuv and picohttpparser instead.", .{});
     }
-    // h2o includes <openssl/ssl.h> and links ssl, crypto and z, none of which this build
-    // provides and all of which come from the host. For the host itself that is fine -- named
-    // or native, addHostSystemPaths finds them. For any other target they are the wrong
-    // machine's, and what zig says about it is 78 lines of 'openssl/ssl.h' file not found.
+    // h2o needs OpenSSL and zlib, and both are packaged now rather than taken from the host --
+    // see the .openssl entry in build.zig.zon. That removed the reason this guard used to give
+    // and did not remove the guard, because the packaged OpenSSL replaced it with its own:
+    // allyourcodebase/openssl compiles crypto/bn/asm/x86_64-gcc.c unconditionally and reaches
+    // for an arm_arch.h it does not carry, so a build for aarch64 stops with 23 errors inside a
+    // dependency. Its README says as much -- x86_64-linux is what it claims.
+    //
+    // So the block stands until that package grows another architecture or this build stops
+    // asking it for one. What it costs is a cross build with the fast backend; -Dh2o=false
+    // cross compiles fine, and that backend needs nothing from the host either.
     if (enable_h2o and !targetIsHost(target)) {
         std.debug.panic(
-            "-Dh2o=true cannot cross compile to {s}-{s}-{s}: h2o needs the host's OpenSSL and " ++
-                "zlib, and this build does not carry them. Add -Dh2o=false for the " ++
-                "libuv+picohttpparser backend, which needs nothing from the host.",
+            "-Dh2o=true cannot cross compile to {s}-{s}-{s}: h2o needs OpenSSL, and the " ++
+                "packaged one builds for x86_64 only -- it compiles x86_64 assembly sources " ++
+                "whatever the target is. Add -Dh2o=false for the libuv+picohttpparser " ++
+                "backend, which needs neither OpenSSL nor anything from the host.",
             .{ @tagName(target.result.cpu.arch), @tagName(target.result.os.tag), @tagName(target.result.abi) },
         );
     }
@@ -642,24 +662,117 @@ pub fn build(b: *std.Build) void {
     // see build.zig.zon.
     const h2o_dep = b.dependency("h2o", .{});
 
+    // TLS, in one place, because two consumers need it and they must not each bring their own.
+    //
+    // Windows gets Schannel, which is the operating system's and therefore no dependency at
+    // all, reads the host's certificate store, and is the only choice there anyway: h2o has no
+    // Windows port, so nothing on that build wants OpenSSL.
+    //
+    // Everywhere else it is OpenSSL, and not by preference. h2o cannot be built without it --
+    // <openssl/ssl.h> sits in h2o.h and h2o/socket.h with no #ifdef around it, and
+    // st_h2o_socket_t carries the SSL pointer as its second field, so TLS is in the socket
+    // rather than a layer over it. Since libcurl then has to speak the same OpenSSL, both are
+    // handed the artifact fetched here; build.zig.zon, .openssl, holds why two would be worse
+    // than one even though they would link.
+    //
+    // Requested with exactly the options curl requests it with, `.{ target, optimize }`, so the
+    // build graph memoizes one instance rather than two identical ones.
+    const openssl: ?*std.Build.Step.Compile = if (is_windows) null else blk: {
+        const dep = b.lazyDependency("openssl", .{ .target = target, .optimize = optimize }) orelse
+            break :blk null;
+        const lib = dep.artifact("openssl");
+        if (libc_file) |file| lib.setLibCFile(file);
+        break :blk lib;
+    };
+    // Only h2o wants this, for lib/handler/compress/gzip.c. Same reasoning as openssl about the
+    // pin and the options; curl is built without compression, so this has one consumer.
+    const zlib: ?*std.Build.Step.Compile = if (!enable_h2o) null else blk: {
+        const dep = b.lazyDependency("zlib", .{ .target = target, .optimize = optimize }) orelse
+            break :blk null;
+        const lib = dep.artifact("z");
+        if (libc_file) |file| lib.setLibCFile(file);
+        break :blk lib;
+    };
+
+    // libcurl. service-core speaks SMTP through it today and will dial HTTP(S) through it
+    // later; a server that already carries one HTTP implementation has no business growing a
+    // second client library beside it.
+    //
+    // What is switched off here is as much of the decision as what is switched on:
+    //
+    //   libpsl, libssh2, libidn2, nghttp2   curl looks for these on the host by default. None
+    //                                       is packaged for this build, and each would put a
+    //                                       system library back where the openssl move just
+    //                                       took four away.
+    //   zlib                                h2o already links one; a second in the same binary
+    //                                       is the openssl problem in miniature. curl wants it
+    //                                       only for Content-Encoding, which SMTP has no use
+    //                                       for -- revisit when the HTTP client arrives.
+    //   every protocol but SMTP and HTTP    curl compiles FTP, IMAP, POP3, RTSP, TFTP, SMB,
+    //                                       Telnet, Gopher, DICT and MQTT unless told not to.
+    //                                       None of them will ever be dialled from here, and
+    //                                       all of them are parser surface in a process that
+    //                                       signs transactions.
+    //
+    // -Dhttp-only is not what does this: it would take SMTP with it.
+    const curl_dep = b.dependency("curl", .{
+        .target = target,
+        .optimize = optimize,
+        .@"use-openssl" = !is_windows,
+        .@"use-schannel" = is_windows,
+        .libpsl = false,
+        .libssh2 = false,
+        .libidn2 = false,
+        .nghttp2 = false,
+        .zlib = false,
+        .@"disable-dict" = true,
+        .@"disable-file" = true,
+        .@"disable-ftp" = true,
+        .@"disable-gopher" = true,
+        .@"disable-imap" = true,
+        .@"disable-ldap" = true,
+        .@"disable-mqtt" = true,
+        .@"disable-pop3" = true,
+        .@"disable-rtsp" = true,
+        .@"disable-smb" = true,
+        .@"disable-telnet" = true,
+        .@"disable-tftp" = true,
+        .@"disable-websockets" = true,
+    });
+    // A helper of curl's own, because the library and the command line tool are both called
+    // "curl" in the build system and b.dependency().artifact() cannot tell them apart.
+    const libcurl = @import("curl").artifact(curl_dep, .lib);
+    if (libc_file) |file| libcurl.setLibCFile(file);
+    // mail.c includes <curl/curl.h>; the path arrives with the library, as with openssl above.
+    service_core.linkLibrary(libcurl);
+
     // What every binary serving HTTP has to link. Collected rather than applied inline, because
     // the integration probe is a second such binary and the two must not drift apart.
     var http_backend_lib: ?*std.Build.Step.Compile = null;
     // h2o's system dependencies belong on the executable rather than in a static archive:
     // packing shared objects into one makes lld object, and lld has a point.
-    const http_system_libs: []const []const u8 =
-        if (enable_h2o) &.{ "ssl", "crypto", "z", "m" } else &.{};
+    //
+    // This was `ssl, crypto, z, m` while three of the four came from the host. Only libm is
+    // left, and it is the one no package replaces.
+    const http_system_libs: []const []const u8 = if (enable_h2o) &.{"m"} else &.{};
 
     // Only service-core includes the selected backend's headers. Everything above it is written
     // against service_core/http.h and does not know which one answered.
     if (enable_h2o) {
-        const h2o = buildH2o(b, h2o_dep, target, optimize);
-        if (libc_file) |file| h2o.setLibCFile(file);
-
         service_core.root_module.addCMacro("H2O_USE_LIBUV", "0");
         for (h2o_include_dirs) |dir| service_core.addIncludePath(h2o_dep.path(dir));
+        // http_h2o.c includes h2o.h, which includes <openssl/ssl.h>. The header path for that
+        // arrives with the library rather than as an addIncludePath, because the openssl
+        // package installs its include directory and linkLibrary carries it along.
+        if (openssl) |ssl| service_core.linkLibrary(ssl);
 
-        http_backend_lib = h2o;
+        // Null only on a pass that is fetching a lazy dependency, and such a pass builds
+        // nothing -- the build re-runs afterwards with both in hand.
+        if (openssl != null and zlib != null) {
+            const h2o = buildH2o(b, h2o_dep, target, optimize, openssl.?, zlib.?);
+            if (libc_file) |file| h2o.setLibCFile(file);
+            http_backend_lib = h2o;
+        }
     } else {
         // The platform layer is already linked; the fallback backend only adds the parser.
         http_backend_lib = uv;
@@ -728,6 +841,7 @@ pub fn build(b: *std.Build) void {
         // A shared test tree with all five paths on it can never fail that way.
         const unit_tests = [_]UnitTest{
             .{ .name = "test_cache", .dir = "service-core/tests", .src = "test_cache.cpp", .lib = service_core },
+            .{ .name = "test_mail", .dir = "service-core/tests", .src = "test_mail.cpp", .lib = service_core },
         };
 
         for (unit_tests) |unit_test| {

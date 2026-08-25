@@ -19,6 +19,7 @@ export type LogCategory =
   | 'db'
   | 'session'
   | 'startup'
+  | 'mail'
 
 /** { code, name } from contracts/errors, never the thrown object and never a stack. */
 export type LogError = {

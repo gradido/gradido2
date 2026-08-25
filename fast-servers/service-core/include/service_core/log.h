@@ -41,6 +41,7 @@ typedef enum sc_log_cat {
     SC_CAT_DB,
     SC_CAT_SESSION,
     SC_CAT_STARTUP,
+    SC_CAT_MAIL,
     SC_CAT__COUNT
 } sc_log_cat;
 
