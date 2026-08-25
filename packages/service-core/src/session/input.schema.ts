@@ -65,8 +65,16 @@ export const sessionClaimsSchema = v.pipe(
   })),
 )
 
+/** What a token carries, before anyone has looked at it: the claims as they are spelled there. */
+export type SessionClaimsInput = v.InferInput<typeof sessionClaimsSchema>
+
 /**
- * The identity of one session: what the store is asked with, and what a token carries.
+ * The identity of one session, and a type that says it has been through the schema.
+ *
+ * A value of this type cannot be a payload someone handed in: the schema renames all three
+ * claims on the way through, so only its output has these names. Anything typed with it has
+ * therefore been parsed, and **nothing that reads it may check it again** — the rules are in
+ * the schema, and a second copy of them in a function drifts from the first.
  *
  * These are session claims, not token claims. A token is re-minted once it is older than
  * the re-issue interval and the new one copies all three unchanged, so a login moves while
@@ -76,9 +84,6 @@ export const sessionClaimsSchema = v.pipe(
  * afresh would keep a stale working set alive forever.
  */
 export type SessionClaims = v.InferOutput<typeof sessionClaimsSchema>
-
-/** The claims as they go into a token — the other direction of {@link sessionClaimsSchema}. */
-export type SessionClaimsPayload = v.InferInput<typeof sessionClaimsSchema>
 
 /**
  * Turns the payload of a token nobody has verified into claims, or into nothing.
@@ -98,7 +103,7 @@ export function readSessionClaims(payload: unknown): SessionClaims | undefined {
 }
 
 /** Spells claims back out for a token — the other half of {@link readSessionClaims}. */
-export function writeSessionClaims(claims: SessionClaims): SessionClaimsPayload {
+export function writeSessionClaims(claims: SessionClaims): SessionClaimsInput {
   return {
     slot: claims.slot,
     user_uuid: claims.userUuid,
@@ -109,6 +114,18 @@ export function writeSessionClaims(claims: SessionClaims): SessionClaimsPayload 
 /**
  * What the store refuses to be built with. The limits only — the logger and the clock are
  * objects, not parameters a schema has anything to say about.
+ *
+ * `maxSessions` is a ceiling, **not a sizing decision**. How many sessions live at once is
+ * the number created within one `hardTimeoutMs`, which depends on the community and the hour,
+ * and the store finds it by itself: it appends a slot when it needs one and reuses the slots
+ * of sessions that have ended. Nothing is retired early below this line. What the number is
+ * for is a load nobody planned for ending the process instead of the request — and what it
+ * should be is still open, because it is a memory question: `Architecture.md`, *Session
+ * cache*, has the experiment that answers it.
+ *
+ * `tokenReissueAfterMs` lives here rather than at the caller because it is what bounds the
+ * token set: one token per interval for as long as a session lives. Deciding it from the
+ * token's own `iat` instead would hand that bound to whoever writes the token.
  */
 export const sessionStoreLimitsSchema = v.object({
   maxSessions: v.pipe(
@@ -127,6 +144,12 @@ export const sessionStoreLimitsSchema = v.object({
     v.minValue(1, 'tokenReissueAfterMs must be positive, or it would not bound the token set'),
   ),
 })
+
+/** What a caller hands the store: the limits as written down, before they are checked. */
+export type SessionStoreLimitsInput = v.InferInput<typeof sessionStoreLimitsSchema>
+
+/** The limits the store runs on, which is to say the ones that came back from `v.parse`. */
+export type SessionStoreLimits = v.InferOutput<typeof sessionStoreLimitsSchema>
 
 /**
  * A token, as the client presented it or as `mint` returned it.
