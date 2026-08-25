@@ -100,6 +100,49 @@
             .url = "git+https://github.com/allyourcodebase/libuv.git#c1ccce24e1077ae7780857c89fb4b3aeb9080315",
             .hash = "libuv-1.52.0-htqqvzNqAAAB6cHIx-wIffe_mqMW5GOKjHeDBJYHGwls",
         },
+        // libpq, the PostgreSQL client. Architecture.md, *Databases*, holds why it is this and
+        // not a protocol client of our own: 3,6 us of user CPU out of 48 is the entire budget a
+        // rewrite could compete for, and it would take on the wire protocol, TLS, SCRAM and
+        // failover to spend it differently.
+        //
+        // The package builds libpq out of a pinned postgres checkout, so this pin carries two:
+        // 5.18.4 is PostgreSQL 18.4. That checkout is 155 MB and the reason this entry is lazy
+        // -- `-Dpostgres=false` never fetches it, which is what a SQLite-only deployment and a
+        // CI job that only needs the fallback want.
+        //
+        // Built with `ssl = .None`, and that is the one thing to read before changing it. The
+        // package pins allyourcodebase/openssl at 0ac6776 while curl -- and therefore this
+        // build -- pins cad7ccb, and two commits of that package hash differently, which makes
+        // them two packages in the graph and two OpenSSLs in one process. The .openssl entry
+        // above says what that costs; it does not become acceptable because a second dependency
+        // asked for it. What ssl = .None gives up is TLS *transport* to the database and
+        // nothing else: scram-sha-256 still authenticates, because the None branch compiles
+        // postgres' own sha2.c and hmac.c in place of the OpenSSL ones.
+        //
+        // So this is correct for the database on this host, over a Unix socket, which is what
+        // Architecture.md prescribes anyway -- and not yet correct for a database across a
+        // network. Closing that means the two openssl pins agreeing, not a second one.
+        .libpq = .{
+            .url = "git+https://github.com/allyourcodebase/libpq#925fa037a81952343b255f88f795257a8006f27d",
+            .hash = "libpq-5.18.4-QME6ad0UAQBVEzKd7H4tswrfCnTZB_1Kjw09tXeUKQK1",
+            .lazy = true,
+        },
+        // SQLite, as the amalgamation from sqlite.org rather than through a build.zig of
+        // someone else's.
+        //
+        // It is one C file. allyourcodebase/sqlite3 exists and is 40 lines around exactly this
+        // archive, and taking it would add a package whose build.zig declares
+        // minimum_zig_version 0.16.0 -- a toolchain floor above this build's, for a compile of
+        // one translation unit that build.zig already knows how to do. picohttpparser is in the
+        // tree on the same reasoning.
+        //
+        // Not lazy: 11 MB, and SQLite is what makes a small community's installation a
+        // download-and-start affair -- a default build that cannot open one would miss the
+        // point of having it.
+        .sqlite3 = .{
+            .url = "https://sqlite.org/2026/sqlite-amalgamation-3530200.zip",
+            .hash = "N-V-__8AALc_rgC04POe18O0LKFRm4ouQpLtL3riscEmWp-Q",
+        },
         // googletest, for the unit tests under -Dtests. Same pin as arnm and
         // gradido-blockchain-core, so the three repositories test against one version. Lazy: a build
         // without -Dtests never fetches it.

@@ -429,6 +429,76 @@ fn buildH2o(
     return lib;
 }
 
+/// SQLite, compiled here out of sqlite.org's amalgamation -- see build.zig.zon, .sqlite3, for
+/// why the package that wraps the same archive is not used.
+///
+/// The defines are upstream's own recommended compile-time options, minus the ones that would
+/// remove something this project may want. Each is here for a stated reason and none is a
+/// performance guess:
+///
+///   THREADSAFE=1            serialized. The roles are threads and a connection may be reached
+///                           from more than one of them; SQLITE_THREADSAFE=2 would make that
+///                           the caller's problem for no measurable gain at this size.
+///   DQS=0                   "x" is a string literal and never an identifier fallback. That
+///                           fallback turns a misspelled column into a silently constant
+///                           string, which is the SQL version of the wrong-column-index bug
+///                           Architecture.md wants generated code to remove.
+///   OMIT_LOAD_EXTENSION     no dlopen reachable from a statement, in a process that signs
+///                           transactions.
+///   OMIT_SHARED_CACHE       upstream discourages it and its locking model is a source of
+///                           surprises; WAL is what this build uses instead.
+///   DEFAULT_WAL_SYNCHRONOUS=1  NORMAL under WAL: durable across a process crash, and a commit
+///                           does not wait for the platter. FULL is for losing power mid-write.
+///   DEFAULT_MEMSTATUS=0     drops the global allocation counters nothing here reads.
+///   LIKE_DOESNT_MATCH_BLOBS, MAX_EXPR_DEPTH=0, OMIT_DEPRECATED, USE_ALLOCA
+///                           the rest of upstream's list, kept together so it stays checkable
+///                           against https://sqlite.org/compile.html#recommended_compile_time_options
+///
+/// The amalgamation is not compiled under this project's warning flags: it is not ours to keep
+/// clean under them, and the same rule already applies to picohttpparser.
+fn buildSqlite(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    sanitize: SanitizeMode,
+) *std.Build.Step.Compile {
+    const dep = b.dependency("sqlite3", .{});
+    const lib = b.addLibrary(.{
+        .name = "sqlite3",
+        .linkage = .static,
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    // The database is reached from the role threads, so it is instrumented with everything
+    // else -- an uninstrumented library under a TSan build reports nothing and hides what the
+    // rest of the build is looking for.
+    applySanitize(lib.root_module, sanitize);
+    addHostSystemPaths(b, lib, target);
+
+    const defines = [_][2][]const u8{
+        .{ "SQLITE_THREADSAFE", "1" },
+        .{ "SQLITE_DQS", "0" },
+        .{ "SQLITE_DEFAULT_WAL_SYNCHRONOUS", "1" },
+        .{ "SQLITE_DEFAULT_MEMSTATUS", "0" },
+        .{ "SQLITE_MAX_EXPR_DEPTH", "0" },
+        .{ "SQLITE_LIKE_DOESNT_MATCH_BLOBS", "1" },
+        .{ "SQLITE_OMIT_DEPRECATED", "1" },
+        .{ "SQLITE_OMIT_LOAD_EXTENSION", "1" },
+        .{ "SQLITE_OMIT_SHARED_CACHE", "1" },
+        .{ "SQLITE_USE_ALLOCA", "1" },
+    };
+    for (defines) |define| lib.root_module.addCMacro(define[0], define[1]);
+
+    lib.addCSourceFiles(.{ .root = dep.path("."), .files = &.{"sqlite3.c"}, .flags = &.{"-std=gnu11"} });
+    // db_sqlite.c includes <sqlite3.h>; installing it here is what puts it on the path of
+    // whatever links this library, the way the openssl and curl packages do it.
+    lib.installHeader(dep.path("sqlite3.h"), "sqlite3.h");
+    return lib;
+}
+
 /// Every component's public headers, on every component's search path.
 ///
 /// The alternative -- naming per target which of the five a translation unit is allowed to see
@@ -519,10 +589,24 @@ pub fn build(b: *std.Build) void {
     // HTTP/1.1, no TLS -- which answers requests rather than merely starting up. Everywhere
     // else this defaults to on, because the fast path is what the fast servers are for.
     const enable_h2o = b.option(bool, "h2o", "Build the h2o HTTP backend; off selects the libuv+picohttpparser fallback (forced off on Windows: h2o has no Windows port)") orelse !is_windows;
+    // Both databases are in by default, because which one is used is a startup decision and not
+    // a build one -- Architecture.md, *DB*: PostgreSQL is the reference, SQLite is what a small
+    // community installs. Turning one off is for a deployment that knows it will never see that
+    // database: -Dpostgres=false is also what saves the 155 MB postgres checkout the driver is
+    // compiled from, which is why that one is worth a flag at all and SQLite's 11 MB is not.
+    const enable_postgres = b.option(bool, "postgres", "Build the PostgreSQL driver (libpq). Off skips a 155 MB fetch and leaves DB_TYPE=postgresql unavailable at runtime (forced off on Windows: the libpq package has no Windows port)") orelse !is_windows;
+    const enable_sqlite = b.option(bool, "sqlite", "Build the SQLite driver. Off leaves DB_TYPE=sqlite unavailable at runtime") orelse true;
     const enable_tests = b.option(bool, "tests", "Build the googletest unit tests and the integration probe") orelse false;
     const enable_benchmarks = b.option(bool, "benchmarks", "Build the bench_* binaries") orelse false;
     const sanitize = b.option(SanitizeMode, "sanitize", "Instrument C sources: undefined_behavior (UBSan) or thread (TSan). AddressSanitizer needs the CMake build with -DFS_ENABLE_SANITIZERS=ON") orelse .off;
 
+    if (enable_postgres and is_windows) {
+        std.debug.panic("-Dpostgres=true does not build for Windows: allyourcodebase/libpq " ++
+            "compiles postgres' posix src/port, and its own README claims Linux and macOS " ++
+            "only. Leave it off -- the binary then carries SQLite, and CMakeLists.txt is " ++
+            "where a Windows build reaches an installed libpq, which is what that file is " ++
+            "for.", .{});
+    }
     if (enable_h2o and is_windows) {
         std.debug.panic("-Dh2o=true does not build for Windows: h2o is a posix event loop. " ++
             "Leave it off and the binary serves over libuv and picohttpparser instead.", .{});
@@ -746,6 +830,46 @@ pub fn build(b: *std.Build) void {
     // mail.c includes <curl/curl.h>; the path arrives with the library, as with openssl above.
     service_core.linkLibrary(libcurl);
 
+    // The two database drivers. Both are compiled in where the build allows it, because which
+    // one a community runs is decided in its environment at startup and not here -- DB_TYPE,
+    // the same variable the TypeScript path reads. A driver the build left out is not an error
+    // until something asks for that database; service-core answers SC_ERR_UNAVAILABLE and says
+    // which build option would have provided it.
+    //
+    // Only db_postgres.c and db_sqlite.c see these headers. Everything above them is written
+    // against service_core/db.h, which carries no driver type.
+    if (enable_postgres) {
+        // Null only on the pass that fetches a lazy dependency; nothing is built on that pass.
+        if (b.lazyDependency("libpq", .{
+            .target = target,
+            .optimize = optimize,
+            // Why this is None and not OpenSSL: build.zig.zon, .libpq. In one line -- the
+            // package pins a different allyourcodebase/openssl than curl does, and two of those
+            // in one process is what the .openssl entry exists to prevent.
+            .ssl = .None,
+            // Wire compression against the database, and the same argument as the ssl one: the
+            // package pins a zlib of its own, h2o already links ours, and PostgreSQL only
+            // compresses what libpq negotiates -- which is nothing this build asks for.
+            .@"disable-zlib" = true,
+            .@"disable-zstd" = true,
+        })) |dep| {
+            const libpq = dep.artifact("pq");
+            // libpq's sources include errno.h, so it needs the corrected libc description for
+            // the same reason libsodium does -- see nativeLibcFile. Without it a Debian host
+            // stops with 88 errors on asm/errno.h inside the dependency.
+            if (libc_file) |file| libpq.setLibCFile(file);
+            service_core.linkLibrary(libpq);
+            service_core.root_module.addCMacro("SC_DB_WITH_POSTGRESQL", "1");
+        }
+    }
+
+    if (enable_sqlite) {
+        const sqlite = buildSqlite(b, target, optimize, sanitize);
+        if (libc_file) |file| sqlite.setLibCFile(file);
+        service_core.linkLibrary(sqlite);
+        service_core.root_module.addCMacro("SC_DB_WITH_SQLITE", "1");
+    }
+
     // What every binary serving HTTP has to link. Collected rather than applied inline, because
     // the integration probe is a second such binary and the two must not drift apart.
     var http_backend_lib: ?*std.Build.Step.Compile = null;
@@ -842,6 +966,7 @@ pub fn build(b: *std.Build) void {
         const unit_tests = [_]UnitTest{
             .{ .name = "test_cache", .dir = "service-core/tests", .src = "test_cache.cpp", .lib = service_core },
             .{ .name = "test_mail", .dir = "service-core/tests", .src = "test_mail.cpp", .lib = service_core },
+            .{ .name = "test_db", .dir = "service-core/tests", .src = "test_db.cpp", .lib = service_core },
         };
 
         for (unit_tests) |unit_test| {

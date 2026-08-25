@@ -24,6 +24,7 @@
 #include "dht_node/dht_node_server.h"
 #include "federation/federation.h"
 #include "service_core/config.h"
+#include "service_core/db.h"
 #include "service_core/http.h"
 #include "service_core/jwt.h"
 #include "service_core/log.h"
@@ -99,6 +100,10 @@ static void print_version(void)
 {
     printf("fast-servers %s\n", FS_VERSION);
     printf("http backend: %s\n", sc_http_backend_name());
+    /* Which databases this binary could open. No role opens one yet -- service_core/db.h says
+     * what is missing before one can -- and which drivers are in is still a property of the
+     * build that is worth being able to read off it rather than infer from how it was made. */
+    printf("database drivers: %s\n", sc_db_drivers());
 }
 
 int main(int argc, char **argv)

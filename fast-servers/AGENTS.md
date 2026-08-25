@@ -156,7 +156,23 @@ zlib        lazy   h2o's gzip handler. Same pin as curl's, same reason.
 libuv              the platform layer — see below. Every build links it.
 googletest  lazy   the unit tests.
 compile_commands   feeds compile_commands.json.
-libpq              designed, not pinned. Architecture.md, *Databases*.
+libpq       lazy   the PostgreSQL driver, built by allyourcodebase/libpq out
+                   of a pinned postgres checkout — so that pin carries two,
+                   and 5.18.4 is PostgreSQL 18.4. Requested with `ssl =
+                   .None`, which is not a preference: the package pins a
+                   different allyourcodebase/openssl than curl does, and two
+                   commits of it hash differently, so asking for OpenSSL here
+                   is asking for a second one in the process. What that gives
+                   up is TLS *transport* to the database — scram-sha-256 still
+                   authenticates. Lazy: the postgres checkout is 155 MB and
+                   `-Dpostgres=false` never fetches it. Not built on Windows —
+                   the package has no port for it, and `-Dpostgres=true` there
+                   stops the build with that sentence rather than with 92
+                   errors inside a dependency.
+sqlite3            SQLite, as sqlite.org's amalgamation. One C file, compiled
+                   by build.zig the way picohttpparser is, rather than through
+                   a package whose build.zig would add a toolchain floor for
+                   one translation unit.
 ```
 
 `lazy` means a build that does not select that path never downloads it.
@@ -350,6 +366,26 @@ http   the Windows fallback is libuv + picohttpparser + ~100 lines, not a
        second HTTP library. Owning the accept loop is what keeps the
        handler signature single. Mongoose is GPLv2/commercial — do not
        reach for it.
+db     both drivers are compiled in and *which* database is used is read
+       from DB_TYPE at startup, never decided by the build. -Dpostgres and
+       -Dsqlite only decide what the binary could open; asking it for a
+       database it has no driver for is SC_ERR_UNAVAILABLE, not a crash
+db     there is deliberately no sc_db_query() both backends implement. The
+       dialects differ, and a repository that has to know which one it is
+       talking to should have to say so — the TypeScript path spells the
+       same decision as a discriminated union. Statements go through
+       sc_db_native(), in a file that already knows the dialect
+pg     the driver is startup-only so far: sc_db_open blocks. The request
+       path wants PQsocket / PQconsumeInput / PQisBusy on h2o's loop and
+       nothing has written it yet
+pg     libpq exposes no SQLSTATE for a *connection* failure, so PQping is
+       what tells "not yet" from "not like this" — server there and
+       refusing is permanent, nothing answering is worth a retry. The
+       TypeScript path reads SQLSTATE classes 28, 3D and 42 for the same
+       decision
+sqlite WAL and foreign_keys are per *connection*, not per database. A
+       connection that forgets them enforces no constraint the schema
+       declares and serialises every reader against the writer
 pg     Unix socket, not TCP loopback, when the database is on this host —
        83.4 to 48.1 µs for one connection string
 pg     one round trip per request: user row and roles in one statement.
