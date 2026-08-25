@@ -44,6 +44,16 @@ include(FetchContent)
 # platform the project targets, which is worse than building the backend that needs nothing.
 # Turn it on where the library is actually installed.
 option(FS_ENABLE_H2O "Build the h2o HTTP backend instead of the libuv+picohttpparser fallback. Needs a libh2o-evloop installed and visible to pkg-config; unavailable on Windows" OFF)
+# The SQLite driver, built from sqlite.org's amalgamation the way build.zig builds it -- one C
+# file, fetched, so this needs nothing installed and defaults on as it does there.
+option(FS_ENABLE_SQLITE "Build the SQLite driver" ON)
+# PostgreSQL, and the second place this file does not mirror build.zig. `zig build` compiles
+# libpq out of a pinned postgres checkout and needs nothing installed; this build asks the host
+# for one, the way it asks for h2o and curl -- and the host this file exists for is a Windows
+# developer's, where libpq is not normally there. Defaulting it on would fail `cmake -B build`
+# out of the box for a driver that build.zig provides anyway. Turn it on where libpq is
+# installed; the binary then carries both, exactly as the zig build's does.
+option(FS_ENABLE_POSTGRES "Build the PostgreSQL driver. Needs libpq and its headers installed and visible to find_package(PostgreSQL)" OFF)
 option(FS_ENABLE_TESTS "Build the googletest unit tests and the integration probe" OFF)
 option(FS_ENABLE_BENCHMARKS "Build the bench_* binaries" OFF)
 option(FS_ENABLE_SANITIZERS "Build with AddressSanitizer, plus UndefinedBehaviorSanitizer on non-MSVC toolchains (MSVC ships no UBSan)" OFF)
@@ -167,6 +177,44 @@ if(NOT FS_ENABLE_H2O)
   set(FS_PICOHTTPPARSER_DIR ${h2o_SOURCE_DIR}/deps/picohttpparser)
 endif()
 
+if(FS_ENABLE_SQLITE)
+  # The amalgamation, from sqlite.org and not through anyone's build.zig or CMake package: it is
+  # one C file. Same archive build.zig.zon pins, and the hash is checked here for the reason it
+  # is pinned there -- a driver that is fetched over the network is part of the process that
+  # signs transactions.
+  #
+  # SOURCE_SUBDIR points at a directory with no CMakeLists.txt for the same reason the h2o entry
+  # above does: the archive has none, and MakeAvailable must not go looking for one.
+  FetchContent_Declare(sqlite3
+    URL https://sqlite.org/2026/sqlite-amalgamation-3530200.zip
+    URL_HASH SHA256=8a310d0a16c7a90cacd4c884e70faa51c902afed2a89f63aaa0126ab83558a32
+    SOURCE_SUBDIR does-not-exist
+  )
+  FetchContent_MakeAvailable(sqlite3)
+
+  # The compile-time options are build.zig's list, with the reason for each beside it there.
+  add_library(fs_sqlite3 STATIC ${sqlite3_SOURCE_DIR}/sqlite3.c)
+  target_include_directories(fs_sqlite3 PUBLIC ${sqlite3_SOURCE_DIR})
+  target_compile_definitions(fs_sqlite3 PRIVATE
+    SQLITE_THREADSAFE=1
+    SQLITE_DQS=0
+    SQLITE_DEFAULT_WAL_SYNCHRONOUS=1
+    SQLITE_DEFAULT_MEMSTATUS=0
+    SQLITE_MAX_EXPR_DEPTH=0
+    SQLITE_LIKE_DOESNT_MATCH_BLOBS=1
+    SQLITE_OMIT_DEPRECATED=1
+    SQLITE_OMIT_LOAD_EXTENSION=1
+    SQLITE_OMIT_SHARED_CACHE=1
+    SQLITE_USE_ALLOCA=1
+  )
+  # Upstream's, and not ours to keep clean under our warning flags.
+  if(MSVC)
+    target_compile_options(fs_sqlite3 PRIVATE /W0)
+  else()
+    target_compile_options(fs_sqlite3 PRIVATE -w)
+  endif()
+endif()
+
 if(FS_ENABLE_TESTS)
   # googletest is C++ testing C, which is what arnm and gradido-blockchain-core do as well. The
   # language is enabled here rather than in project() so that a build without tests never asks
@@ -258,6 +306,20 @@ endforeach()
 # produces. When the two disagree, build.zig.zon is right.
 find_package(CURL REQUIRED)
 target_link_libraries(service_core PUBLIC CURL::libcurl)
+
+# The database drivers. db_postgres.c and db_sqlite.c are compiled either way and answer
+# SC_ERR_UNAVAILABLE without their driver, so what these switch is what the binary can open --
+# not whether it builds. service_core/db.h holds the arrangement.
+if(FS_ENABLE_SQLITE)
+  target_link_libraries(service_core PUBLIC fs_sqlite3)
+  target_compile_definitions(service_core PRIVATE SC_DB_WITH_SQLITE=1)
+endif()
+
+if(FS_ENABLE_POSTGRES)
+  find_package(PostgreSQL REQUIRED)
+  target_link_libraries(service_core PUBLIC PostgreSQL::PostgreSQL)
+  target_compile_definitions(service_core PRIVATE SC_DB_WITH_POSTGRESQL=1)
+endif()
 
 if(FS_ENABLE_H2O)
   # Unlike build.zig, this file does not build h2o -- zig fetches the pinned checkout and

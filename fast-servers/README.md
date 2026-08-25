@@ -23,6 +23,8 @@ Options, all with `-D`:
 | option | default | what it does |
 |---|---|---|
 | `h2o` | on, forced off on Windows | build the h2o HTTP backend; off selects the fallback |
+| `postgres` | on, forced off on Windows | build the PostgreSQL driver. Off also skips a 155 MB fetch |
+| `sqlite` | on | build the SQLite driver |
 | `tests` | off | the googletest binaries and the integration probe |
 | `benchmarks` | off | the `bench_*` binaries |
 | `sanitize` | `off` | `undefined_behavior` (UBSan) or `thread` (TSan) |
@@ -139,6 +141,48 @@ Configuration comes from the environment, with legacy's names and ports:
 Each role answers `GET /_health`. That is the whole of what is implemented: the routes in
 `contracts/server/` are not served yet, and peer discovery is a stub that finds nobody.
 
+## The database
+
+Both drivers are in the binary and which database is used is read at startup, never built in.
+`fast-servers --version` says which ones this build has.
+
+```text
+libpq      compiled from a pinned postgres checkout; -Dpostgres=false leaves it out.
+           Not on Windows: that package compiles postgres' posix src/port and claims
+           Linux and macOS only, so `zig build` there refuses rather than letting the
+           compiler explain it. A Windows build reaches an installed libpq through
+           CMakeLists.txt, which is the file that exists for that target.
+sqlite     compiled from sqlite.org's amalgamation; -Dsqlite=false leaves it out.
+           Builds everywhere, Windows included.
+```
+
+The variables are the ones the TypeScript path reads, with the same defaults:
+
+| variable | default | |
+|---|---|---|
+| `DB_TYPE` | `postgresql` | or `sqlite` |
+| `DB_HOST` | `localhost` | a value starting with `/` is a Unix socket directory, which is what a database on this host should be reached through — 83.4 → 48.1 µs |
+| `DB_PORT` | `5432` | |
+| `DB_USER` | `gradido` | |
+| `DB_PASSWORD` | empty | refused when empty and `NODE_ENV=production`, as on the TypeScript path |
+| `DB_DATABASE` | `gradido_community` | |
+| `DB_FILE` | `./gradido_community.sqlite` | SQLite only |
+
+**No role opens a connection yet.** `service_core/db.h` is the surface and its unit test is the
+only caller; a server that refused to start over a database it never queries would be worse
+than one that has not got there. What else is missing — the asynchronous PostgreSQL path, the
+generated row mapping, TLS to a remote database — is in [Architecture.md](Architecture.md),
+*Databases*, with the reason for each.
+
+`test_db` covers the configuration, the refusals and SQLite for real. Its two PostgreSQL tests
+need a server and skip without one, because a green test that connected to nothing says
+nothing:
+
+```sh
+SC_DB_TEST_PG_HOST=/var/run/postgresql SC_DB_TEST_PG_DATABASE=gradido \
+    ./zig-out/bin/test_db
+```
+
 ## The CMake build
 
 `CMakeLists.txt` exists for the MSVC ABI, which zig cannot target because it does not ship the
@@ -148,17 +192,26 @@ Windows SDK. It mirrors `build.zig` and never leads it.
 cmake -B build && cmake --build build
 cmake -B build -DFS_ENABLE_TESTS=ON && ctest --test-dir build
 cmake -B build -DFS_ENABLE_H2O=ON              # only where libh2o-evloop is installed
+cmake -B build -DFS_ENABLE_POSTGRES=ON         # only where libpq is installed
 ```
 
-Its dependencies are fetched rather than looked for — the core, libsodium, libuv and
-picohttpparser included — so a Windows developer needs Visual Studio and nothing else.
+Its dependencies are fetched rather than looked for — the core, libsodium, libuv,
+picohttpparser and the SQLite amalgamation included — so a Windows developer needs Visual
+Studio and nothing else.
 
-The one thing it does not build is h2o, and that is why `FS_ENABLE_H2O` is **off by default
-here while `-Dh2o` is on in `build.zig`**. Compiling h2o is a page of `build.zig` that would
-have to be written a second time in CMake, and it does not build for the target this file
-exists for at all — so this build asks pkg-config for an installed `libh2o-evloop` instead, and
-defaults to not asking. It still fetches the h2o checkout either way, for its
-`deps/picohttpparser`.
+Two things it does not build, and both are why an option that is **on** in `build.zig` is
+**off** here:
+
+- **h2o.** Compiling it is a page of `build.zig` that would have to be written a second time in
+  CMake, and it does not build for the target this file exists for at all — so this build asks
+  pkg-config for an installed `libh2o-evloop` instead, and defaults to not asking. It still
+  fetches the h2o checkout either way, for its `deps/picohttpparser`.
+- **libpq.** `zig build` compiles it out of a pinned postgres checkout; this one asks
+  `find_package(PostgreSQL)`, the way it asks for curl. A Windows developer's machine does not
+  normally have libpq, and failing `cmake -B build` out of the box over a driver the zig build
+  provides anyway would be the wrong trade. SQLite has no such problem — it is one C file, so
+  this build fetches and compiles it exactly as `build.zig` does, and `FS_ENABLE_SQLITE`
+  is on.
 
 On Linux the CMake build is worth having for a second reason: it prints the `-Wall -Wextra`
 findings. `zig build` hides C compiler warnings when a step succeeds and turns them into errors
@@ -169,8 +222,9 @@ when one fails, so a green `zig build` says nothing about them either way.
 ```text
 src/main.c        role selection, the quit flag, one thread per role
 service-core/     logging, config, the HTTP surface and its two backends,
-                  the cache table, JWT, the mail client. Threads and locks
-                  come from libuv
+                  the cache table, JWT, the mail client, the database
+                  connection and its two drivers. Threads and locks come
+                  from libuv
 backend-core/     the backend domain. Empty, and the emptiness is the point
 backend/          the HTTP server the frontend talks to
 federation/       the HTTP server other communities talk to

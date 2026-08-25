@@ -157,6 +157,51 @@ SQLite       in process, called directly
 Both are C calling a C library, and that is not a preference — it is what the measurements
 leave room for.
 
+### What is built, and what is not
+
+`service-core/src/db*.c` behind `service_core/db.h`. Both drivers are compiled into every
+default build, because *which* database a community runs is read from `DB_TYPE` at startup and
+is not a property of the binary — `-Dpostgres=false` and `-Dsqlite=false` exist for a
+deployment that knows it will never see one of them, and asking such a build for that database
+is an `SC_ERR_UNAVAILABLE` naming the option, not a crash.
+
+```text
+libpq      allyourcodebase/libpq, out of a pinned postgres checkout. Not on Windows:
+           that package compiles postgres' posix src/port. `-Dpostgres=true` there
+           stops the build saying so, the way `-Dh2o=true` does
+sqlite     sqlite.org's amalgamation, compiled by build.zig. Every target
+```
+
+What the surface carries is opening, probing, waiting and closing — the questions that are
+genuinely the same asked twice — plus the environment they are configured from, which is the
+TypeScript path's `DB_TYPE`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_DATABASE`,
+`DB_FILE`, down to the defaults. Waiting is what a database and its server starting together
+need, and it turns on one distinction: a connection that was refused, unresolvable or timed out
+is tried again, while a server that answered and *refused* ends the startup at once. libpq
+publishes no SQLSTATE for a connection failure, so `PQping` stands in for the SQLSTATE classes
+the TypeScript path reads.
+
+Three things are deliberately absent, and each has a reason rather than a date:
+
+```text
+no query surface     the dialects differ; a repository that has to know which one it is
+                     talking to should have to say so. Statements are written against the
+                     driver, reached through sc_db_native() — see *The mapping is generated*.
+no async path        sc_db_open blocks, which is right for a startup and wrong for a request.
+                     PQsocket / PQconsumeInput / PQisBusy on h2o's loop is a second entry
+                     point beside it, and arrives with the first repository that needs it.
+no TLS to postgres   the libpq package pins a different allyourcodebase/openssl than curl
+                     does, and two of those in one process is what the openssl pin exists to
+                     prevent, so it is built with ssl = None. scram-sha-256 still
+                     authenticates; what is missing is transport encryption, which the Unix
+                     socket this section prescribes does not need and a database across a
+                     network does. Closing it means the two pins agreeing.
+```
+
+Nothing opens a connection yet: no role reads a row, and a server that refuses to start over a
+database it never queries would be a regression dressed as progress. `--version` reports which
+drivers are in.
+
 ### Where a query's time goes
 
 Warm database, one connection, prepared statements. Method and full tables in
