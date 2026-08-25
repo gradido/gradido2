@@ -247,6 +247,18 @@ foreach(target service_core backend_core)
   )
 endforeach()
 
+# libcurl. service-core's mail.c speaks SMTP through it, and the outbound HTTP this project
+# will grow goes the same way.
+#
+# Taken from the host rather than built, which is this file's arrangement with h2o as well and
+# for the same reason: `zig build` compiles the pinned allyourcodebase/curl and needs nothing
+# installed, while this build exists for the one target zig cannot serve and asks the system for
+# what is already there. So the version here is whatever the host has, and its TLS backend is
+# whatever the distribution linked it against -- neither is the pinned combination build.zig
+# produces. When the two disagree, build.zig.zon is right.
+find_package(CURL REQUIRED)
+target_link_libraries(service_core PUBLIC CURL::libcurl)
+
 if(FS_ENABLE_H2O)
   # Unlike build.zig, this file does not build h2o -- zig fetches the pinned checkout and
   # compiles the source list itself, which is a page of build.zig and would be a second page

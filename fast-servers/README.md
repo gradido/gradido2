@@ -13,8 +13,10 @@ zig build run -- --federation  # build and run, roles after --
 ```
 
 `build.zig` is the master build. It fetches and compiles everything it needs, so nothing has to
-be installed for it beyond a zig toolchain — and, on the h2o path, OpenSSL and zlib, which h2o
-links against.
+be installed for it beyond a zig toolchain. That now holds without an exception: OpenSSL and
+zlib used to come from the host because h2o links them, and both are packaged since libcurl
+arrived and made a second, statically linked OpenSSL beside the host's dynamic one a real
+prospect. `ldd zig-out/bin/fast-servers` names `libm` and `libc` and nothing else.
 
 Options, all with `-D`:
 
@@ -34,9 +36,11 @@ overrides it.
 
 Naming the host's own triple works and is the same build: `-Dtarget=x86_64-linux-gnu` on that
 machine gets `/usr/include` and `/usr/lib` back, which zig otherwise withholds from anything it
-considers a cross build. A target that is genuinely another machine needs `-Dh2o=false`, because
-h2o wants the host's OpenSSL and zlib and this build does not carry them — it says so and stops
-rather than letting the compiler explain it 78 times.
+considers a cross build. A target that is genuinely another machine still needs `-Dh2o=false`,
+but no longer because of the host: `allyourcodebase/openssl` compiles x86_64 assembly whatever
+the target is, and an aarch64 build stops with 23 errors inside it. The build says so and stops
+rather than letting the compiler explain it. `-Dh2o=false` cross compiles, and that backend
+needs neither OpenSSL nor anything else from the host.
 
 ## h2o, and the fallback behind the same header
 
@@ -78,9 +82,22 @@ library each; this is five, and a test binary that links one component and sees 
 component's include directory is what proves the header carries its own dependencies. A shared
 test tree with all five paths on it can never fail that way.
 
-The cache tests are worth running under `-Dsanitize=thread`. A reference counted structure under
-two locks does not fail a single-threaded test when it is wrong; it fails in production, under
-load, weeks later.
+The cache and mail tests are worth running under `-Dsanitize=thread`. A reference counted
+structure under two locks does not fail a single-threaded test when it is wrong, and neither does
+a worker pool with a missing lock; both fail in production, under load, weeks later.
+
+Two of the mail tests need someone on the other end and skip without one, because a green test
+that sent nothing says nothing:
+
+```sh
+../h20Test/smtp_client/sink.py --port 2525 &
+SC_MAIL_TEST_URL=smtp://127.0.0.1:2525 ./zig-out/bin/test_mail
+```
+
+`SC_MAIL_SLOW_URL` points at a *deliberately slow* SMTP server — 150 ms per mail or more — and
+enables the one test that watches the worker pool grow under a backlog and retire again
+afterwards. Any relay that answers slowly will do. `SC_MAIL_TEST_LOG` turns the mailer's log
+lines back on while a test is being worked on.
 
 `tests/integration/` drives the built binary over raw sockets from `bun test`, once against each
 HTTP backend — see [its README](tests/integration/README.md), which also lists where the two
@@ -152,7 +169,8 @@ when one fails, so a green `zig build` says nothing about them either way.
 ```text
 src/main.c        role selection, the quit flag, one thread per role
 service-core/     logging, config, the HTTP surface and its two backends,
-                  the cache table, JWT. Threads and locks come from libuv
+                  the cache table, JWT, the mail client. Threads and locks
+                  come from libuv
 backend-core/     the backend domain. Empty, and the emptiness is the point
 backend/          the HTTP server the frontend talks to
 federation/       the HTTP server other communities talk to

@@ -22,6 +22,7 @@
 static const char *const kCategoryNames[SC_CAT__COUNT] = {
     "auth",       "user", "transaction", "contribution", "community",
     "federation", "http", "db",          "session",      "startup",
+    "mail",
 };
 
 static sc_log_level g_minimum = SC_LOG_INFO;
