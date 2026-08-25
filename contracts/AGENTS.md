@@ -260,7 +260,7 @@ so a failure names something.
 | `types/` | 18 enums from legacy `shared`, `database` and the backend, plus the `Timestamp` and `PasswordHash` conventions |
 | `errors/` | database, domain and mutation errors; codes newly assigned |
 | `db/` | **29 tables — every one legacy has.** Column types, defaults, keys and indexes are decided; what is not is collected as `open` on the column or on the table |
-| `logging.json` | envelope, levels, 10 categories, 8 seed events, redaction |
+| `logging.json` | envelope, levels, 10 categories, 13 seed events, redaction |
 | `server/` | **135 routes** — 134 collected from legacy (121 backend, 13 federation) plus `peer.bootstrap`, which legacy has no counterpart for. Names, paths, methods, rights and roles are decided; request fields are filled in from the legacy arg classes, response shapes are not, except on `peer.bootstrap` which is new and therefore fully contracted |
 | `test-vectors/` | empty — **the most valuable missing piece** |
 
