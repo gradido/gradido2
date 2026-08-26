@@ -206,6 +206,12 @@ loop-bound everything asynchronous — uv_fs_*, uv_getaddrinfo, uv_spawn, uv_que
            the request thread; put it on a thread of its own or change h2o's backend.
 ```
 
+**Before adding a thread anywhere, read `Architecture.md`, *Threading*.** It holds one model for
+the whole process, and the rule it comes down to is that work leaves the request path because it
+serialises or syncs, never because it waits — waiting that has a file descriptor belongs on the
+loop. A module that decides its own threading is how a process ends up with four answers to one
+question.
+
 The loop-free half is used directly and not wrapped: `uv_rwlock_t` in the session cache,
 `uv_mutex_t` in the log, `uv_thread_t` for the thread each role runs on, `uv_once` for the
 cache's hash seed. There is no `service_core/thread.h` to go through, and there must not be one
@@ -256,7 +262,9 @@ It is not a second HTTP library and must not become one. Owning the accept loop 
 the handler signature single; Mongoose is GPLv2 or commercial and is not the way out.
 
 **The fallback is not a deployment option.** One thread means one core, whatever the machine
-has, and nothing about it was built to carry load. It is there so that everything around the
+has, and nothing about it was built to carry load. It clamps `SERVER_THREADS` to one and logs
+that it did, rather than refusing to start on a configuration h2o accepts -- the seam's promise
+is that the same configuration starts both. It is there so that everything around the
 request path — the roles, the configuration, the domain code — can be worked on and debugged
 where h2o cannot build. A high-performance server on Windows is not on the table anyway; the
 fast path targets the Linux machine this project runs on. `-Dh2o=false` selects the fallback and
@@ -388,6 +396,21 @@ h2o    it sends `Server: h2o/<version>` on every response until globalconf
        and not a defence: fingerprinting works on header order anyway. It
        denies the scanner that shortlists by banner, and costs one line.
        Neither backend sends one; the integration suite asserts that.
+h2o    h2o_start_response asserts the generator is NULL, and h2o_send_inline
+       calls it itself. A request that was deferred therefore cannot be
+       answered with h2o_send_inline -- it already has a generator. Send
+       with h2o_send and H2O_SEND_STATE_FINAL instead; do_sendvec clears
+       the generator before sending, which is also what keeps `stop` from
+       firing on a request that WAS answered.
+h2o    it stops reading a connection while a response is pending, so a
+       client that closes after its request is usually not noticed until
+       the write fails. The fallback keeps reading and sees the EOF. Do
+       not build anything on being told; build on the request staying
+       alive until it is answered, which is what the generator gives you.
+http   a deferred request's ticket packs loop, slot and generation, and the
+       slot's generation and phase share one word so that validating a
+       ticket and claiming it are one CAS. Two steps is a race: a slot
+       released and re-armed in between passes both checks. http_defer.h
 http   the Windows fallback is libuv + picohttpparser + ~100 lines, not a
        second HTTP library. Owning the accept loop is what keeps the
        handler signature single. Mongoose is GPLv2/commercial — do not

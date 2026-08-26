@@ -20,6 +20,7 @@ sc_status federation_run(const sc_config *cfg, const sc_quit_flag *quit)
     http_config.host = cfg->listen_host;
     http_config.port = cfg->federation_port;
     http_config.role = "federation";
+    http_config.threads = cfg->server_threads;
 
     server = sc_http_server_create(&http_config);
     if (server == NULL) {

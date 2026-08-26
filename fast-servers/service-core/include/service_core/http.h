@@ -41,11 +41,27 @@ typedef int (*sc_http_handler_fn)(sc_http_req *req, void *user_data);
  */
 #define SC_HTTP_MAX_BODY (32 * 1024)
 
+/*
+ * How many loops a server may run, and therefore how many threads. The ceiling is 255 because
+ * a deferred request's ticket carries the loop it belongs to in eight bits -- see
+ * sc_http_defer. No machine this targets is near it.
+ */
+#define SC_HTTP_THREADS_MAX 255
+
 typedef struct sc_http_config {
     const char *host; /* dotted quad; hostnames are not resolved here */
     uint16_t port;
     /* Names the server in its log lines: "backend", "federation". */
     const char *role;
+    /*
+     * Loops, each on its own thread, each with its own listening socket under SO_REUSEPORT.
+     * 0 means one per core.
+     *
+     * Threads are the number of cores and there is no allowance for I/O wait -- Architecture.md,
+     * *Threading*, holds why the familiar reasoning does not apply to a thread-per-loop server.
+     * The fallback backend serves on one thread whatever this says, and logs that it did.
+     */
+    uint16_t threads;
 } sc_http_config;
 
 /** Names the backend this build linked: "h2o" or "libuv+picohttpparser". Never NULL. */
@@ -69,8 +85,77 @@ sc_status sc_http_route(sc_http_server *server, const char *path, sc_http_handle
  *  before any thread starts serving. */
 sc_status sc_http_listen(sc_http_server *server);
 
-/** Runs until @p quit is raised. Returns SC_OK on a clean shutdown. */
+/** Runs until @p quit is raised. Returns SC_OK on a clean shutdown.
+ *
+ *  With more than one loop it starts the other threads, serves on the calling thread, and
+ *  joins them before returning -- so a role still owns exactly the thread it was given. */
 sc_status sc_http_run(sc_http_server *server, const sc_quit_flag *quit);
+
+/** Loops this server actually runs, known after sc_http_listen. 1 for the fallback. */
+uint16_t sc_http_thread_count(const sc_http_server *server);
+
+/* --- answering later -------------------------------------------------------------------- */
+
+/*
+ * A handler that cannot answer yet -- because a write has to be committed, or a query has to
+ * come back -- defers the request instead of blocking its loop. Architecture.md, *The write
+ * must be answered, not acknowledged*, is the design; this is the whole of the mechanism.
+ *
+ *   handler        sc_http_defer(), then return 0 without replying
+ *   worker         does the work, then sc_http_resume() from its own thread
+ *   loop           the resume callback runs, on the loop that owns the request, and replies
+ *
+ * No sc_http_req ever crosses a thread. What crosses is the ticket, which the loop resolves
+ * back to a request or finds to be gone -- an index and a check rather than a pointer, the
+ * same trick the session cache plays with a slot number in a token.
+ */
+
+/** Identifies one deferred request. Never 0 for a request that was actually deferred. */
+typedef uint64_t sc_http_ticket;
+
+/** How many requests one loop may have outstanding at a time. Fixed, because the request path
+ *  does not allocate -- AGENTS.md section 1. A defer beyond it is SC_ERR_QUEUE_FULL and the
+ *  handler answers 503 rather than waiting. */
+#define SC_HTTP_DEFER_MAX 1024
+
+/**
+ * Runs on the loop thread that owns the request, exactly once per ticket, and never anywhere
+ * else.
+ *
+ * @p req is the deferred request and must be answered with sc_http_reply -- unless it is NULL,
+ * which is what a client that disconnected while the work was running looks like. It is NULL
+ * rather than absent so that @p work is released either way: a write that was committed is not
+ * undone by the client leaving, and something still has to give the slot back.
+ *
+ * @p work is what sc_http_defer was handed. Nothing here owns it.
+ */
+typedef void (*sc_http_resume_fn)(sc_http_req *req, void *work, void *user_data);
+
+/**
+ * Registers what answers deferred requests. Startup only, like a route, and one per server --
+ * the callback is a dispatcher over @p work, which is where "what was being waited for" lives.
+ */
+sc_status sc_http_on_resume(sc_http_server *server, sc_http_resume_fn fn, void *user_data);
+
+/**
+ * Takes the request out of the handler's hands. Call from the handler, on its own loop, and
+ * return 0 afterwards without replying.
+ *
+ * @p work is borrowed until the resume callback has run and is never touched here. Answers
+ * SC_ERR_QUEUE_FULL when this loop has SC_HTTP_DEFER_MAX requests outstanding, and
+ * SC_ERR_UNAVAILABLE when no resume callback was registered.
+ */
+sc_status sc_http_defer(sc_http_server *server, sc_http_req *req, void *work, sc_http_ticket *out);
+
+/**
+ * Says the work behind @p ticket is finished. Safe from any thread, and the only call here
+ * that is.
+ *
+ * It wakes the loop that owns the request; the reply is written there and not on the caller's
+ * thread. Answers SC_ERR_UNAVAILABLE for a ticket that is not outstanding, which is what a
+ * second resume of the same ticket is.
+ */
+sc_status sc_http_resume(sc_http_server *server, sc_http_ticket ticket);
 
 /* --- inside a handler ------------------------------------------------------------------ */
 

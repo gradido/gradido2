@@ -31,6 +31,17 @@ typedef struct sc_config {
     uint16_t federation_port; /* FEDERATION_PORT, legacy FEDERATION_MODULE_PORT 5010 */
     uint16_t dht_port;        /* DHT_PORT, legacy DHT_MODULE_PORT 5000 */
 
+    /*
+     * SERVER_THREADS: loops per HTTP role, one per core when unset.
+     *
+     * It is the number of cores and not more. Architecture.md, *Threading*, holds why: h2o is
+     * thread-per-loop, so an oversubscribed thread does not delay one request but every
+     * connection the kernel gave that loop. There is nothing to be gained by covering I/O wait
+     * here, because waiting that has a file descriptor never occupies a thread in the first
+     * place. The fallback backend serves on one whatever this says.
+     */
+    uint16_t server_threads;
+
     /* FEDERATION_DHT_TOPIC. Empty means peer discovery stays off, which is how legacy spells
      * it too -- see stage5.env, "if you set the value of FEDERATION_DHT_TOPIC". */
     char dht_topic[SC_CONFIG_TOPIC_MAX];

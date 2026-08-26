@@ -33,6 +33,20 @@ int32_t sc_atomic_load(const volatile int32_t *value)
 #endif
 }
 
+int sc_atomic_cas(volatile int32_t *value, int32_t expected, int32_t desired)
+{
+#if defined(_WIN32) && !defined(__GNUC__)
+    return InterlockedCompareExchange((volatile LONG *)value, (LONG)desired, (LONG)expected) ==
+           (LONG)expected;
+#else
+    /* Strong: this is not a loop, and a spurious failure would drop a resume on the floor.
+     * acq_rel on success, so the work the other thread finished is visible to the loop thread
+     * that picks the slot up. */
+    return __atomic_compare_exchange_n(value, &expected, desired, 0, __ATOMIC_ACQ_REL,
+                                       __ATOMIC_ACQUIRE);
+#endif
+}
+
 void sc_atomic_store(volatile int32_t *value, int32_t desired)
 {
 #if defined(_WIN32) && !defined(__GNUC__)
