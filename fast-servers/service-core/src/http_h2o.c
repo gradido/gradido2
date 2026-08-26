@@ -1,9 +1,17 @@
 /*
- * The h2o backend: one event loop per server, the evloop socket layer, no libuv.
+ * The h2o backend: one event loop per thread, the evloop socket layer, no libuv loop.
  *
- * The accept path follows h2o's own examples and the h2o prototype. What is different here
- * is that the loop is not `while (h2o_evloop_run(loop, INT32_MAX))`: it ticks, so the quit flag
- * a signal handler raised is seen within SC_RUNTIME_TICK_MS and every role shuts down together.
+ * The accept path follows h2o's own examples and the h2o prototype. Two things are different
+ * here and both are deliberate:
+ *
+ *   the loop is not `while (h2o_evloop_run(loop, INT32_MAX))`. It ticks, so the quit flag a
+ *   signal handler raised is seen within SC_RUNTIME_TICK_MS and every role shuts down together.
+ *
+ *   there are several of them. h2o is thread-per-loop -- one globalconf shared read-only, one
+ *   h2o_context_t per thread, and an h2o_req_t that belongs to exactly one of them and is never
+ *   handed to another. Each loop takes its own listening socket under SO_REUSEPORT and the
+ *   kernel does the balancing, which is what removes the accept lock and the thundering herd.
+ *   Architecture.md, *Threading*, holds why the count is the number of cores and not more.
  *
  * Idioms worth not rediscovering are recorded in AGENTS.md section 6, not here.
  */
@@ -18,9 +26,12 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <uv.h>
+
 #include "h2o.h"
 #include "h2o/http1.h"
 
+#include "http_defer.h"
 #include "service_core/log.h"
 
 /*
@@ -34,17 +45,58 @@ typedef struct {
     void *user_data;
 } sc_route_handler;
 
-struct sc_http_server {
-    h2o_globalconf_t config;
+/*
+ * One of these per thread. Everything h2o keeps per context is in here, and so is the deferred
+ * request table -- which is per loop rather than per server precisely so that resolving a
+ * ticket needs no lock: only this thread ever adds to it or takes from it.
+ */
+typedef struct sc_http_loop {
     h2o_context_t context;
     h2o_accept_ctx_t accept_ctx;
-    h2o_hostconf_t *hostconf;
+    h2o_multithread_queue_t *queue;
+    h2o_multithread_receiver_t receiver;
+    /* One message per slot, so a resume allocates nothing. A slot is resumed once, so its
+     * message is never on the queue twice. */
+    h2o_multithread_message_t messages[SC_HTTP_DEFER_MAX];
+    sc_defer_table defer;
+    struct sc_http_server *server;
+    uv_thread_t thread;
     int listen_fd;
+    int context_started;
+    int thread_started;
+    sc_status status;
+} sc_http_loop;
+
+struct sc_http_server {
+    h2o_globalconf_t config;
+    h2o_hostconf_t *hostconf;
+    /* Allocated at create, never resized. Not a fixed array: SC_HTTP_THREADS_MAX of these is
+     * megabytes, and this process is one whose resident size is a feature. */
+    sc_http_loop *loops;
+    uint16_t thread_count;
+    const sc_quit_flag *quit;
+    sc_http_resume_fn on_resume;
+    void *on_resume_data;
     char host[64];
     char role[32];
     uint16_t port;
-    int context_started;
 };
+
+/* The generator is how a deferred request learns that its client left: h2o calls `stop` when it
+ * disposes a request whose response never started, and clears the generator itself on a final
+ * send, so `stop` fires exactly when the answer did not. It is allocated from the request pool
+ * -- nothing on the request path mallocs -- and carries the ticket rather than a slot pointer,
+ * because by the time it fires the slot may belong to somebody else. */
+typedef struct {
+    h2o_generator_t super;
+    sc_http_loop *loop;
+    int32_t slot;
+    uint32_t generation;
+} sc_defer_generator;
+
+/* Defined below, beside the rest of the deferred-request machinery; registered up in
+ * sc_http_listen, which is where a loop is built. */
+static void on_resume_message(h2o_multithread_receiver_t *receiver, h2o_linklist_t *messages);
 
 const char *sc_http_backend_name(void)
 {
@@ -57,9 +109,22 @@ static int on_request(h2o_handler_t *self, h2o_req_t *req)
     return route->fn((sc_http_req *)req, route->user_data);
 }
 
+static uint16_t resolve_threads(uint16_t requested)
+{
+    unsigned int cores;
+
+    if (requested != 0)
+        return requested > SC_HTTP_THREADS_MAX ? SC_HTTP_THREADS_MAX : requested;
+    cores = uv_available_parallelism();
+    if (cores == 0)
+        return 1;
+    return cores > SC_HTTP_THREADS_MAX ? SC_HTTP_THREADS_MAX : (uint16_t)cores;
+}
+
 sc_http_server *sc_http_server_create(const sc_http_config *cfg)
 {
     sc_http_server *server;
+    uint16_t i;
 
     if (cfg == NULL || cfg->host == NULL || cfg->role == NULL)
         return NULL;
@@ -69,10 +134,22 @@ sc_http_server *sc_http_server_create(const sc_http_config *cfg)
     server = (sc_http_server *)calloc(1, sizeof(*server));
     if (server == NULL)
         return NULL;
-    server->listen_fd = -1;
     server->port = cfg->port;
     memcpy(server->host, cfg->host, strlen(cfg->host) + 1);
     memcpy(server->role, cfg->role, strlen(cfg->role) + 1);
+
+    server->thread_count = resolve_threads(cfg->threads);
+    server->loops = (sc_http_loop *)calloc(server->thread_count, sizeof(*server->loops));
+    if (server->loops == NULL) {
+        free(server);
+        return NULL;
+    }
+    for (i = 0; i != server->thread_count; ++i) {
+        server->loops[i].server = server;
+        server->loops[i].listen_fd = -1;
+        server->loops[i].status = SC_OK;
+        sc_defer_table_init(&server->loops[i].defer, (uint8_t)i);
+    }
 
     h2o_config_init(&server->config);
     /* h2o's own default is a gigabyte. The fallback backend stops at SC_HTTP_MAX_BODY, and a
@@ -102,14 +179,34 @@ sc_http_server *sc_http_server_create(const sc_http_config *cfg)
 
 void sc_http_server_destroy(sc_http_server *server)
 {
+    uint16_t i;
+
     if (server == NULL)
         return;
-    if (server->context_started)
-        h2o_context_dispose(&server->context);
-    if (server->listen_fd != -1)
-        (void)close(server->listen_fd);
+    for (i = 0; i != server->thread_count; ++i) {
+        sc_http_loop *loop = &server->loops[i];
+        /* The queue owns a socket on this loop, so it goes before the context that owns the
+         * loop. Nothing is running by now: sc_http_run joined every thread before returning. */
+        if (loop->queue != NULL) {
+            h2o_multithread_unregister_receiver(loop->queue, &loop->receiver);
+            h2o_multithread_destroy_queue(loop->queue);
+        }
+        if (loop->context_started) {
+            h2o_loop_t *evloop = loop->context.loop;
+            h2o_context_dispose(&loop->context);
+            h2o_evloop_destroy(evloop);
+        }
+        if (loop->listen_fd != -1)
+            (void)close(loop->listen_fd);
+    }
+    free(server->loops);
     h2o_config_dispose(&server->config);
     free(server);
+}
+
+uint16_t sc_http_thread_count(const sc_http_server *server)
+{
+    return server != NULL ? server->thread_count : 0;
 }
 
 sc_status sc_http_route(sc_http_server *server, const char *path, sc_http_handler_fn fn,
@@ -130,23 +227,60 @@ sc_status sc_http_route(sc_http_server *server, const char *path, sc_http_handle
     return SC_OK;
 }
 
+sc_status sc_http_on_resume(sc_http_server *server, sc_http_resume_fn fn, void *user_data)
+{
+    if (server == NULL || fn == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+    server->on_resume = fn;
+    server->on_resume_data = user_data;
+    return SC_OK;
+}
+
 static void on_accept(h2o_socket_t *listener, const char *err)
 {
-    sc_http_server *server = (sc_http_server *)listener->data;
+    sc_http_loop *loop = (sc_http_loop *)listener->data;
     h2o_socket_t *sock;
 
     if (err != NULL)
         return;
     if ((sock = h2o_evloop_socket_accept(listener)) == NULL)
         return;
-    h2o_accept(&server->accept_ctx, sock);
+    h2o_accept(&loop->accept_ctx, sock);
+}
+
+/**
+ * One listening socket per loop, each with SO_REUSEPORT: the kernel spreads connections over
+ * them. Sharing one socket instead would put every loop on one accept queue, which is the
+ * thundering herd this arrangement exists to avoid.
+ *
+ * The spreading is Linux's, and this is the one place the fast path assumes the machine it is
+ * deployed on. Darwin lets the sockets bind and hands new connections to the last one bound
+ * rather than distributing them, so a macOS build serves correctly on one loop while the others
+ * idle. That is a development machine, and Architecture.md, *Windows*, already says where this
+ * server runs.
+ */
+static sc_status bind_one(sc_http_server *server, sc_http_loop *loop,
+                          const struct sockaddr_in *addr)
+{
+    int reuse = 1;
+
+    loop->listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (loop->listen_fd == -1 ||
+        setsockopt(loop->listen_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) != 0 ||
+        setsockopt(loop->listen_fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse)) != 0 ||
+        bind(loop->listen_fd, (const struct sockaddr *)addr, sizeof(*addr)) != 0 ||
+        listen(loop->listen_fd, SOMAXCONN) != 0) {
+        sc_log_error(SC_CAT_STARTUP, "server.listen.failed", "%s cannot listen on %s:%u: %s",
+                     server->role, server->host, (unsigned)server->port, strerror(errno));
+        return SC_ERR_NETWORK;
+    }
+    return SC_OK;
 }
 
 sc_status sc_http_listen(sc_http_server *server)
 {
     struct sockaddr_in addr;
-    h2o_socket_t *sock;
-    int reuse = 1;
+    uint16_t i;
 
     if (server == NULL)
         return SC_ERR_INVALID_ARGUMENT;
@@ -160,46 +294,202 @@ sc_status sc_http_listen(sc_http_server *server)
         return SC_ERR_INVALID_ARGUMENT;
     }
 
-    server->listen_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server->listen_fd == -1 ||
-        setsockopt(server->listen_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) != 0 ||
-        bind(server->listen_fd, (struct sockaddr *)&addr, sizeof(addr)) != 0 ||
-        listen(server->listen_fd, SOMAXCONN) != 0) {
-        sc_log_error(SC_CAT_STARTUP, "server.listen.failed", "%s cannot listen on %s:%u: %s",
-                     server->role, server->host, (unsigned)server->port, strerror(errno));
-        return SC_ERR_NETWORK;
+    /* Every socket is bound here, on the calling thread, before any of them serves. A port
+     * already taken is then one error line at startup rather than N of them from N threads. */
+    for (i = 0; i != server->thread_count; ++i) {
+        sc_http_loop *loop = &server->loops[i];
+        h2o_socket_t *sock;
+        sc_status status = bind_one(server, loop, &addr);
+
+        if (status != SC_OK)
+            return status;
+
+        /* The context owns the loop; both are created here rather than in _create so that a
+         * server that never got its port does not leave event loops behind. */
+        h2o_context_init(&loop->context, h2o_evloop_create(), &server->config);
+        loop->context_started = 1;
+        loop->accept_ctx.ctx = &loop->context;
+        loop->accept_ctx.hosts = server->config.hosts;
+
+        loop->queue = h2o_multithread_create_queue(loop->context.loop);
+        if (loop->queue == NULL)
+            return SC_ERR_NO_MEMORY;
+        h2o_multithread_register_receiver(loop->queue, &loop->receiver, on_resume_message);
+
+        sock = h2o_evloop_socket_create(loop->context.loop, loop->listen_fd,
+                                        H2O_SOCKET_FLAG_DONT_READ);
+        if (sock == NULL)
+            return SC_ERR_NETWORK;
+        sock->data = loop;
+        h2o_socket_read_start(sock, on_accept);
     }
 
-    /* The context owns the loop; both are created here rather than in _create so that a server
-     * that never got its port does not leave an event loop behind. */
-    h2o_context_init(&server->context, h2o_evloop_create(), &server->config);
-    server->context_started = 1;
-    server->accept_ctx.ctx = &server->context;
-    server->accept_ctx.hosts = server->config.hosts;
-
-    sock = h2o_evloop_socket_create(server->context.loop, server->listen_fd,
-                                    H2O_SOCKET_FLAG_DONT_READ);
-    if (sock == NULL)
-        return SC_ERR_NETWORK;
-    sock->data = server;
-    h2o_socket_read_start(sock, on_accept);
-
-    sc_log_info(SC_CAT_STARTUP, "server.listen", "%s listening on http://%s:%u", server->role,
-                server->host, (unsigned)server->port);
+    sc_log_info(SC_CAT_STARTUP, "server.listen", "%s listening on http://%s:%u, %u thread%s",
+                server->role, server->host, (unsigned)server->port, (unsigned)server->thread_count,
+                server->thread_count == 1 ? "" : "s");
     return SC_OK;
+}
+
+static void run_loop(void *arg)
+{
+    sc_http_loop *loop = (sc_http_loop *)arg;
+
+    while (!sc_quit_requested(loop->server->quit)) {
+        if (h2o_evloop_run(loop->context.loop, SC_RUNTIME_TICK_MS) != 0) {
+            loop->status = SC_ERR_NETWORK;
+            return;
+        }
+    }
 }
 
 sc_status sc_http_run(sc_http_server *server, const sc_quit_flag *quit)
 {
+    sc_status status = SC_OK;
+    uint16_t i;
+
     if (server == NULL || quit == NULL)
         return SC_ERR_INVALID_ARGUMENT;
-    while (!sc_quit_requested(quit)) {
-        if (h2o_evloop_run(server->context.loop, SC_RUNTIME_TICK_MS) != 0)
-            return SC_ERR_NETWORK;
+    server->quit = quit;
+
+    /* Loop 0 runs on the calling thread. A role therefore still owns exactly the one thread
+     * main gave it, and the others are this function's own business from start to join. */
+    for (i = 1; i != server->thread_count; ++i) {
+        if (uv_thread_create(&server->loops[i].thread, run_loop, &server->loops[i]) != 0) {
+            sc_log_error(SC_CAT_STARTUP, "server.thread.failed", "%s could not start loop %u of %u",
+                         server->role, (unsigned)i, (unsigned)server->thread_count);
+            /* The threads that did start are joined below; raising the flag is what brings
+             * them back. A server serving on fewer loops than it was asked for is not a
+             * degraded mode this offers -- it is a startup failure. */
+            sc_runtime_request_quit();
+            status = SC_ERR_NETWORK;
+            break;
+        }
+        server->loops[i].thread_started = 1;
     }
+
+    if (status == SC_OK)
+        run_loop(&server->loops[0]);
+
+    for (i = 1; i != server->thread_count; ++i) {
+        if (!server->loops[i].thread_started)
+            continue;
+        (void)uv_thread_join(&server->loops[i].thread);
+    }
+    for (i = 0; i != server->thread_count && status == SC_OK; ++i)
+        status = server->loops[i].status;
+
     sc_log_info(SC_CAT_STARTUP, "server.stop", "%s stopped", server->role);
+    return status;
+}
+
+/* --- answering later -------------------------------------------------------------------- */
+
+static void deliver(sc_http_loop *loop, int32_t slot)
+{
+    sc_http_req *req = NULL;
+    void *work = NULL;
+
+    /* The slot goes back before the callback runs, so a callback that defers again -- or one
+     * that takes its time -- does not hold a slot it no longer needs. Both values were copied
+     * out, so nothing here reads the slot afterwards. */
+    sc_defer_release(&loop->defer, slot, &req, &work);
+    loop->server->on_resume(req, work, loop->server->on_resume_data);
+}
+
+static void on_resume_message(h2o_multithread_receiver_t *receiver, h2o_linklist_t *messages)
+{
+    sc_http_loop *loop = H2O_STRUCT_FROM_MEMBER(sc_http_loop, receiver, receiver);
+
+    while (!h2o_linklist_is_empty(messages)) {
+        h2o_multithread_message_t *message =
+            H2O_STRUCT_FROM_MEMBER(h2o_multithread_message_t, link, messages->next);
+        /* Which slot this is, is where the message sits in the array. One message per slot is
+         * what keeps a resume from allocating. */
+        int32_t slot = (int32_t)(message - loop->messages);
+
+        h2o_linklist_unlink(&message->link);
+        deliver(loop, slot);
+    }
+}
+
+static void on_defer_stop(h2o_generator_t *super, h2o_req_t *req)
+{
+    sc_defer_generator *generator = (sc_defer_generator *)super;
+    (void)req;
+
+    /* The client is gone. The slot stays taken -- a worker is still holding its ticket and its
+     * resume has to land somewhere -- and only the request is forgotten. */
+    sc_defer_forget(&generator->loop->defer, generator->slot, generator->generation);
+}
+
+static sc_http_loop *loop_of(sc_http_server *server, const h2o_req_t *req)
+{
+    uint16_t i;
+
+    /* A linear walk over as many contexts as the machine has cores, on the path where
+     * something is about to wait for a database. It costs nothing worth a second structure. */
+    for (i = 0; i != server->thread_count; ++i) {
+        if (req->conn->ctx == &server->loops[i].context)
+            return &server->loops[i];
+    }
+    return NULL;
+}
+
+sc_status sc_http_defer(sc_http_server *server, sc_http_req *req, void *work, sc_http_ticket *out)
+{
+    h2o_req_t *r = (h2o_req_t *)req;
+    sc_defer_generator *generator;
+    sc_http_loop *loop;
+    sc_http_ticket ticket;
+
+    if (server == NULL || r == NULL || out == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+    if (server->on_resume == NULL)
+        return SC_ERR_UNAVAILABLE;
+    if ((loop = loop_of(server, r)) == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+
+    ticket = sc_defer_arm(&loop->defer, req, work);
+    if (ticket == 0)
+        return SC_ERR_QUEUE_FULL;
+
+    /* The generator is registered before the ticket leaves this function, which is the whole of
+     * the rule in AGENTS.md section 6: a client that disconnects while the work runs must find
+     * a `stop` callback already in place, or it writes into a request nobody owns any more. */
+    generator = h2o_mem_alloc_pool(&r->pool, sc_defer_generator, 1);
+    generator->super.proceed = NULL;
+    generator->super.stop = on_defer_stop;
+    generator->loop = loop;
+    generator->slot = sc_defer_index_of(ticket);
+    generator->generation = sc_defer_generation_of(ticket);
+    /* This is what makes the request outlive the handler. It snapshots res.status into
+     * res.original for the access loggers, of which this server registers none. */
+    h2o_start_response(r, &generator->super);
+
+    *out = ticket;
     return SC_OK;
 }
+
+sc_status sc_http_resume(sc_http_server *server, sc_http_ticket ticket)
+{
+    sc_http_loop *loop;
+    uint8_t index;
+    int32_t slot;
+
+    if (server == NULL || ticket == 0)
+        return SC_ERR_INVALID_ARGUMENT;
+    index = sc_defer_loop_of(ticket);
+    if (index >= server->thread_count)
+        return SC_ERR_INVALID_ARGUMENT;
+    loop = &server->loops[index];
+
+    if (!sc_defer_claim(&loop->defer, ticket, &slot))
+        return SC_ERR_UNAVAILABLE;
+    h2o_multithread_send_message(&loop->receiver, &loop->messages[slot]);
+    return SC_OK;
+}
+
+/* --- inside a handler ------------------------------------------------------------------- */
 
 int sc_http_method_is(const sc_http_req *req, const char *method)
 {
@@ -294,6 +584,17 @@ sc_status sc_http_reply(sc_http_req *req, int status, const char *content_type, 
     r->res.content_length = body_len;
     h2o_add_header(&r->pool, &r->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, content_type,
                    strlen(content_type));
+
+    if (r->_generator != NULL) {
+        /* A deferred request: sc_http_defer already started the response, and h2o_send_inline
+         * asserts that nothing has. Send directly instead -- h2o clears the generator on a
+         * final send, which is also what keeps `stop` from firing on a request that was
+         * answered. The strdup is the same one h2o_send_inline does, and for the same reason:
+         * the buffer has to outlive this call. */
+        h2o_iovec_t buf = h2o_strdup(&r->pool, body, body_len);
+        h2o_send(r, &buf, 1, H2O_SEND_STATE_FINAL);
+        return SC_OK;
+    }
     /* h2o_send_inline copies into the request pool itself, which is what makes it safe to hand
      * it the caller's stack buffer: the pool lives exactly as long as the request. */
     h2o_send_inline(r, body, body_len);

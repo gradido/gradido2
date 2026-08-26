@@ -16,6 +16,21 @@ FS_HTTP_PROBE=../../build/fallback/bin/http-probe FS_HTTP_PROBE_PORT=17901 bun t
 `FS_HTTP_PROBE_PORT` the port (default 17899). The suite prints which backend answered, so a
 failure names it.
 
+The probe is started with four loops rather than one per core, so that every test in the suite
+runs against a server whose connections are spread over several event loops — and does so
+identically on a one-core build machine and a sixteen-core one. The fallback clamps that to one
+and says so, which is asserted rather than assumed.
+
+Under a sanitizer, point `TSAN_OPTIONS` or `UBSAN_OPTIONS` at a `log_path`: the harness captures
+the probe's stderr and only prints it when the probe dies, so a sanitizer report on a passing run
+would otherwise be invisible.
+
+```sh
+zig build -Dtests -Dsanitize=thread -p build/tsan
+FS_HTTP_PROBE=../../build/tsan/bin/http-probe FS_HTTP_PROBE_PORT=17904 \
+  TSAN_OPTIONS=log_path=/tmp/tsan.report bun test
+```
+
 ## Why raw sockets, and why a probe binary
 
 `fetch` would test bun's idea of HTTP. What is interesting here is what happens to the bytes: a
@@ -49,6 +64,16 @@ so that none of them can change unnoticed.
 | a transfer encoding other than chunked | 400 | 501 |
 | a non-numeric `Content-Length` | 400 | 413 |
 | a client that never stops sending | keeps taking it | drain bounded at 2 s / 256 KiB |
+| noticing a client left mid-request | not until the write fails | at once, the EOF is read |
+| `SERVER_THREADS` | as many loops as asked for | clamped to 1, logged |
+
+The disconnect row is the one to read together with `/defer`. h2o stops reading a connection
+while a response is pending, so a client that closes after its request is usually not seen until
+the answer is written; the fallback keeps reading while a request is deferred and sees the EOF,
+so its resume callback is handed a NULL request. Neither is wrong and nothing may depend on
+which happens — what both guarantee is that the request stays alive until it is answered, so a
+worker's resume always lands somewhere. `answering later` in the suite asserts exactly that
+split.
 
 The first row is the one to weigh before either backend goes behind a proxy: it is the classic
 request smuggling setup, and the two resolve it differently. Both are defensible — h2o follows

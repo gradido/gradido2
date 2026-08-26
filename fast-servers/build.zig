@@ -1049,6 +1049,10 @@ pub fn build(b: *std.Build) void {
             .flags = &c_flags,
         });
         probe.linkLibrary(service_core);
+        // uv.h directly: the probe owns the worker thread behind /defer, which is what makes
+        // sc_http_defer testable at all. linkLibrary does not carry a dependency's header path
+        // through service_core, so it is asked for here.
+        probe.linkLibrary(uv);
         probe.linkLibrary(gbc);
         probe.linkLibrary(sodium);
         linkHttpBackend(probe, http_backend_lib, http_system_libs);

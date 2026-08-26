@@ -21,6 +21,7 @@
 
 #include <uv.h>
 
+#include "http_defer.h"
 #include "picohttpparser.h"
 #include "service_core/log.h"
 
@@ -51,10 +52,18 @@ struct sc_http_server {
     uv_loop_t loop;
     uv_tcp_t listener;
     uv_timer_t quit_timer;
+    /* What a worker thread touches, and the only thing here that it may. uv_async_send is
+     * documented as safe from any thread; nothing else in libuv's loop-bound half is. */
+    uv_async_t resume_async;
     const sc_quit_flag *quit;
 
     sc_route routes[MAX_ROUTES];
     size_t route_count;
+
+    /* One loop, so one table, and its loop index is always zero. */
+    sc_defer_table defer;
+    sc_http_resume_fn on_resume;
+    void *on_resume_data;
 
     char host[64];
     char role[32];
@@ -65,8 +74,9 @@ struct sc_http_server {
 
 /*
  * What a handler sees. It carries the parsed head, the collected body and the response the
- * handler is filling in -- and it lives on the stack of the read callback, so nothing a handler
- * is given outlives its own call. That is the same promise h2o's request pool makes.
+ * handler is filling in, and it lives inside the connection -- so it is valid for exactly as
+ * long as the request is, which is the handler's own call unless the handler deferred it. That
+ * is the same promise h2o's request pool makes.
  */
 struct sc_http_req {
     const char *method;
@@ -94,6 +104,17 @@ struct conn {
     uv_timer_t drain_timer;
     int open_handles; /* the tcp and the timer; the memory goes when both are shut */
     sc_http_server *server;
+
+    /*
+     * The request lives here rather than on the read callback's stack, and that is what makes
+     * deferring possible at all: a handler that answers later needs its request to outlive the
+     * call it was made in. Everything in it still points into `in`, which is why reading is
+     * parsed but not consumed while a request is deferred -- see process().
+     */
+    struct sc_http_req req;
+    int deferred;             /* a handler took the request and has not answered yet */
+    sc_http_ticket ticket;    /* what a worker is holding while it is deferred */
+    size_t deferred_wire_len; /* what to consume once the answer goes out */
 
     char in[REQ_BUF];
     size_t in_used;
@@ -176,6 +197,14 @@ static void teardown(struct conn *c)
     if (c->closing)
         return;
     c->closing = 1;
+    if (c->deferred) {
+        /* A worker is still holding this request's ticket. Its slot stays taken so the resume
+         * has somewhere to land; what goes is the request, and the resume callback will be
+         * told the client is gone rather than handed a connection that is being freed. */
+        c->deferred = 0;
+        sc_defer_forget(&c->server->defer, sc_defer_index_of(c->ticket),
+                        sc_defer_generation_of(c->ticket));
+    }
     uv_timer_stop(&c->drain_timer);
     uv_close((uv_handle_t *)&c->drain_timer, on_handle_closed);
     uv_close((uv_handle_t *)&c->handle, on_handle_closed);
@@ -529,19 +558,23 @@ static void dispatch(struct conn *c, struct sc_http_req *req)
 
 static void process(struct conn *c)
 {
-    while (!c->writing && !c->close_after_write) {
-        struct sc_http_req req;
+    /* A deferred request has not been answered, so its bytes are still in the buffer and its
+     * pointers still point into them. Nothing may be parsed or consumed until it is done --
+     * and nothing may be answered either, because HTTP/1.1 responses go out in request order.
+     * Reading stays on, which is how an EOF is still noticed while a worker is busy. */
+    while (!c->writing && !c->close_after_write && !c->deferred) {
+        struct sc_http_req *req = &c->req;
         size_t num = MAX_HEADERS;
         size_t wire_len; /* what this request occupies, head included */
         int keep;
 
-        memset(&req, 0, sizeof(req));
+        memset(req, 0, sizeof(*req));
 
         if (c->head_len == 0) {
             size_t te_len = 0, cl_len = 0;
             const char *te, *cl_hdr;
-            int r = phr_parse_request(c->in, c->in_used, &req.method, &req.method_len, &req.path,
-                                      &req.path_len, &req.minor_version, req.headers, &num,
+            int r = phr_parse_request(c->in, c->in_used, &req->method, &req->method_len, &req->path,
+                                      &req->path_len, &req->minor_version, req->headers, &num,
                                       c->last_len);
             if (r == -2) { /* the head is not complete yet */
                 c->last_len = c->in_used;
@@ -554,10 +587,10 @@ static void process(struct conn *c)
                 return;
             }
             c->head_len = (size_t)r;
-            req.num_headers = num;
+            req->num_headers = num;
 
-            te = header_of(&req, "transfer-encoding", &te_len);
-            cl_hdr = header_of(&req, "content-length", &cl_len);
+            te = header_of(req, "transfer-encoding", &te_len);
+            cl_hdr = header_of(req, "content-length", &cl_len);
 
             if (te != NULL) {
                 /* Both headers on one request is how a proxy and a server are made to disagree
@@ -571,7 +604,7 @@ static void process(struct conn *c)
                     fail(c, 501, "only chunked transfer encoding\n");
                     return;
                 }
-                if (req.minor_version < 1) {
+                if (req->minor_version < 1) {
                     fail(c, 400, "chunked needs HTTP/1.1\n");
                     return;
                 }
@@ -581,7 +614,7 @@ static void process(struct conn *c)
                 c->ch_remaining = 0;
                 c->body_len = 0;
             } else {
-                long long n = content_length_of(&req);
+                long long n = content_length_of(req);
                 if (n < 0) {
                     fail(c, 413, "bad or oversized Content-Length\n");
                     return;
@@ -593,9 +626,9 @@ static void process(struct conn *c)
             /* The head was parsed on an earlier read; parse it again off the same bytes, which
              * is cheap and keeps the pointers valid. The head is never written over -- the
              * decoded body starts after it. */
-            phr_parse_request(c->in, c->in_used, &req.method, &req.method_len, &req.path,
-                              &req.path_len, &req.minor_version, req.headers, &num, 0);
-            req.num_headers = num;
+            phr_parse_request(c->in, c->in_used, &req->method, &req->method_len, &req->path,
+                              &req->path_len, &req->minor_version, req->headers, &num, 0);
+            req->num_headers = num;
         }
 
         if (c->framing == FRAME_CHUNKED) {
@@ -612,28 +645,34 @@ static void process(struct conn *c)
                 break;
             }
             wire_len = c->ch_read;
-            req.body_len = c->body_len;
+            req->body_len = c->body_len;
         } else {
             if (c->in_used - c->head_len < c->content_len)
                 return; /* body still arriving */
             wire_len = c->head_len + c->content_len;
-            req.body_len = c->content_len;
+            req->body_len = c->content_len;
         }
-        req.body = req.body_len != 0 ? c->in + c->head_len : NULL;
+        req->body = req->body_len != 0 ? c->in + c->head_len : NULL;
 
-        dispatch(c, &req);
-        if (!req.replied) {
+        dispatch(c, req);
+        if (c->deferred) {
+            /* The handler took it. Remember what to drop once the answer goes out -- by then
+             * the head will not be re-parsed and nothing else knows how long this request was. */
+            c->deferred_wire_len = wire_len;
+            return;
+        }
+        if (!req->replied) {
             /* A route that accepted a request must have answered it. One that returns 0 without
              * replying would otherwise leave the client waiting, which is harder to find than a
              * 500 in the log. */
-            req.status = 500;
-            req.content_type = "text/plain";
-            req.reply_len = 0;
+            req->status = 500;
+            req->content_type = "text/plain";
+            req->reply_len = 0;
         }
 
-        keep = wants_keep_alive(&req);
+        keep = wants_keep_alive(req);
         /* Copies the answer out before the buffer moves. */
-        respond(c, req.status, req.content_type, req.reply, req.reply_len, keep);
+        respond(c, req->status, req->content_type, req->reply, req->reply_len, keep);
         consume(c, wire_len);
     }
 }
@@ -682,6 +721,104 @@ static void on_connection(uv_stream_t *listener, int status)
     uv_read_start((uv_stream_t *)&c->handle, on_alloc, on_read);
 }
 
+/* --- answering later -------------------------------------------------------------------- */
+
+/*
+ * One loop and one thread, so all of this is the wake-up and nothing else: a worker claims the
+ * slot from its own thread and uv_async_send brings the answer back here, where the request is.
+ * That an async coalesces is why delivery walks the table -- see sc_defer_next_resuming.
+ */
+
+static struct conn *conn_of(sc_http_req *req)
+{
+    return (struct conn *)((char *)req - offsetof(struct conn, req));
+}
+
+static void deliver(sc_http_server *server, int32_t slot)
+{
+    sc_http_req *req = NULL;
+    void *work = NULL;
+    struct conn *c;
+    int keep;
+
+    sc_defer_release(&server->defer, slot, &req, &work);
+    server->on_resume(req, work, server->on_resume_data);
+
+    /* NULL is a client that left while the work ran. The connection is already on its way out
+     * and the work has been handed back, which is all that was owed. */
+    if (req == NULL)
+        return;
+
+    c = conn_of(req);
+    c->deferred = 0;
+    c->ticket = 0;
+    if (!c->req.replied) {
+        /* Same rule as an ordinary handler: taking a request and not answering it leaves a
+         * client waiting, and that is worse to find than a 500 in the log. */
+        c->req.status = 500;
+        c->req.content_type = "text/plain";
+        c->req.reply_len = 0;
+    }
+    keep = wants_keep_alive(&c->req);
+    respond(c, c->req.status, c->req.content_type, c->req.reply, c->req.reply_len, keep);
+    consume(c, c->deferred_wire_len);
+}
+
+static void on_resume_async(uv_async_t *async)
+{
+    sc_http_server *server = (sc_http_server *)async->data;
+    int32_t slot = -1;
+
+    /* Restart the walk each time rather than continue past the slot just delivered: delivering
+     * frees the slot, and a resume that arrived while the callback ran may have taken it. */
+    while ((slot = sc_defer_next_resuming(&server->defer, 0)) >= 0)
+        deliver(server, slot);
+}
+
+sc_status sc_http_on_resume(sc_http_server *server, sc_http_resume_fn fn, void *user_data)
+{
+    if (server == NULL || fn == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+    server->on_resume = fn;
+    server->on_resume_data = user_data;
+    return SC_OK;
+}
+
+sc_status sc_http_defer(sc_http_server *server, sc_http_req *req, void *work, sc_http_ticket *out)
+{
+    struct conn *c;
+    sc_http_ticket ticket;
+
+    if (server == NULL || req == NULL || out == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+    if (server->on_resume == NULL)
+        return SC_ERR_UNAVAILABLE;
+
+    ticket = sc_defer_arm(&server->defer, req, work);
+    if (ticket == 0)
+        return SC_ERR_QUEUE_FULL;
+
+    c = conn_of(req);
+    c->deferred = 1;
+    c->ticket = ticket;
+    *out = ticket;
+    return SC_OK;
+}
+
+sc_status sc_http_resume(sc_http_server *server, sc_http_ticket ticket)
+{
+    int32_t slot;
+
+    if (server == NULL || ticket == 0)
+        return SC_ERR_INVALID_ARGUMENT;
+    if (sc_defer_loop_of(ticket) != 0)
+        return SC_ERR_INVALID_ARGUMENT; /* this backend has one loop and it is loop zero */
+    if (!sc_defer_claim(&server->defer, ticket, &slot))
+        return SC_ERR_UNAVAILABLE;
+    uv_async_send(&server->resume_async);
+    return SC_OK;
+}
+
 /* --- the sc_http surface ---------------------------------------------------------------- */
 
 sc_http_server *sc_http_server_create(const sc_http_config *cfg)
@@ -706,7 +843,33 @@ sc_http_server *sc_http_server_create(const sc_http_config *cfg)
     server->port = cfg->port;
     memcpy(server->host, cfg->host, strlen(cfg->host) + 1);
     memcpy(server->role, cfg->role, strlen(cfg->role) + 1);
+
+    /*
+     * One loop, whatever was asked for, and it says so rather than failing.
+     *
+     * Refusing a thread count that h2o accepts would break the one promise the seam makes --
+     * that the same configuration starts both backends -- and this build exists so that the
+     * roles are runnable where h2o will not compile, not so that it can carry load. AGENTS.md
+     * section 3b: the fallback is not a deployment option.
+     */
+    if (cfg->threads > 1)
+        sc_log_warn(SC_CAT_STARTUP, "server.threads.clamped",
+                    "%s was asked for %u threads; this backend serves on one", server->role,
+                    (unsigned)cfg->threads);
+
+    sc_defer_table_init(&server->defer, 0);
+    if (uv_async_init(&server->loop, &server->resume_async, on_resume_async) != 0) {
+        (void)uv_loop_close(&server->loop);
+        free(server);
+        return NULL;
+    }
+    server->resume_async.data = server;
     return server;
+}
+
+uint16_t sc_http_thread_count(const sc_http_server *server)
+{
+    return server != NULL ? 1 : 0;
 }
 
 static void close_walking_handle(uv_handle_t *handle, void *arg)

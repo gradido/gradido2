@@ -20,11 +20,192 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <uv.h>
+
 #include "service_core/http.h"
 #include "service_core/log.h"
 #include "service_core/runtime.h"
 
 static sc_quit_flag g_quit;
+
+/*
+ * The worker behind /defer, and the whole reason this route exists: sc_http_defer and
+ * sc_http_resume cannot be tested from the loop that owns the request, because the thing being
+ * tested is that the answer comes back to that loop from somewhere else.
+ *
+ * It is the shape a real one has -- a fixed pool taken under a lock, a condition variable, a
+ * worker that sends the ticket back when its work is done -- in as few lines as still make the
+ * point. Nothing allocates after startup here either.
+ */
+#define WORK_MAX 64
+
+typedef struct work_item {
+    sc_http_ticket ticket;
+    unsigned delay_ms;
+    char echo[128];
+    size_t echo_len;
+    int used;
+} work_item;
+
+static struct {
+    uv_mutex_t lock;
+    uv_cond_t wake;
+    uv_thread_t thread;
+    work_item items[WORK_MAX];
+    int32_t queue[WORK_MAX];
+    int head, tail, count;
+    int stop;
+    /* Deferred requests whose client had gone by the time the work finished. The suite reads
+     * it back from /defer-stats, because a resume that arrives at nobody is otherwise
+     * indistinguishable from one that never arrived. */
+    unsigned abandoned;
+    unsigned answered;
+    sc_http_server *server;
+} g_worker;
+
+static work_item *take_item(void)
+{
+    int i;
+
+    uv_mutex_lock(&g_worker.lock);
+    for (i = 0; i != WORK_MAX; ++i) {
+        if (!g_worker.items[i].used) {
+            g_worker.items[i].used = 1;
+            uv_mutex_unlock(&g_worker.lock);
+            return &g_worker.items[i];
+        }
+    }
+    uv_mutex_unlock(&g_worker.lock);
+    return NULL;
+}
+
+static void give_back(work_item *item)
+{
+    uv_mutex_lock(&g_worker.lock);
+    item->used = 0;
+    uv_mutex_unlock(&g_worker.lock);
+}
+
+static void push(work_item *item)
+{
+    uv_mutex_lock(&g_worker.lock);
+    g_worker.queue[g_worker.tail] = (int32_t)(item - g_worker.items);
+    g_worker.tail = (g_worker.tail + 1) % WORK_MAX;
+    ++g_worker.count;
+    uv_cond_signal(&g_worker.wake);
+    uv_mutex_unlock(&g_worker.lock);
+}
+
+static void run_worker(void *arg)
+{
+    (void)arg;
+    for (;;) {
+        work_item *item;
+
+        uv_mutex_lock(&g_worker.lock);
+        while (g_worker.count == 0 && !g_worker.stop)
+            uv_cond_wait(&g_worker.wake, &g_worker.lock);
+        if (g_worker.stop && g_worker.count == 0) {
+            uv_mutex_unlock(&g_worker.lock);
+            return;
+        }
+        item = &g_worker.items[g_worker.queue[g_worker.head]];
+        g_worker.head = (g_worker.head + 1) % WORK_MAX;
+        --g_worker.count;
+        uv_mutex_unlock(&g_worker.lock);
+
+        /* Standing in for a commit: time spent off the loop, on this thread. */
+        if (item->delay_ms != 0)
+            sc_runtime_sleep_ms(item->delay_ms);
+        (void)sc_http_resume(g_worker.server, item->ticket);
+    }
+}
+
+/** Runs on the loop that owns the request, and nowhere else. */
+static void on_resume(sc_http_req *req, void *work, void *user_data)
+{
+    work_item *item = (work_item *)work;
+    (void)user_data;
+
+    uv_mutex_lock(&g_worker.lock);
+    if (req != NULL)
+        ++g_worker.answered;
+    else
+        ++g_worker.abandoned;
+    uv_mutex_unlock(&g_worker.lock);
+
+    /* NULL is a client that hung up while the worker was busy. The work still happened; there
+     * is just nobody left to tell, and the item has to go back either way. */
+    if (req != NULL)
+        (void)sc_http_reply(req, 200, "text/plain", item->echo, item->echo_len);
+    give_back(item);
+}
+
+/**
+ * Answers later, from another thread. `X-Defer-Ms` says how much later; the body comes back as
+ * the answer, so the suite can see that the request survived the wait intact.
+ */
+static int handle_defer(sc_http_req *req, void *user_data)
+{
+    sc_http_server *server = (sc_http_server *)user_data;
+    size_t body_len = 0, header_len = 0;
+    const char *body = sc_http_body(req, &body_len);
+    const char *delay = sc_http_header(req, "x-defer-ms", &header_len);
+    work_item *item;
+    sc_status status;
+
+    item = take_item();
+    if (item == NULL) {
+        (void)sc_http_reply(req, 503, "text/plain", "no worker slot\n", 15);
+        return 0;
+    }
+    item->delay_ms = 0;
+    if (delay != NULL && header_len != 0 && header_len < 8) {
+        char number[8];
+        memcpy(number, delay, header_len);
+        number[header_len] = '\0';
+        item->delay_ms = (unsigned)strtoul(number, NULL, 10);
+    }
+    item->echo_len = body_len < sizeof(item->echo) ? body_len : sizeof(item->echo);
+    if (item->echo_len != 0)
+        memcpy(item->echo, body, item->echo_len);
+
+    /* Deferring first and queueing second is not a preference: the worker needs the ticket, and
+     * a ticket that reached it before the request was deferred would name nothing. */
+    status = sc_http_defer(server, req, item, &item->ticket);
+    if (status != SC_OK) {
+        give_back(item);
+        /* A full table answers rather than waits -- Architecture.md, *The write must be
+         * answered, not acknowledged*. */
+        (void)sc_http_reply(req, 503, "text/plain", "deferral refused\n", 17);
+        return 0;
+    }
+    push(item);
+    return 0;
+}
+
+/** What the deferred requests did, so the suite can see the ones nobody was left to answer. */
+static int handle_defer_stats(sc_http_req *req, void *user_data)
+{
+    char out[128];
+    int written;
+    unsigned answered, abandoned;
+    (void)user_data;
+
+    uv_mutex_lock(&g_worker.lock);
+    answered = g_worker.answered;
+    abandoned = g_worker.abandoned;
+    uv_mutex_unlock(&g_worker.lock);
+
+    written = snprintf(out, sizeof(out), "{\"answered\":%u,\"abandoned\":%u,\"threads\":%u}",
+                       answered, abandoned, (unsigned)sc_http_thread_count(g_worker.server));
+    if (written <= 0 || (size_t)written >= sizeof(out)) {
+        (void)sc_http_reply(req, 500, "text/plain", "", 0);
+        return 0;
+    }
+    (void)sc_http_reply(req, 200, "application/json", out, (size_t)written);
+    return 0;
+}
 
 /** Fixed answer, so the suite has something whose bytes it knows exactly. */
 static int handle_hello(sc_http_req *req, void *user_data)
@@ -108,16 +289,26 @@ int main(int argc, char **argv)
     sc_http_config http_config;
     sc_http_server *server;
     unsigned long port;
+    unsigned long threads = 0;
     char *end;
 
-    if (argc != 2) {
-        fprintf(stderr, "usage: http-probe <port>\n");
+    if (argc != 2 && argc != 3) {
+        fprintf(stderr, "usage: http-probe <port> [threads]\n");
         return 2;
     }
     port = strtoul(argv[1], &end, 10);
     if (*end != '\0' || port == 0 || port > 65535) {
         fprintf(stderr, "http-probe: '%s' is not a port\n", argv[1]);
         return 2;
+    }
+    /* Absent means what it means for a role: one loop per core. The suite passes a number where
+     * it wants the answer not to depend on the machine it runs on. */
+    if (argc == 3) {
+        threads = strtoul(argv[2], &end, 10);
+        if (*end != '\0' || threads > SC_HTTP_THREADS_MAX) {
+            fprintf(stderr, "http-probe: '%s' is not a thread count\n", argv[2]);
+            return 2;
+        }
     }
 
     sc_log_init(SC_LOG_WARN);
@@ -126,26 +317,47 @@ int main(int argc, char **argv)
     http_config.host = "127.0.0.1";
     http_config.port = (uint16_t)port;
     http_config.role = "http-probe";
+    http_config.threads = (uint16_t)threads;
     server = sc_http_server_create(&http_config);
     if (server == NULL)
         return 1;
+
+    g_worker.server = server;
+    if (uv_mutex_init(&g_worker.lock) != 0 || uv_cond_init(&g_worker.wake) != 0) {
+        sc_http_server_destroy(server);
+        return 1;
+    }
 
     if (sc_http_route(server, "/hello", handle_hello, NULL) != SC_OK ||
         sc_http_route(server, "/echo", handle_echo, NULL) != SC_OK ||
         sc_http_route(server, "/echo-header", handle_echo_header, NULL) != SC_OK ||
         sc_http_route(server, "/whoami", handle_whoami, NULL) != SC_OK ||
         sc_http_route(server, "/path", handle_path, NULL) != SC_OK ||
-        sc_http_listen(server) != SC_OK) {
+        sc_http_route(server, "/defer", handle_defer, server) != SC_OK ||
+        sc_http_route(server, "/defer-stats", handle_defer_stats, NULL) != SC_OK ||
+        sc_http_on_resume(server, on_resume, NULL) != SC_OK || sc_http_listen(server) != SC_OK) {
+        sc_http_server_destroy(server);
+        return 1;
+    }
+    if (uv_thread_create(&g_worker.thread, run_worker, NULL) != 0) {
         sc_http_server_destroy(server);
         return 1;
     }
 
     /* Announced on stdout rather than through the log, so the harness has one line to wait for
      * that does not depend on the log level. */
-    printf("http-probe listening on 127.0.0.1:%lu backend=%s\n", port, sc_http_backend_name());
+    printf("http-probe listening on 127.0.0.1:%lu backend=%s threads=%u\n", port,
+           sc_http_backend_name(), (unsigned)sc_http_thread_count(server));
     fflush(stdout);
 
     (void)sc_http_run(server, &g_quit);
+
+    uv_mutex_lock(&g_worker.lock);
+    g_worker.stop = 1;
+    uv_cond_signal(&g_worker.wake);
+    uv_mutex_unlock(&g_worker.lock);
+    (void)uv_thread_join(&g_worker.thread);
+
     sc_http_server_destroy(server);
     return 0;
 }

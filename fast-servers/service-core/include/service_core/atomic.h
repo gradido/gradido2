@@ -1,5 +1,5 @@
 /*
- * The two atomics this project needs, and nothing else.
+ * The three atomics this project needs, and nothing else.
  *
  * This is what is left of `service_core/thread.h` after the platform layer became libuv:
  * threads, mutexes and reader/writer locks are `uv_thread_*`, `uv_mutex_*` and `uv_rwlock_*`
@@ -33,5 +33,16 @@ int32_t sc_atomic_load(const volatile int32_t *value);
  * atomic object, and nothing else this project has.
  */
 void sc_atomic_store(volatile int32_t *value, int32_t desired);
+
+/**
+ * Compare and swap. Returns non-zero when @p expected was found and @p desired was written.
+ *
+ * The third atomic, and it arrived with one caller: a deferred request's slot packs its
+ * generation and its phase into one word so that "is this ticket still the one this slot
+ * holds" and "claim it" are a single operation -- see http_defer.h. Checking the generation
+ * and then claiming the slot in two steps is a race, because a slot released and re-armed in
+ * between passes both checks while belonging to somebody else.
+ */
+int sc_atomic_cas(volatile int32_t *value, int32_t expected, int32_t desired);
 
 #endif /* SERVICE_CORE_ATOMIC_H */

@@ -5,9 +5,13 @@
  */
 #include "service_core/config.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+/* For SC_HTTP_THREADS_MAX. The ceiling belongs to the server rather than to the environment,
+ * so it is read from there and not repeated here. */
+#include "service_core/http.h"
 #include "service_core/log.h"
 
 #define DEFAULT_LISTEN_HOST "127.0.0.1"
@@ -58,6 +62,29 @@ static sc_status read_port(uint16_t *out, const char *name, uint16_t fallback)
     return SC_OK;
 }
 
+/* 0 is not an error here: it is how "one per core" is spelled, and it is the default. The
+ * ceiling is the one the ticket in a deferred request can carry -- service_core/http.h. */
+static sc_status read_threads(uint16_t *out)
+{
+    const char *value = getenv("SERVER_THREADS");
+    char *end;
+    unsigned long parsed;
+
+    if (value == NULL || value[0] == '\0') {
+        *out = 0;
+        return SC_OK;
+    }
+    parsed = strtoul(value, &end, 10);
+    if (*end != '\0' || parsed > SC_HTTP_THREADS_MAX) {
+        sc_log_fatal(SC_CAT_STARTUP, "config.threads_invalid",
+                     "SERVER_THREADS is '%s', which is not 0 (one per core) to %d", value,
+                     SC_HTTP_THREADS_MAX);
+        return SC_ERR_MALFORMED;
+    }
+    *out = (uint16_t)parsed;
+    return SC_OK;
+}
+
 sc_status sc_config_load(sc_config *out)
 {
     sc_status status;
@@ -89,18 +116,33 @@ sc_status sc_config_load(sc_config *out)
     if (status != SC_OK)
         return status;
 
+    status = read_threads(&out->server_threads);
+    if (status != SC_OK)
+        return status;
+
     return SC_OK;
 }
 
 void sc_config_log(const sc_config *cfg)
 {
+    char threads[16];
+
     if (cfg == NULL)
         return;
+    /* What was configured, not what it resolved to: how many cores this machine has is the
+     * server's answer and it says so in its own listen line. */
+    if (cfg->server_threads == 0)
+        snprintf(threads, sizeof(threads), "per core");
+    else
+        snprintf(threads, sizeof(threads), "%u", (unsigned)cfg->server_threads);
+
     /* The seed is reported as present or absent. Printing it would put the community's private
      * key into every log aggregator the operator happens to run. */
     sc_log_info(SC_CAT_STARTUP, "config.loaded",
-                "host %s, backend %u, federation %u, dht %u, topic %s, seed %s, log level %d",
+                "host %s, backend %u, federation %u, dht %u, threads %s, topic %s, seed %s, "
+                "log level %d",
                 cfg->listen_host, (unsigned)cfg->backend_port, (unsigned)cfg->federation_port,
-                (unsigned)cfg->dht_port, cfg->dht_topic[0] != '\0' ? cfg->dht_topic : "(unset)",
+                (unsigned)cfg->dht_port, threads,
+                cfg->dht_topic[0] != '\0' ? cfg->dht_topic : "(unset)",
                 cfg->dht_seed_hex[0] != '\0' ? "set" : "(unset)", (int)cfg->log_level);
 }

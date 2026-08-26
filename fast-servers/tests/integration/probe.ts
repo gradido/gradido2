@@ -12,8 +12,20 @@ import { Raw } from './raw'
 export interface Probe {
   readonly port: number
   readonly backend: string
+  /** Loops the probe actually runs. h2o takes what it is given; the fallback answers 1. */
+  readonly threads: number
   stop(): Promise<void>
 }
+
+/*
+ * Four, and not "one per core", which is what the probe does when it is given nothing.
+ *
+ * Every test in the suite then runs against a server whose connections are spread over several
+ * event loops, which is what production does -- and it does so on a build machine with one core
+ * as much as on one with sixteen, so a failure means the same thing everywhere. The fallback
+ * clamps it to one and says so; that difference is the point of asking.
+ */
+const THREADS = 4
 
 const DEFAULT_BINARY = new URL('../../zig-out/bin/http-probe', import.meta.url).pathname
 
@@ -21,7 +33,7 @@ export async function startProbe(): Promise<Probe> {
   const binary = process.env.FS_HTTP_PROBE ?? DEFAULT_BINARY
   const port = Number.parseInt(process.env.FS_HTTP_PROBE_PORT ?? '17899', 10)
 
-  const child: ChildProcessWithoutNullStreams = spawn(binary, [String(port)], {
+  const child: ChildProcessWithoutNullStreams = spawn(binary, [String(port), String(THREADS)], {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 
@@ -65,6 +77,7 @@ export async function startProbe(): Promise<Probe> {
   })
 
   const backend = /backend=(\S+)/.exec(announcement)?.[1] ?? 'unknown'
+  const threads = Number.parseInt(/threads=(\d+)/.exec(announcement)?.[1] ?? '0', 10)
 
   // Listening is announced before the loop runs; one accepted connection proves the loop is
   // actually turning.
@@ -80,6 +93,7 @@ export async function startProbe(): Promise<Probe> {
   return {
     port,
     backend,
+    threads,
     async stop() {
       stopping = true
       child.kill('SIGINT')

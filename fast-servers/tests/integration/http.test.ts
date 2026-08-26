@@ -481,3 +481,98 @@ describe('chunked transfer encoding', () => {
     expect(statusOf(response)).toBe(isH2o ? 200 : 400)
   })
 })
+
+describe('answering later', () => {
+  /** `/defer` hands the request to a worker thread, which sends the ticket back after a wait.
+   *  What is being tested is that the answer arrives on the loop that owns the request. */
+  function deferred(body: string, delayMs: number): string {
+    return (
+      `POST /defer HTTP/1.1\r\nHost: x\r\nX-Defer-Ms: ${delayMs}\r\n` +
+      `Content-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`
+    )
+  }
+
+  async function stats(): Promise<{ answered: number; abandoned: number; threads: number }> {
+    return JSON.parse(bodyOf(await once(get('/defer-stats'))).toString())
+  }
+
+  test('a request answered from another thread comes back intact', async () => {
+    const response = await once(deferred('carried across a thread', 30))
+    expect(statusOf(response)).toBe(200)
+    expect(bodyOf(response).toString()).toBe('carried across a thread')
+  })
+
+  test('a deferred answer is framed like any other', async () => {
+    // The deferred path sends through h2o_send rather than h2o_send_inline, which is exactly
+    // the call that once produced a chunked response instead of a Content-Length one. Neither
+    // backend may take that route without the framing following it.
+    const response = await once(deferred('framed', 10))
+    expect(headOf(response)).toContain('Content-Length: 6')
+    expect(headOf(response)).not.toContain('chunked')
+  })
+
+  test('an immediate resume is answered too', async () => {
+    // Zero delay is the race worth having: the worker may resume before the handler has even
+    // returned, so the loop is asked to deliver a ticket for a request it is still dispatching.
+    const responses = await Promise.all(
+      Array.from({ length: 16 }, (_, i) => once(deferred(`now-${i}`, 0))),
+    )
+    responses.forEach((response, i) => {
+      expect(statusOf(response)).toBe(200)
+      expect(bodyOf(response).toString()).toBe(`now-${i}`)
+    })
+  })
+
+  test('many at once are each answered with their own body', async () => {
+    // With several loops these land on different threads, and every one of them has to get its
+    // own answer back rather than somebody else's -- which is what the ticket exists to decide.
+    const count = 48
+    const responses = await Promise.all(
+      Array.from({ length: count }, (_, i) => once(deferred(`req-${i}`, 20))),
+    )
+    responses.forEach((response, i) => {
+      expect(statusOf(response)).toBe(200)
+      expect(bodyOf(response).toString()).toBe(`req-${i}`)
+    })
+  })
+
+  test('a client that leaves mid-work does not take the answer with it', async () => {
+    const before = await stats()
+
+    const socket = await connect()
+    socket.send(deferred('nobody-is-listening', 250))
+    await Bun.sleep(30)
+    socket.close()
+
+    await Bun.sleep(500)
+    const after = await stats()
+
+    // Which of the two counters moved is each backend's own and is asserted below. What must
+    // hold for both is that the work finished and was accounted for exactly once: a resume
+    // that reached nobody is still a resume that has to be delivered, or its slot leaks.
+    expect(after.answered + after.abandoned).toBe(before.answered + before.abandoned + 1)
+
+    if (isH2o) {
+      // h2o stops reading a connection while a response is pending, so a client that closes
+      // after its request is not noticed until the write fails. The reply is produced and goes
+      // nowhere. The generator's `stop` is still what covers the cases h2o does see -- an
+      // HTTP/2 reset, a connection error, shutdown -- and it is why the request cannot be
+      // disposed under the worker's feet.
+      expect(after.abandoned).toBe(before.abandoned)
+    } else {
+      // The fallback keeps reading while a request is deferred, so it sees the EOF and the
+      // resume callback is handed a NULL request.
+      expect(after.abandoned).toBe(before.abandoned + 1)
+    }
+
+    // And the server is still there, which is the half that matters either way.
+    expect(statusOf(await once(get('/hello')))).toBe(200)
+  })
+
+  test('the probe runs the loops it was asked for', async () => {
+    // Four is what probe.ts asks for. h2o takes it; the fallback is one thread whatever it is
+    // told, and logs that it clamped -- AGENTS.md section 3b, it is not a deployment option.
+    expect(probe.threads).toBe(isH2o ? 4 : 1)
+    expect((await stats()).threads).toBe(probe.threads)
+  })
+})

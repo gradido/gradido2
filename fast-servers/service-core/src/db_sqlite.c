@@ -41,6 +41,10 @@
  * that a deadlock is reported instead of looking like a hang. It is not configurable yet
  * because nothing has measured it; when something does, it belongs in sc_db_config beside the
  * connect timeouts.
+ *
+ * It is also five seconds of stopped event loop the day a request writes on its own thread,
+ * which is why Architecture.md, *Threading*, puts writes on one dedicated thread instead: with
+ * a single writer there is no contention to wait out and this number stops meaning anything.
  */
 #define SQLITE_BUSY_TIMEOUT_MS 5000
 
@@ -109,6 +113,17 @@ sc_status sc_db_sqlite_open(const sc_db_config *cfg, sc_db *db)
     /* FULLMUTEX because the roles are threads and one connection may be reached from more than
      * one of them. SQLITE_OPEN_CREATE because a community's first start has no file yet, which
      * is what "download and start" means. */
+    /*
+     * FULLMUTEX is right for what this is today -- one handle that several role threads share
+     * -- and it is also the ceiling: every statement serialises on that handle's mutex, so WAL's
+     * readers-beside-a-writer holds at the file level and is given back inside the process.
+     *
+     * What replaces it is in Architecture.md, *SQLite: read where you are, write on one thread*:
+     * one connection per loop thread opened SQLITE_OPEN_NOMUTEX for reads, and a single writer
+     * thread for writes. Do not drop FULLMUTEX before the connections are per-thread -- on its
+     * own that is not an optimisation, it is a data race. The busy_timeout below has the same
+     * condition attached to it.
+     */
     rc = sqlite3_open_v2(cfg->file, &handle,
                          SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, NULL);
     if (rc != SQLITE_OK) {

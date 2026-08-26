@@ -147,6 +147,260 @@ bundled headers and never see it.
 
 ---
 
+## Threading
+
+One model for the process, because a threading decision taken twice is a threading decision
+taken differently. Three modules have already arrived at the same shape without consulting each
+other — `dht-node` owns a thread and answers through a `drain` that never waits, the mailer owns
+threads and is reached through a queue, the session cache is shared and holds its locks for two
+instructions. This section is that shape written down, so that the fourth module does not have
+to rediscover it and the fifth does not get it slightly wrong.
+
+### The rule
+
+```text
+Does the waiting have a file descriptor?
+
+  yes ->  it belongs on the event loop. No thread, no handoff, no context switch.
+  no  ->  it belongs on a thread of its own, and how many of those there are comes
+          from the resource, never from the number of cores and never from how long
+          the wait is.
+```
+
+**Work does not leave the request path because it waits. It leaves because it serialises or
+because it syncs.** Waiting is what an event loop is for. A lock only one thread may hold and an
+`fsync` that stops a core are not, and they are the only two reasons a thread exists anywhere in
+this document.
+
+That is why the numbers in *Where a query's time goes* do not lead where they appear to. Of the
+48.1 µs a query costs, 3.6 are user CPU and most of the rest is waiting for the server — and the
+answer to that is not more threads to cover the wait, it is `PQsocket` on the loop, where the
+wait costs no thread at all.
+
+### The map
+
+```text
+main thread        config, log, sodium, signal handlers, then it joins and nothing else
+role thread        one per selected role -- src/main.c, and see One binary, three roles
+  loop threads     an HTTP role scales here: N h2o contexts, N evloops, SO_REUSEPORT
+mail workers       1..worker_max, shared, queue-fed. See Mail
+sqlite writer      one, shared, queue-fed. See Databases
+dht-node           tokio, inside the Rust module, reached only through drain
+```
+
+Everything below the role line is a consequence of the rule and not a preference, and the two
+entries that are not built yet are marked in their own sections rather than dated here.
+
+### h2o is thread-per-loop, and that is the whole reason for the rule
+
+```text
+h2o_globalconf_t   once, read-only after setup, shared by every thread
+h2o_context_t      one per thread, each with its own h2o_evloop_create()
+h2o_req_t          belongs to one loop thread. No lock, and no handing it to another.
+```
+
+A blocking call in a handler therefore does not block **a request**, it blocks **a loop** — and
+with it every other connection the kernel gave that loop, including all the ones that would have
+been answered from the session cache in 11.6 µs. At eight loops and ten thousand connections, one
+5 ms `fsync` stops about twelve hundred of them. That does not appear in a throughput average and
+it is the only thing visible in a p99.
+
+This is the difference from a thread-per-request server, and it is what makes the familiar
+reasoning wrong here: *the operations wait on I/O, so run more threads than cores and let the
+scheduler cover the wait*. That is sound where a thread carries one request. Where a thread
+carries a loop it buys a stalled loop instead of a stalled request, and it costs a second thing
+besides — an oversubscribed loop is descheduled with events pending, so its timers fire late.
+Keep-alive expiry, request timeouts and the session store's expiry walk are all timers.
+
+**Threads are the number of cores. There is no allowance for I/O wait, because there is no I/O
+wait left on a thread once the rule above has been followed.**
+
+`SERVER_THREADS` is the knob and its default is one loop per core. Two details of how it is
+built are worth knowing before changing it: every listening socket is bound on the calling
+thread before any of them serves, so a port already taken is one error line at startup instead
+of N from N threads; and loop 0 runs on the role's own thread rather than on a thread of its
+own, so a role still owns exactly the thread `main` gave it and `sc_http_run` joins the rest
+before it returns.
+
+The mailer is the one entry in the map that can push the process past that count, and it is why
+`worker_max` is expressed in cores at all — see *The workers*. Against a remote relay a mail
+worker is idle 99.9 % of the time, so it is not competing for a core; against a local one the
+second worker is never started, because the first is never slow enough to ask for it.
+
+### How a thread talks back to a loop
+
+`service_core/http.h` carries three calls and both backends implement them:
+
+```text
+sc_http_defer(server, req, work, &ticket)   the handler, on its own loop
+sc_http_resume(server, ticket)              the worker, from any thread
+the resume callback                         registered once, runs on the owning loop
+```
+
+Underneath, h2o has `h2o_multithread_create_queue` / `_register_receiver` / `_send_message`,
+and the fallback has a `uv_async_t`. h2o's is cheap enough not to think about: the write to the
+wakeup fd is skipped when the receiver already has messages pending, so a busy loop takes no
+syscall per message. The fallback's async coalesces and cannot say how many resumes it stands
+for, so delivery there walks the table -- which is affordable exactly because that backend is
+the one not carrying load.
+
+Two things it does not do, and both have bitten every project that has tried this:
+
+- **The request may be gone.** A client that disconnects takes its `h2o_req_t` with it, so no
+  worker may hold that pointer across a thread boundary. What crosses is an id that the loop
+  thread resolves back to a request or fails to resolve — see *The write must be answered, not
+  acknowledged*, which is where that matters most. On the h2o side that id is backed by a
+  generator registered at defer time: h2o clears the generator on a final send and calls its
+  `stop` on a request it disposes, so `stop` fires exactly when the answer did not.
+- **The reply goes back to the loop it came from**, not to any loop. The receiver is per-context,
+  so which one to send to is part of what the worker was handed.
+
+Per-thread state on an HTTP role hangs off the handler, not off a global: `on_context_init` /
+`on_context_dispose` and `h2o_context_get_handler_context()`. That is where a per-loop SQLite read
+connection lives.
+
+### What this means for each kind of work
+
+```text
+CPU, request-shaped     the request thread. Routing, session lookup, JSON, domain logic.
+PostgreSQL              the loop, asynchronously. PQsocket / PQconsumeInput / PQisBusy.
+SQLite reads            the request thread, one connection per loop thread.
+SQLite writes           one dedicated writer thread, queue-fed.
+Mail                    the mail workers. Never the request thread, at any queue depth.
+Peer discovery          the Rust module's own thread, drained, never waited on.
+```
+
+**What is worth controlling separately is the number of connections, not the number of threads.**
+This is the whole case against a database thread pool. Postgres has a `max_connections` and its
+own best concurrency, which has nothing to do with how many cores serve HTTP — and asynchronous
+libpq lets those two numbers be set independently, because a connection is an fd and not a thread.
+A pool ties them back together: a blocking connection needs a thread to block, so the connection
+count becomes the thread count and neither can be tuned without moving the other.
+
+The `fsync` is the exception the rule was written for, and it is the next section.
+
+### SQLite: read where you are, write on one thread
+
+SQLite has no socket and no asynchronous API, so it is the one place where the rule's second
+branch applies inside the request path — and the answer differs between reading and writing,
+because SQLite's own concurrency does.
+
+**Reads stay on the request thread.** A read from a warm page cache is single-digit microseconds;
+*Where a query's time goes* puts the index lookup itself at 1.6 µs. A context switch with a futex
+wakeup costs several, plus what it does to both caches. Handing a read to another thread spends
+more than the read.
+
+What that requires is one connection per loop thread, opened `SQLITE_OPEN_NOMUTEX`. Today
+`db_sqlite.c` opens one handle `SQLITE_OPEN_FULLMUTEX` and shares it, which is correct and is
+also the ceiling: every statement serialises on that handle's mutex, so WAL's readers-and-a-writer
+holds at the file level and is given back inside the process. One connection per thread removes
+the mutex rather than contending on it, because no connection is then seen by two threads.
+
+**Writes go to a single dedicated writer thread** holding the one write connection, fed by a
+queue, answering through the loop's receiver. Four reasons, and the last is the one that pays:
+
+```text
+1  SQLite permits one writer regardless. N request threads that write serialise
+   anyway -- the choice is only whether they serialise on their loops or off them.
+2  busy_timeout stops being a question. Five seconds (db_sqlite.c) is the right
+   number for role threads sharing a handle, and it is also five seconds of stopped
+   event loop. With one writing thread there is no contention to wait out.
+3  fsync never belongs on a loop. WAL with synchronous = NORMAL costs tens of
+   microseconds, FULL costs tenths of milliseconds to milliseconds, and which one a
+   deployment chose must not decide whether twelve hundred connections stall.
+4  Group commit. One thread that can see several queued writes puts them in one
+   transaction, so one fsync serves all of them. This is the largest throughput gain
+   available on this path and it exists only when one thread sees the writes.
+```
+
+It is the mailer's shape with a different ceiling, and deliberately so: *The workers* says a
+worker is a connection and grows the count to what the relay rewards. Here the count is one,
+because that is what the database permits — same structure, and the resource sets the number in
+both cases, which is the rule.
+
+### The write must be answered, not acknowledged
+
+A request that writes cannot be answered before the write is known to have happened. That is not
+a latency preference, it is what the caller is asking: this repository moves money, and a `200`
+that means *queued* is a `200` that lies about the one thing the client needed to know.
+
+So the handler does not answer. It returns 0 without calling `h2o_send` — which is how h2o is
+told the request has been taken over rather than declined — the request stays alive on its loop,
+and the reply is written from the receiver callback once the commit has returned. Six things
+follow, and they are the design rather than the implementation of it.
+
+**The unit of the queue is a transaction, not a statement.** Whatever has to be atomic for the
+domain is one queue item, because the writer batches items and an item is the smallest thing it
+can keep whole. Two statements pushed separately may end up in the same batch, but nothing
+guarantees it and nothing may depend on it.
+
+**Group commit does not cost the answer its latency — under load it is what saves it.**
+
+```text
+one commit per request   request N waits behind the N-1 fsyncs queued ahead of it,
+                         because SQLite lets one writer commit at a time regardless
+group commit             request N waits for at most two: the batch already in
+                         flight when it arrived, and the batch it lands in
+```
+
+That is the argument for the shape and not merely for its throughput. It also decides the
+durability setting: `synchronous = FULL` is what makes *committed* mean *survives the power
+going out*, it costs an `fsync` per commit — and group commit is what makes one commit serve a
+batch, which is what makes FULL affordable. NORMAL is cheaper and answers a question nobody
+asked here: it survives a crashing process and not a losing power supply.
+
+**One item's failure must not become the batch's.** Each item runs inside its own `SAVEPOINT`,
+so a constraint violation rolls back to that savepoint — no `fsync`, no effect on its
+neighbours — and that item alone is answered with its error. The exception is honest and has to
+be handled: an I/O error or a full disk takes the whole transaction with it, and then every item
+in the batch is answered as failed, which is correct, because none of them happened.
+`sqlite3_get_autocommit()` is how the writer tells the two apart rather than guessing from the
+result code.
+
+**A full queue answers; it does not wait.** The loop may not block on a queue, so a writer that
+cannot take the item answers the request — `503` — the same way the mailer hands
+`SC_ERR_QUEUE_FULL` back to its caller rather than deciding for it. See *What the queue costs,
+exactly*: the ceiling is a number chosen at startup and never an allocation under load.
+
+**A client that leaves does not cancel the write.** A read whose requester is gone may be
+dropped; a write may not, because the request to move money was made and answering nobody is
+not the same as not doing it. The disconnect suppresses the reply and nothing else.
+
+**No `h2o_req_t` crosses a thread.** The queue item carries the originating loop's receiver and
+an id; the loop thread resolves that id back to an in-flight request, or finds that it is gone.
+That is the session cache's trick used again — an index and a check rather than a pointer, see
+*The token carries the slot* — and it is what removes the lifetime problem instead of
+synchronising it. The writer never holds anything that a disconnect can free.
+
+The ticket is three numbers — loop, slot, generation — and the slot's generation and phase live
+in one word, so that "is this ticket still what the slot holds" and "claim it" are a single
+compare-and-swap. Asking in two steps is a race: a slot released and re-armed in between passes
+both checks while belonging to somebody else. `service-core/src/http_defer.h` holds the rest.
+
+**Noticing that the client left is not guaranteed and must not be needed.** h2o stops reading a
+connection while a response is pending, so a client that closes after its request is often not
+seen until the write fails; the fallback keeps reading and sees the EOF. Both are correct, and
+the difference is asserted in `tests/integration`. What the design rests on is the other half:
+the request cannot be disposed while a worker holds its ticket, so a resume that arrives at
+nobody is delivered with a null request rather than into freed memory.
+
+### Where the model is still open
+
+- **Who owns the mailer and the database handles.** No role opens either yet — *What is built,
+  and what is not*. When one does, the question is process-wide or per-role, and the answer is
+  process-wide for both: two roles in one process talking to one relay and one database file
+  should hold one queue and one writer between them, not two of each competing.
+- **Nothing here is in CI yet.** The integration suite drives both backends over four loops and
+  both come back clean under TSan and UBSan, which is the check being described — it is run by
+  hand today and *Safety net* already says where it belongs.
+- **The session cache is not yet the one this document describes.** `service_core/cache.h` is an
+  open-addressing table with a hashed key, and *Session cache* above specifies direct indexing
+  from the token with no hash at all. Nothing consumes either yet, so the design is ahead of the
+  code rather than in conflict with it — but the multi-loop server is what makes it matter, and
+  the store is shared across those loops rather than one per thread.
+
+---
+
 ## Databases
 
 ```text
