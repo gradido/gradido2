@@ -1,0 +1,87 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "roles",
+  "description": "The roles an admin creates on top of the default ones. The default roles are not in here and never will be: they are defined in code, their rights are in ../rights.json, and this table cannot overwrite either.",
+  "source": null,
+  "origin": "gradido2",
+  "columns": [
+    {
+      "name": "id",
+      "type": "uint64",
+      "nullable": false,
+      "identity": true,
+      "description": "Referenced by role_rights.role_id. Not by user_roles, which links by name — see there."
+    },
+    {
+      "name": "name",
+      "type": "varchar(40)",
+      "nullable": false,
+      "description": "Unique, and what user_roles.role holds. Must not equal a RoleNames value: a created role that shadows a default one would be unreachable, because the default is resolved first. The database cannot check that — the code enum is not visible to it — so the application rejects it on write and a contract test asserts the check exists."
+    },
+    {
+      "name": "parent_role",
+      "type": "varchar(40)",
+      "nullable": true,
+      "default": null,
+      "enum": "RoleNames",
+      "description": "The default role this role starts from, as a RoleNames value. A name and not a foreign key because there is no row to point at, and because only a default role may be inherited from — which a varchar checked against the code enum says exactly, with no cycles to detect. NULL means an empty base: every right has to be granted explicitly.",
+      "reference": "../rights.json"
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "nullable": true,
+      "default": null
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp_ms",
+      "nullable": false,
+      "default": "now"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp_ms",
+      "nullable": false,
+      "default": "now",
+      "description": "Written on every change to the role AND on every insert, update or delete in role_rights for it, in the same transaction. MAX(updated_at) over this table lets an instance skip a rebuild it does not need; it is not what bounds staleness — the cache TTL is."
+    },
+    {
+      "name": "updated_by_user_id",
+      "type": "uint64",
+      "nullable": true,
+      "default": null,
+      "references": {
+        "table": "users",
+        "column": "id"
+      },
+      "description": "The admin who made the change. NULL for anything written outside the application."
+    }
+  ],
+  "primaryKey": [
+    "id"
+  ],
+  "unique": [
+    {
+      "name": "name",
+      "columns": [
+        "name"
+      ]
+    }
+  ],
+  "indexes": [],
+  "notes": [
+    "Nothing seeds this table. An instance that never creates a role has an empty one, and every account still has its rights — they come from the default roles in code.",
+    "The rights of a row are the rows in role_rights, applied to the default set of parent_role. A row with no role_rights rows is exactly its parent role under a different name.",
+    "Renaming a role rewrites user_roles.role for every holder in the same transaction, because that column holds the name. It is a handful of rows and one statement; what is not allowed is renaming without it, which would leave holders pointing at a name nothing answers to.",
+    "Deleting a role is blocked while user_roles still references its name. The admin frontend reassigns first — there is no cascade, because losing rights silently is not something a foreign key should be allowed to decide.",
+    "Cached process-globally with the 10 minute TTL Architecture.md sets for role rights, and invalidated immediately when an admin edits a role on that instance. Another instance sees the change within the TTL. That bound is the answer, not a poll interval — the same rule applies to settings.",
+    "Not scoped by community, for the reason db/settings.json gives: an instance has exactly one home community, and a foreign community's roles are not this instance's business.",
+    "Tens of rows, read whole into the cache. No index beyond the primary key and the unique name.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json.",
+    "Identifiers are uint64 throughout; see contracts/AGENTS.md.",
+    "A created role is assignable: role.assign takes the name as text and resolves it as db/user_roles.json describes. The route it replaces typed that field as the RoleNames enum, which is why this table was writable only by hand until now."
+  ],
+  "open": []
+}

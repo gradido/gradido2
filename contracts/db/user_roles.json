@@ -2,7 +2,7 @@
   "contractVersion": 1,
   "kind": "table",
   "name": "user_roles",
-  "description": "Roles held by a user. One role per row.",
+  "description": "A role assignment: this account holds this role, as far as user_role_scopes reaches. One row per assignment, and the same role may be assigned twice with different scopes. An account with no row here is a USER — the table lists the exceptions, not the members.",
   "source": "database/src/entity/UserRole.ts",
   "columns": [
     {
@@ -24,15 +24,8 @@
       "name": "role",
       "type": "varchar(40)",
       "nullable": false,
-      "enum": "RoleNames",
-      "description": "Stored as a string. An unrecognised value is ignored with a warning, never rejected — see types/RoleNames.json."
-    },
-    {
-      "name": "visible_creation_groups",
-      "type": "text",
-      "nullable": true,
-      "default": null,
-      "description": "A moderator's visibility scope: JSON array of creation-group strings plus the sentinels '*all' and '*untagged'. NULL means no restriction."
+      "description": "A RoleNames value or a roles.name — resolved in that order, so a default role can never be shadowed by a created one. A name that is neither is ignored with a warning, never rejected. Not a foreign key: the default roles have no row to point at, and they are the majority of what this column holds.",
+      "reference": "../rights.json"
     },
     {
       "name": "created_at",
@@ -47,18 +40,30 @@
       "default": null
     }
   ],
-  "primaryKey": ["id"],
+  "primaryKey": [
+    "id"
+  ],
   "unique": [],
   "indexes": [
     {
       "name": "user_id",
-      "columns": ["user_id"]
+      "columns": [
+        "user_id"
+      ]
     }
   ],
   "notes": [
-    "JSON inside a text column: both implementations must parse it the same way, including what an invalid document does. Currently unspecified — write the answer here before either implementation reads the column.",
-    "gradido2 adds roles and role_rights tables on top of this (see Architecture.md, Auth). Those are not yet contracted.",
+    "No row means USER. That is why the table stays small enough to be read per session on the miss path: only moderators, admins and the holders of created roles have rows at all. An implementation that treats a missing row as 'no rights' locks out every ordinary member.",
+    "No unique key on (user_id, role), deliberately. Two MODERATOR rows for one account with different scopes are the normal way to say 'moderates #feuerwehr, and everything in community Y' — a unique key would forbid exactly the case the scope model exists for. Legacy's duplicates, which carried no scope and meant nothing, are collapsed by the migration into one row.",
+    "Resolution order is the whole of the 'default roles cannot be overwritten' rule: RoleNames first, roles second. A row created before a default role of the same name existed stops being reachable the day that release ships, which is the intended direction — the code wins.",
+    "An unknown name is ignored with a warning, the same policy types/RoleNames.json declares. An older binary must survive a database written by a newer one, and an account whose only row is unknown falls back to USER rather than to nothing.",
+    "Renaming a created role rewrites this column for every holder, in the transaction that does the rename — see db/roles.json.",
+    "The scope hangs off the assignment, in user_role_scopes: not off the role, which is shared and reusable, and not off the account, which may hold two assignments that reach differently.",
+    "No JSON in a text column any more. visible_creation_groups, with its '*all' and '*untagged' sentinels, becomes rows in user_role_scopes under the creation_group dimension — '*untagged' as the reserved target_id 0, '*all' as the absence of rows.",
+    "The rights an account actually holds are not in this table. They come from the role: from code for a default role, from role_rights for a created one — see Architecture.md, Auth, and ../rights.json.",
     "created_at and updated_at are UTC milliseconds; see types/Timestamp.json.",
-    "Identifiers are uint64 throughout. Legacy is inconsistent here — users.id is int unsigned while referrer_id, contribution_link_id and publisher_id, which point at it, are bigint unsigned. A foreign key narrower than its target truncates silently in C, so gradido2 uses one width everywhere."
-  ]
+    "Identifiers are uint64 throughout. Legacy is inconsistent here — users.id is int unsigned while referrer_id, contribution_link_id and publisher_id, which point at it, are bigint unsigned. A foreign key narrower than its target truncates silently in C, so gradido2 uses one width everywhere.",
+    "Written through role.assign, role.unassign and role.setScope, which address the assignment by id. The account-addressing routes they replace — user.setRole, creationGroup.get/setModeratorScope — are deprecated and must not be used to write this table once a second assignment can exist."
+  ],
+  "open": []
 }

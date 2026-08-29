@@ -1,0 +1,57 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "user_settings",
+  "description": "Per-member settings that only the member themself reads. Same shape as settings, different lifecycle: millions of rows instead of dozens, loaded with the session instead of at startup, and never polled.",
+  "source": null,
+  "origin": "gradido2",
+  "columns": [
+    {
+      "name": "user_id",
+      "type": "uint64",
+      "nullable": false,
+      "references": {
+        "table": "users",
+        "column": "id"
+      },
+      "description": "Leading column of the primary key, so one range scan returns everything the session needs."
+    },
+    {
+      "name": "key",
+      "type": "varchar(64)",
+      "nullable": false,
+      "description": "A key from ../user_settings.json. Same grammar and the same stability rule as settings.key.",
+      "reference": "../user_settings.json"
+    },
+    {
+      "name": "value",
+      "type": "text",
+      "nullable": true,
+      "description": "Same text form and same parse rule as settings.value: the registry declares the type, the column carries the decimal string, 'true'/'false' or UTC milliseconds. A key whose type is uint64 and whose meaning is a row elsewhere carries that id as a decimal string — see main_creation_group — with no foreign key behind it, so an id that resolves to nothing is read as unset.",
+      "note": "NULL is an explicit null where the registry allows one. An absent row is the unset case."
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp_ms",
+      "nullable": false,
+      "default": "now"
+    }
+  ],
+  "primaryKey": [
+    "user_id",
+    "key"
+  ],
+  "unique": [],
+  "indexes": [],
+  "notes": [
+    "One query per session, never a join per row. The session loads a member's settings once when it is built and holds them; a request that renders another member never reads this table. That is the whole reason the table can exist without costing anything.",
+    "Which flags may move here, and which may not, is decided by the query and not by the topic: a flag that appears in a WHERE, JOIN or ORDER BY over many users stays a column on users. hide_amount_gdd and hide_amount_gdt are only ever read for the logged-in member (legacy backend/src/graphql/model/User.ts), so they move. gms_allowed does not: legacy filters on it in backend/src/apis/gms/ExportUsers.ts, and as a key that export becomes a join per row. avatar_visible_to_members is read when showing a profile to someone else and stays a column for the same reason.",
+    "The columns moving off users: hide_amount_gdd, hide_amount_gdt, their defaults there are the legacy column defaults — false, false — because anything else changes a migrated member's behavior silently. main_creation_group joins them from the other side: it replaces the user_creation_groups table rather than a column, for the reason ../user_settings.json gives.",
+    "Rows may be deleted here; deleting one restores the registry default. Unlike settings there is no cross-instance marker to keep honest, because these are own writes: the member changes their own setting in the request whose session holds it. Another instance holding a session for the same member learns nothing — which is the same staleness the session model already accepts everywhere else.",
+    "Deletion of the row is not tied to deletion of the member. users.deleted_at is a soft delete, so nothing here is removed when a member leaves.",
+    "No index beyond the primary key. Its leading column is user_id, which serves the only query this table has. A lookup of one key across all members is not a query the product makes; if it ever becomes one, the index belongs here before it is written.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json.",
+    "Identifiers are uint64 throughout; see contracts/AGENTS.md."
+  ],
+  "open": []
+}

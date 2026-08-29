@@ -1,0 +1,45 @@
+{
+  "contractVersion": 1,
+  "kind": "settings",
+  "description": "The key set behind db/user_settings.json. Same kind of value as const.json holds, but changeable at runtime instead of at release. The tables are generic; this file is what makes a row typed, bounded and readable by both implementations.",
+  "origin": "gradido2",
+  "valueEncoding": "Every value in the database is text, in the same form contracts/ uses everywhere: a decimal string for every numeric type, 'true' or 'false' for bool, UTC milliseconds for an instant. 'default' below carries that same text form, so a default and a stored value are never encoded differently.",
+  "settings": {
+    "hide_amount_gdd": {
+      "group": "wallet",
+      "scope": "user",
+      "type": "bool",
+      "default": "false",
+      "description": "The member hides their own GDD balance in the header. About their own view only — nobody else's response depends on it.",
+      "source": "database/src/entity/User.ts hideAmountGDD, migration 0059"
+    },
+    "hide_amount_gdt": {
+      "group": "wallet",
+      "scope": "user",
+      "type": "bool",
+      "default": "false",
+      "description": "The member hides their own GDT balance in the header. About their own view only — nobody else's response depends on it.",
+      "source": "database/src/entity/User.ts hideAmountGDT"
+    },
+    "main_creation_group": {
+      "group": "contribution",
+      "scope": "user",
+      "type": "uint64",
+      "nullable": true,
+      "default": null,
+      "reference": "db/creation_groups.json",
+      "description": "The member's main creation group: what the group field is pre-filled with when they submit a contribution, and what a moderator sets for them when seeding a whole organisation at once. NULL means they have none.",
+      "note": "The value is a creation_groups.id as a decimal string, not the tag. An admin may rename a tag through creationGroup.edit, and a preference that silently stops matching after a rename is the failure this encoding removes. An id that resolves to no row is read as unset and logged at warn — the same soft failure a deleted group produces.",
+      "source": "database/src/entity/UserCreationGroup.ts, replaced"
+    }
+  },
+  "notes": [
+    "A key is an identifier and follows the rule the rest of contracts/ follows: rename nothing, reuse nothing. To retire one, mark it deprecated and leave it here — a database written by an older release still holds rows under the old name.",
+    "'default' is what an implementation returns when no row exists, and every implementation returns exactly this. It is not a suggestion and it is not re-derived from an environment variable.",
+    "A default of null is only legal together with nullable: true. Everywhere else null in the database is a value that failed to parse, and the reading implementation falls back to this default and logs an error — see db/settings.json.",
+    "min, max and the string bounds are validation for the admin frontend and for both implementations, which must reject the same value. A bound is not decoration.",
+    "main_creation_group replaces the user_creation_groups table, which gradido2 does not have. Legacy modelled it as an ordered many-to-many with a sort_order, but only ../gradido/admin ever wrote it, always with exactly one tag or none (ChangeUserRoleFormular.vue, saveUserMainTag), every save replaced the whole list in one transaction (backend/src/graphql/resolver/util/userCreationGroups.ts), and the only reader takes personal[0] (util/suggestCreationGroup.ts). A table whose logic can never hold more than one row is a setting.",
+    "The migration takes the row with the lowest sort_order, ties broken by the lowest id — legacy's own order — and writes its creation_group_id. A member with more than one row is a state legacy's write path cannot produce; if one exists anyway, the extra rows are dropped and logged at warn rather than being silently picked between."
+  ],
+  "open": []
+}

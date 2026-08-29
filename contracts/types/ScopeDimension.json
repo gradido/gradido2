@@ -1,0 +1,29 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "ScopeDimension",
+  "representation": "string",
+  "description": "The dimensions along which a role assignment can be narrowed. A dimension names a column that resources are grouped by; which resource that is, is part of the dimension's meaning and is written here.",
+  "source": null,
+  "origin": "gradido2",
+  "unknownValuePolicy": "ignore_and_warn",
+  "values": [
+    {
+      "name": "CREATION_GROUP",
+      "value": "creation_group",
+      "targets": "creation_groups.id",
+      "description": "Which creation groups a contribution carries. A contribution has zero or more, so it is covered when any of them is in the set. target_id 0 covers contributions with none."
+    },
+    {
+      "name": "COMMUNITY",
+      "value": "community",
+      "targets": "communities.id",
+      "description": "Which community a resource belongs to. target_id 0 has no meaning here — every resource has a community."
+    }
+  ],
+  "notes": [
+    "Adding a dimension is a value here plus one line where the resource's value is read. No table, no migration, and nothing in the four database implementations changes.",
+    "An unknown dimension is dropped when the cache is built and logged at warn: a scope an implementation does not understand must not silently widen or narrow anything, and dropping the row leaves that dimension unrestricted only if no other row for it survives — which is the same as the admin never having set it.",
+    "A dimension is an identifier and follows the rule the rest of contracts/ follows: rename nothing, reuse nothing."
+  ]
+}

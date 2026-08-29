@@ -1,0 +1,177 @@
+{
+  "contractVersion": 1,
+  "kind": "route",
+  "server": "backend",
+  "model": "RoleAssignment",
+  "description": "Assigning roles and narrowing how far one assignment reaches. Replaces user.setRole and the two moderator-scope routes, both of which address an account and therefore cannot say which of its assignments they mean.",
+  "mount": "/",
+  "source": [],
+  "origin": "gradido2",
+  "models": {
+    "RoleAssignment": {
+      "description": "One row of user_roles together with its scope rows. The mutations return the account's full list rather than what they changed, so a caller never has to reconstruct the new state.",
+      "type": "object",
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "uint64",
+          "description": "user_roles.id. This is what the scope routes address; an account's roles are not addressable by name, because the same role may be assigned twice."
+        },
+        {
+          "name": "role",
+          "required": true,
+          "type": "text",
+          "description": "A RoleNames value or a roles.name, resolved in that order — see db/user_roles.json."
+        },
+        {
+          "name": "isDefaultRole",
+          "required": true,
+          "type": "bool",
+          "description": "True when the name resolved against RoleNames, false when it resolved against the roles table. The caller would otherwise have to know the code enum to tell an editable role from one it must not offer to edit."
+        },
+        {
+          "name": "scopes",
+          "required": true,
+          "type": "object[]",
+          "description": "One entry per dimension this assignment restricts. A dimension that is not listed is unrestricted, which is the same statement db/user_role_scopes.json makes about a missing row. An assignment that restricts nothing has an empty array.",
+          "fields": [
+            {
+              "name": "dimension",
+              "required": true,
+              "type": "enum",
+              "enum": "ScopeDimension"
+            },
+            {
+              "name": "targetIds",
+              "required": true,
+              "type": "uint64[]",
+              "description": "The ids this assignment is restricted to in that dimension, ascending. Never empty — a dimension with no targets is not listed at all. 0 means the resources with no value in the dimension, for example a contribution with no creation group."
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "routes": [
+    {
+      "name": "role.listAssignments",
+      "method": "GET",
+      "path": "/role/list-assignments",
+      "rights": ["SET_USER_ROLE"],
+      "auth": "session",
+      "roles": ["admin"],
+      "request": {
+        "fields": [
+          { "name": "userId", "required": true, "type": "uint64" }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "type": "object[]",
+        "model": "RoleAssignment",
+        "description": "Every assignment the account holds, oldest first. Empty means the account is a plain USER."
+      },
+      "legacy": null,
+      "notes": [
+        "Guarded by the write right, as legacy guards moderatorCreationGroupScope with SET_MODERATOR_CREATION_GROUP_SCOPE. Only whoever may change an assignment needs to read one."
+      ]
+    },
+    {
+      "name": "role.assign",
+      "method": "POST",
+      "path": "/role/assign",
+      "rights": ["SET_USER_ROLE"],
+      "auth": "session",
+      "roles": ["admin"],
+      "request": {
+        "fields": [
+          { "name": "userId", "required": true, "type": "uint64" },
+          {
+            "name": "role",
+            "required": true,
+            "type": "text",
+            "description": "A RoleNames value or a roles.name. Not typed as the RoleNames enum, which is exactly what stopped user.setRole from ever assigning a created role."
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "type": "object[]",
+        "model": "RoleAssignment",
+        "description": "The account's assignments after the change."
+      },
+      "legacy": null,
+      "notes": [
+        "Adds an assignment, it does not replace the account's others. That is the difference to user.setRole and the reason this route exists.",
+        "The new assignment starts unrestricted in every dimension. Narrowing it is a second call to role.setScope, which is deliberate: an assignment that is created and scoped in one call cannot be created by an admin frontend that does not yet know about scopes.",
+        "An account may not hold the same role twice with the same scope, and since a new assignment is unrestricted, assigning a role the account already holds unrestricted is rejected rather than duplicated.",
+        "An admin cannot change their own assignments, the rule legacy enforces in setUserRole."
+      ]
+    },
+    {
+      "name": "role.unassign",
+      "method": "POST",
+      "path": "/role/unassign",
+      "rights": ["SET_USER_ROLE"],
+      "auth": "session",
+      "roles": ["admin"],
+      "request": {
+        "fields": [
+          { "name": "userRoleId", "required": true, "type": "uint64" }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "type": "object[]",
+        "model": "RoleAssignment",
+        "description": "The account's remaining assignments."
+      },
+      "legacy": null,
+      "notes": [
+        "The scope rows go with the assignment, so re-assigning the role later starts unrestricted. Legacy behaves the same way and its own comment says so; it is worth knowing rather than discovering.",
+        "An account with no assignments left is a plain USER. There is no separate way to say that."
+      ]
+    },
+    {
+      "name": "role.setScope",
+      "method": "POST",
+      "path": "/role/set-scope",
+      "rights": ["SET_ROLE_SCOPE"],
+      "auth": "session",
+      "roles": ["admin"],
+      "request": {
+        "fields": [
+          { "name": "userRoleId", "required": true, "type": "uint64" },
+          { "name": "dimension", "required": true, "type": "enum", "enum": "ScopeDimension" },
+          {
+            "name": "targetIds",
+            "required": true,
+            "type": "uint64[]",
+            "description": "Replaces this assignment's rows in that dimension, and only in that dimension — the others are untouched. An empty array removes the restriction, which is how 'sees everything' is said. 0 is legal and means the resources with no value in the dimension."
+          }
+        ]
+      },
+      "response": {
+        "nullable": false,
+        "type": "object[]",
+        "model": "RoleAssignment",
+        "description": "The account's assignments after the change."
+      },
+      "legacy": null,
+      "notes": [
+        "Full replacement per dimension, in one transaction. A partial write would leave an assignment reaching further than either the old or the new list, and for a moment nobody would be able to say which.",
+        "A target id that does not resolve in its dimension is rejected here, at the edge, with the id named. That is the one place it can be answered properly: db/user_role_scopes.json carries no foreign key, so a wrong id written past this route survives until the session cache drops it with a warning nobody reads.",
+        "Duplicates in targetIds are collapsed, order is not stored.",
+        "An unrestricted account-wide 'sees everything' is the absence of rows, so setting an empty array twice is not an error and changes nothing."
+      ]
+    }
+  ],
+  "notes": [
+    "The models block is new here: four routes answer with the same shape, and repeating a nested object four times is four places to edit it wrong. Every other route file still carries its response shape inline, most of them as open.",
+    "These four replace three routes that address an account: user.setRole, creationGroup.getModeratorScope and creationGroup.setModeratorScope. Those are marked deprecated where they stand, not deleted — a name in contracts/ is never reused, and an admin frontend that still calls them must keep working until it is changed.",
+    "Nothing here is scoped by community. An instance has exactly one home community; a role assignment restricted to a foreign community would be a statement this instance cannot enforce.",
+    "The right on role.setScope is SET_ROLE_SCOPE and not SET_MODERATOR_CREATION_GROUP_SCOPE: the route is generic over dimensions, and the old right names one dimension and one role. The old right stays, deprecated, on the deprecated routes."
+  ],
+  "open": []
+}

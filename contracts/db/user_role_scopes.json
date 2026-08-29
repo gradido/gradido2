@@ -1,0 +1,71 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "user_role_scopes",
+  "description": "How far one role assignment reaches. One row per (assignment, dimension, target). Generic on purpose: a new dimension is a new enum value, not a new table.",
+  "source": null,
+  "origin": "gradido2",
+  "columns": [
+    {
+      "name": "id",
+      "type": "uint64",
+      "nullable": false,
+      "identity": true
+    },
+    {
+      "name": "user_role_id",
+      "type": "uint64",
+      "nullable": false,
+      "references": {
+        "table": "user_roles",
+        "column": "id"
+      },
+      "onDelete": "cascade",
+      "description": "The assignment this narrows. Not the user and not the role: the same person can hold MODERATOR twice with different scopes, and that is the point."
+    },
+    {
+      "name": "dimension",
+      "type": "varchar(32)",
+      "nullable": false,
+      "enum": "ScopeDimension",
+      "description": "Which dimension is being restricted. The enum says what each dimension's target_id refers to."
+    },
+    {
+      "name": "target_id",
+      "type": "uint64",
+      "nullable": false,
+      "description": "The id inside that dimension — creation_groups.id for 'creation_group', communities.id for 'community'. 0 is reserved and means the resources that have no value in this dimension: a contribution with no creation group. Identity columns start at 1, so 0 can never collide with a real row."
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp_ms",
+      "nullable": false,
+      "default": "now"
+    }
+  ],
+  "primaryKey": [
+    "id"
+  ],
+  "unique": [
+    {
+      "name": "user_role_dimension_target",
+      "columns": [
+        "user_role_id",
+        "dimension",
+        "target_id"
+      ]
+    }
+  ],
+  "indexes": [],
+  "notes": [
+    "The rule, for every dimension alike: no row for a dimension means unrestricted in that dimension; one or more rows mean exactly those targets. There is no mode column and no empty-means-everything special case, because there is no way to write an empty list — a moderator who should see nothing loses the assignment instead.",
+    "target_id carries no foreign key, and that is the trade this table makes deliberately: one polymorphic column instead of one table per dimension, in a schema that exists four times over (C/PostgreSQL, C/SQLite, Drizzle/PostgreSQL, Drizzle/SQLite). The integrity a foreign key would give is bought back where it is actually needed: the rows are read once per session, resolved against the cached dimension data, and a target that resolves to nothing is dropped and logged at warn rather than matching anything.",
+    "Read once, never joined. A session loads its assignments and their scopes at login and holds them as a set per dimension; a request answers 'may X do R to Y' out of memory. That is why a generic table costs nothing here and why the shape is chosen for how it is written and read by admins, not for how it would be queried per request.",
+    "Where scope still reaches the database is the list query — a moderator's contribution list is filtered by the same set, as an IN over the ids the session already holds. Both implementations must build that filter from the same set, or the list and the per-resource check disagree.",
+    "What a scope bites on is decided per domain, not per right: rights.json gives each domain an 'exposes' list, and a restriction applies exactly where the resource carries that dimension. A moderator scoped to two creation groups is therefore not blocked from searching users — the user domain exposes no creation_group. The full rule is rights.json, 'evaluation'.",
+    "Rows cascade with the assignment. Revoking a role takes its scope with it, so re-granting the role starts unrestricted — which is what legacy does today, and it is worth knowing rather than discovering.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json.",
+    "Identifiers are uint64 throughout; see contracts/AGENTS.md."
+  ],
+  "open": []
+}

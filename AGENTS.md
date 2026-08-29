@@ -57,6 +57,12 @@ Two rules follow, and neither is negotiable:
 `fast-servers/` is C: h2o, request path, session, repositories. It is an independent
 implementation of the same business behavior and may lag behind TypeScript.
 
+**A deployment runs one path or the other, never both.** Nothing proxies between them, and a
+route missing on the fast path is never forwarded to TypeScript: the server answers
+`ROUTE_NOT_IMPLEMENTED` and the frontend shows an error. Lagging behind therefore means a
+fast-path deployment offers fewer routes — it never means a mixed deployment. The reason is
+the session cache; see `Architecture.md`, *One implementation per deployment*.
+
 When changing TypeScript: identify whether business behavior changed, locate the
 corresponding domain path in `fast-servers/`, assess whether it is affected, update it only
 when required. Do **not** force artificial parity.
@@ -582,6 +588,7 @@ Did the change accidentally introduce a generic abstraction?
 Did TypeScript remain the reference behavior?
 Would the product still work if the fast path were switched off?
 Does any behavior now exist only in the fast path?
+Does anything assume the other implementation is reachable at runtime?
 Did the fast path preserve semantics while remaining independently optimized?
 Does contracts/ still describe the actual shared behavior?
 Did money arithmetic go through shared-native?

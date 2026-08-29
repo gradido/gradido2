@@ -8,12 +8,17 @@ share: why there are two, what a SessionContext is for, the consistency model, t
 organisation, the database and logging contracts. This file holds only what is specific to
 building that in C, and it does not repeat the reasoning.
 
-Two rules from there govern everything here, so they are worth restating:
+Three rules from there govern everything here, so they are worth restating:
 
 - **No feature originates on this path.** Behavior that exists only in C silently removes
   itself from the fallback that keeps the project alive without its author.
 - **This path must be droppable, not merely removable.** Running without it must require no
   code change anywhere else.
+- **A deployment runs this path or the TypeScript one, never both.** Nothing proxies between
+  them: a route not implemented here answers `ROUTE_NOT_IMPLEMENTED` rather than reaching
+  TypeScript. Lagging behind means a smaller route set, not a mixed deployment — the session
+  cache lives in one process and cannot be shared across the two. See *One implementation per
+  deployment* there.
 
 ---
 

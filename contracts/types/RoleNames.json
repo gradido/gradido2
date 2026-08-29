@@ -11,11 +11,6 @@
     { "name": "USER", "value": "USER" },
     { "name": "MODERATOR", "value": "MODERATOR" },
     { "name": "MODERATOR_AI", "value": "MODERATOR_AI" },
-    { "name": "ADMIN", "value": "ADMIN" },
-    {
-      "name": "DLT_CONNECTOR",
-      "value": "DLT_CONNECTOR_ROLE",
-      "note": "value differs from the name — legacy spelling, kept"
-    }
+    { "name": "ADMIN", "value": "ADMIN" }
   ]
 }
