@@ -1,0 +1,872 @@
+{
+  "contractVersion": 1,
+  "kind": "rights",
+  "name": "rights",
+  "description": "Every right both implementations know, grouped into domains, each with the bit it occupies in its domain's uint64 mask, and the default roles that hold it. This is the registry db/role_rights.json stores strings out of and the rights arrays in server/** name.",
+  "origin": "gradido2",
+  "maxRightsPerDomain": "64",
+  "unknownValuePolicy": "ignore_and_warn",
+  "defaultRoles": [
+    {
+      "role": "ADMIN",
+      "all": true,
+      "description": "Allowed everything, in every domain, including domains and rights added after this file was written. Never enumerated — an enumeration would be a second source of truth that goes stale on the first new right."
+    },
+    {
+      "role": "USER",
+      "description": "A member of the community, and the role an account has when it holds no other: db/user_roles.json lists only the exceptions, so an account with no row there is a USER."
+    },
+    {
+      "role": "MODERATOR",
+      "description": "A member who also moderates contributions. Holds the rights whose roles list names MODERATOR; how far one moderator reaches is not part of the role but of their assignment — see db/user_role_scopes.json."
+    },
+    {
+      "role": "MODERATOR_AI",
+      "description": "The AI moderator. Holds what MODERATOR holds plus the crea rights."
+    },
+    {
+      "role": "UNAUTHORIZED",
+      "description": "No session. Holds exactly the rights marked public. Never written to user_roles — it is what a request without a session is checked against."
+    },
+    {
+      "role": "DLT_CONNECTOR",
+      "description": "The DLT connector service. Holds only what it needs on the community routes."
+    }
+  ],
+  "domains": [
+    {
+      "name": "user",
+      "description": "Registration, login, session, profile and the admin actions on an account.",
+      "exposes": [],
+      "sources": [
+        "server/backend/user.json"
+      ],
+      "rights": [
+        {
+          "name": "VERIFY_LOGIN",
+          "bit": "0",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "LOGIN",
+          "bit": "1",
+          "public": true,
+          "roles": [
+            "UNAUTHORIZED",
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "LOGOUT",
+          "bit": "2",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "CREATE_USER",
+          "bit": "3",
+          "public": true,
+          "roles": [
+            "UNAUTHORIZED",
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "SEND_RESET_PASSWORD_EMAIL",
+          "bit": "4",
+          "public": true,
+          "roles": [
+            "UNAUTHORIZED",
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "SET_PASSWORD",
+          "bit": "5",
+          "public": true,
+          "roles": [
+            "UNAUTHORIZED",
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "QUERY_OPT_IN",
+          "bit": "6",
+          "public": true,
+          "roles": [
+            "UNAUTHORIZED",
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "CHECK_USERNAME",
+          "bit": "7",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "UPDATE_USER_INFOS",
+          "bit": "8",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "USER",
+          "bit": "9",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "HAS_ELOPAGE",
+          "bit": "10",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "GMS_USER_PLAYGROUND",
+          "bit": "11",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "HUMHUB_AUTO_LOGIN",
+          "bit": "12",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "SEARCH_ADMIN_USERS",
+          "bit": "13",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "SEARCH_USERS",
+          "bit": "14",
+          "roles": [
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "SEND_ACTIVATION_EMAIL",
+          "bit": "15",
+          "roles": [
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "SET_USER_ROLE",
+          "bit": "16",
+          "roles": []
+        },
+        {
+          "name": "DELETE_USER",
+          "bit": "17",
+          "roles": []
+        },
+        {
+          "name": "UNDELETE_USER",
+          "bit": "18",
+          "roles": []
+        },
+        {
+          "name": "SET_ROLE_SCOPE",
+          "bit": "19",
+          "roles": [],
+          "description": "Narrow how far one role assignment reaches, in any dimension. Admin only, like the right it replaces."
+        }
+      ]
+    },
+    {
+      "name": "contribution",
+      "description": "Contributions, the messages on them and the contribution links.",
+      "exposes": [
+        "creation_group"
+      ],
+      "sources": [
+        "server/backend/contribution.json",
+        "server/backend/contribution-message.json",
+        "server/backend/contribution-link.json"
+      ],
+      "rights": [
+        {
+          "name": "CREATE_CONTRIBUTION",
+          "bit": "0",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "UPDATE_CONTRIBUTION",
+          "bit": "1",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "DELETE_CONTRIBUTION",
+          "bit": "2",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "LIST_CONTRIBUTIONS",
+          "bit": "3",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "LIST_ALL_CONTRIBUTIONS",
+          "bit": "4",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "OPEN_CREATIONS",
+          "bit": "5",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "ADMIN_CREATE_CONTRIBUTION",
+          "bit": "6",
+          "roles": [
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "ADMIN_UPDATE_CONTRIBUTION",
+          "bit": "7",
+          "bound": true,
+          "roles": [
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "ADMIN_DELETE_CONTRIBUTION",
+          "bit": "8",
+          "bound": true,
+          "roles": [
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "ADMIN_LIST_CONTRIBUTIONS",
+          "bit": "9",
+          "bound": true,
+          "roles": [
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "ADMIN_OPEN_CREATIONS",
+          "bit": "10",
+          "roles": [
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "CONFIRM_CONTRIBUTION",
+          "bit": "11",
+          "bound": true,
+          "roles": [
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "DENY_CONTRIBUTION",
+          "bit": "12",
+          "bound": true,
+          "roles": [
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "CREATE_CONTRIBUTION_MESSAGE",
+          "bit": "13",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "LIST_ALL_CONTRIBUTION_MESSAGES",
+          "bit": "14",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "ADMIN_CREATE_CONTRIBUTION_MESSAGE",
+          "bit": "15",
+          "bound": true,
+          "roles": [
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "ADMIN_LIST_ALL_CONTRIBUTION_MESSAGES",
+          "bit": "16",
+          "bound": true,
+          "roles": [
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "CREATE_CONTRIBUTION_LINK",
+          "bit": "17",
+          "roles": []
+        },
+        {
+          "name": "UPDATE_CONTRIBUTION_LINK",
+          "bit": "18",
+          "roles": []
+        },
+        {
+          "name": "DELETE_CONTRIBUTION_LINK",
+          "bit": "19",
+          "roles": []
+        },
+        {
+          "name": "LIST_CONTRIBUTION_LINKS",
+          "bit": "20",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "transaction",
+      "description": "Sending coins, the balance and the transaction links.",
+      "exposes": [],
+      "sources": [
+        "server/backend/transaction.json",
+        "server/backend/balance.json",
+        "server/backend/transaction-link.json"
+      ],
+      "rights": [
+        {
+          "name": "SEND_COINS",
+          "bit": "0",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "TRANSACTION_LIST",
+          "bit": "1",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "BALANCE",
+          "bit": "2",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "CREATE_TRANSACTION_LINK",
+          "bit": "3",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "DELETE_TRANSACTION_LINK",
+          "bit": "4",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "QUERY_TRANSACTION_LINK",
+          "bit": "5",
+          "public": true,
+          "roles": [
+            "UNAUTHORIZED",
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "REDEEM_TRANSACTION_LINK",
+          "bit": "6",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "QUERY_REDEEM_JWT",
+          "bit": "7",
+          "public": true,
+          "roles": [
+            "UNAUTHORIZED",
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "DISBURSE_TRANSACTION_LINK",
+          "bit": "8",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "LIST_TRANSACTION_LINKS",
+          "bit": "9",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "LIST_TRANSACTION_LINKS_ADMIN",
+          "bit": "10",
+          "roles": [
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "community",
+      "description": "The home community and the federated ones, their statistics, their branding and the linked Humhub spaces.",
+      "exposes": [
+        "community"
+      ],
+      "sources": [
+        "server/backend/community.json",
+        "server/backend/statistics.json",
+        "server/backend/project-branding.json",
+        "server/backend/space.json"
+      ],
+      "rights": [
+        {
+          "name": "COMMUNITIES",
+          "bit": "0",
+          "public": true,
+          "roles": [
+            "UNAUTHORIZED",
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI",
+            "DLT_CONNECTOR"
+          ]
+        },
+        {
+          "name": "COMMUNITY_UPDATE",
+          "bit": "1",
+          "roles": [
+            "DLT_CONNECTOR"
+          ]
+        },
+        {
+          "name": "COMMUNITY_WITH_API_KEYS",
+          "bit": "2",
+          "roles": []
+        },
+        {
+          "name": "COMMUNITY_STATISTICS",
+          "bit": "3",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "PROJECT_BRANDING_VIEW",
+          "bit": "4",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "PROJECT_BRANDING_BANNER",
+          "bit": "5",
+          "public": true,
+          "roles": [
+            "UNAUTHORIZED",
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "PROJECT_BRANDING_MUTATE",
+          "bit": "6",
+          "roles": []
+        },
+        {
+          "name": "LIST_HUMHUB_SPACES",
+          "bit": "7",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "creation_group",
+      "description": "Creation groups and who may manage which of them.",
+      "exposes": [],
+      "sources": [
+        "server/backend/creation-group.json"
+      ],
+      "rights": [
+        {
+          "name": "LIST_CREATION_GROUPS",
+          "bit": "0",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "MANAGE_OWN_CREATION_GROUPS",
+          "bit": "1",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "MANAGE_USER_CREATION_GROUPS",
+          "bit": "2",
+          "roles": [
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "MANAGE_CREATION_GROUPS",
+          "bit": "3",
+          "roles": []
+        },
+        {
+          "name": "SET_MODERATOR_CREATION_GROUP_SCOPE",
+          "bit": "4",
+          "roles": [],
+          "deprecated": true,
+          "note": "Replaced by user.SET_ROLE_SCOPE, which is generic over dimensions. Kept because a name here is never reused, and because the deprecated routes still carry it."
+        },
+        {
+          "name": "ADOPT_LEGACY_HASHTAGS",
+          "bit": "5",
+          "roles": []
+        }
+      ]
+    },
+    {
+      "name": "crea",
+      "description": "The AI assistant: its chat and its settings.",
+      "exposes": [],
+      "sources": [
+        "server/backend/crea.json",
+        "server/backend/crea-chat.json"
+      ],
+      "rights": [
+        {
+          "name": "AI_SEND_MESSAGE",
+          "bit": "0",
+          "roles": [
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "SET_USER_SALUTATION",
+          "bit": "1",
+          "roles": [
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "AI_SETTINGS",
+          "bit": "2",
+          "roles": []
+        }
+      ]
+    },
+    {
+      "name": "gdt",
+      "description": "The GDT side: balance, entries and the publisher lookup.",
+      "exposes": [],
+      "sources": [
+        "server/backend/gdt.json"
+      ],
+      "rights": [
+        {
+          "name": "GDT_BALANCE",
+          "bit": "0",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "LIST_GDT_ENTRIES",
+          "bit": "1",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "EXIST_PID",
+          "bit": "2",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "matching",
+      "description": "Matching entries.",
+      "exposes": [],
+      "sources": [
+        "server/backend/matching-entry.json"
+      ],
+      "rights": [
+        {
+          "name": "CREATE_MATCHING_ENTRY",
+          "bit": "0",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "UPDATE_MATCHING_ENTRY",
+          "bit": "1",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "DELETE_MATCHING_ENTRY",
+          "bit": "2",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "LIST_MATCHING_ENTRY",
+          "bit": "3",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "newsletter",
+      "description": "The newsletter subscription.",
+      "exposes": [],
+      "sources": [
+        "server/backend/newsletter.json"
+      ],
+      "rights": [
+        {
+          "name": "SUBSCRIBE_NEWSLETTER",
+          "bit": "0",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "UNSUBSCRIBE_NEWSLETTER",
+          "bit": "1",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "thank_you_card",
+      "description": "Thank you cards and the payments received for them.",
+      "exposes": [],
+      "sources": [
+        "server/backend/thank-you-card.json",
+        "server/backend/thank-you-card-payment.json"
+      ],
+      "rights": [
+        {
+          "name": "MANAGE_OWN_THANK_YOU_CARD",
+          "bit": "0",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        },
+        {
+          "name": "RECEIVE_THANK_YOU_CARD_PAYMENT",
+          "bit": "1",
+          "roles": [
+            "USER",
+            "MODERATOR",
+            "MODERATOR_AI"
+          ]
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "A bit is a promise. It is written here explicitly and never derived from the order of the array, never renumbered, never reused after a right is retired — retire one by marking it deprecated and leaving both the entry and its bit in place. contracts/AGENTS.md, Names are stable forever.",
+    "The default roles live only here. No migration seeds them into db/roles.json, nothing in the database can extend or restrict them, and a role an admin creates may not be named like one — db/user_roles.json resolves a name against this file first and against roles second.",
+    "A domain is a promise for the same reason: the bit only means something together with the domain, so moving a right into a better-fitting domain later is a renumbering. The grouping below is therefore a decision made now, not a filing convenience, and splitting a domain later is only free for rights that do not exist yet.",
+    "Sixty-four is the ceiling per domain because a domain's mask is one uint64 — Architecture.md, Auth. The largest domain here holds 21. A contract test asserts the ceiling rather than trusting the count.",
+    "roles lists the default roles that hold the right, minus ADMIN, which holds everything by definition. The lists were read out of the roles arrays in server/**, which came from legacy; a contract test asserts the two stay equal, in both directions, so a right that exists only in a route or only here is a failing test and not a silent deny.",
+    "public marks a right whose route needs no session (auth: public). Those are the routes Architecture.md groups as needing no permission; the right still exists so that one mechanism answers every route, and UNAUTHORIZED is the role that holds it.",
+    "LOGIN, CREATE_USER, SEND_RESET_PASSWORD_EMAIL and QUERY_OPT_IN carry no roles array in server/backend/user.json at all. Their lists here are derived from auth: public and are the only entries in this file that were not read off a route.",
+    "The role names are the RoleNames enum names; server/** spells the same roles lowercase with dashes (moderator-ai). One of the two spellings should go — see the open question.",
+    "MODERATOR holds everything USER holds, and MODERATOR_AI everything MODERATOR holds. That is a property of the sets below rather than an inheritance rule the code implements, and a contract test asserts it stays true: an account that is promoted must never lose a right by being promoted.",
+    "A domain is also a resource kind: 'exposes' says which scope dimensions its resources carry, and that is what a role assignment's scope narrows. A domain that exposes nothing cannot be scoped, which is the correct answer for LOGIN and for the newsletter.",
+    "bound marks the rights legacy enforces per resource today (ContributionResolver and ContributionMessageResolver, via assertContributionInModeratorScope). Marking more rights bound later tightens behavior without changing the mechanism — see the open question."
+  ],
+  "open": [
+    {
+      "question": "Is SEARCH_ADMIN_USERS really a right every USER holds?",
+      "detail": "server/backend/user.json grants user.adminSearch to user, moderator, moderator-ai and admin, while the plain user.search is moderator and up. Carried over from legacy exactly as found. Either the name is misleading or the grant is.",
+      "why_it_matters": "If it is a mistake, contracting it makes it permanent and both implementations reproduce it faithfully.",
+      "status": "unanswered — check against the legacy resolver before the first release"
+    },
+    {
+      "question": "Which spelling of a role name survives?",
+      "detail": "types/RoleNames.json has MODERATOR_AI, the roles arrays in server/** have moderator-ai, and this file uses the enum name. A mapping rule that lives nowhere is a mapping rule each implementation invents.",
+      "why_it_matters": "Two spellings of one name is the cheapest kind of bug to prevent and an annoying one to find.",
+      "status": "unanswered — decide when the route contracts next move"
+    },
+    {
+      "question": "Which further rights are resource-bound?",
+      "detail": "Seven are marked bound because legacy enforces the moderator scope on exactly those call sites. Others plausibly belong there — ADMIN_OPEN_CREATIONS and LIST_ALL_CONTRIBUTIONS read across other people's contributions — but legacy does not gate them per resource, and marking one bound changes what a scoped moderator may do.",
+      "why_it_matters": "Each one is a behaviour change for existing moderators, not a refactor. It should be decided deliberately and once, not discovered per route.",
+      "status": "unanswered — decide before the first scoped moderator exists in production"
+    }
+  ],
+  "evaluation": {
+    "description": "The whole check, and there is no second one. Grants are what a session holds: one per row in user_roles, each carrying the role's mask per domain (from the global role cache) and its scope sets (from user_role_scopes).",
+    "rule": "allowed(grants, right, resource?) = EXISTS g IN grants: bit(right) IN g.mask[domain(right)] AND FOR EACH (dimension d, ids) IN g.scopes: NOT domain(right).exposes CONTAINS d OR ids INTERSECTS values(resource, d)",
+    "notes": [
+      "A restriction applies only where the resource has that dimension. A moderator scoped to two creation groups is not thereby blocked from searching users — the user domain exposes no creation_group, so the restriction has nothing to bite on. This is what legacy does today, and it is the reason the dimension is read off the domain instead of being written on each right.",
+      "A right marked bound must be checked WITH a resource. A bound right checked without one is a programming error: it fails closed and logs at error, rather than passing because there was nothing to filter. That flag is the only thing standing between this model and the classic hole where a forgotten argument silently widens a permission.",
+      "For a list, the same sets become the query filter instead of a membership test — the moderator's contribution list is an IN over the ids the session already holds. One source, two applications, so the list and the per-row check cannot disagree.",
+      "values(resource, d) is the only code a new dimension needs: one accessor per (domain, dimension) pair. Everything else — which dimensions exist, which domain exposes them, which rights are bound, what a role may do — is data."
+    ]
+  }
+}

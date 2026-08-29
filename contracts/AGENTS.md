@@ -116,8 +116,8 @@ Every file carries an envelope so a loader can check what it is reading:
 { "contractVersion": 1, "kind": "...", "...": "..." }
 ```
 
-`kind` is one of `const`, `enum`, `convention`, `errors`, `logging`, `table`, `route`,
-`test-vectors`.
+`kind` is one of `const`, `enum`, `convention`, `errors`, `logging`, `settings`, `rights`,
+`table`, `route`, `test-vectors`.
 
 `convention` is for cross-cutting behavior that is neither a value nor a shape — how time is
 represented, how strings are compared. It lives in `types/` beside the enums.
@@ -126,6 +126,45 @@ represented, how strings are compared. It lives in `types/` beside the enums.
 
 One flat map, keyed by name. `group` is for humans and for grouping test output; `source`
 records where the value came from so the legacy original stays findable.
+
+### settings.json
+
+The same shape as `const.json` and for the same kind of value — the difference is when it
+changes. A constant changes with a release; a setting changes while the server runs, from the
+admin frontend. `db/settings.json` and `db/user_settings.json` hold the rows; this file holds
+what a row *means*, and without it a row is an untyped string that the two implementations
+parse differently.
+
+Each entry adds `scope` (`instance` or `user`, which decides the table), a `default` in the
+same text form the database stores, and the bounds — `min`, `max`, `nullable` — that both
+implementations reject the same value by. **`default` is authoritative:** an absent row means
+exactly this value, and no implementation re-derives it from an environment variable.
+
+The exclusions carry their reason with them, in the file's `notes`. A value that must exist
+before the database is open stays in env, a value whose leak is an incident stays in the
+secret store, and a value that already has a home — a column on `communities`, a function in
+`shared-native` — does not get a second one here.
+
+### rights.json
+
+The registry of everything the auth system checks: every right, the domain it belongs to,
+the **bit** it occupies in that domain's `uint64` mask, and the default roles that hold it.
+`db/role_rights.json` stores strings out of this file and the `rights` arrays in `server/**`
+name them.
+
+A bit is a value, so the same rule applies as everywhere else here: it is written down
+explicitly, never derived from array order, never renumbered, never reused. The domain is
+part of the identity — a bit means nothing without it — so **moving a right into a
+better-fitting domain later is a renumbering** and is not allowed either. Sixty-four rights
+per domain is the ceiling, because a domain's mask is one `uint64`.
+
+The default roles live here and **only** here — nothing seeds them into the database, which is
+why `roles.parent_role` and `user_roles.role` hold names rather than foreign keys. `ADMIN`
+carries `"all": true` and is never enumerated; the others are read off the `roles` array of
+each right.
+
+Two contract tests keep it honest: every right named in `server/**` exists here and every
+right here is named by a route, and no domain holds more than 64.
 
 ### types/&lt;Name&gt;.json — one file per type
 
@@ -210,6 +249,11 @@ from. Where legacy used a type the vocabulary above has no answer for, `type` is
 `note` is the opposite case: the type is decided, but something about it is worth knowing
 (`publisherId` is an Elopage number, not a gradido row id).
 
+A route contracted here that the fast path has not implemented answers `ROUTE_NOT_IMPLEMENTED`
+(`errors/api.json`) on a fast-path deployment, and is never proxied to TypeScript — see
+`../Architecture.md`, *One implementation per deployment*. What is contracted here is therefore
+the full route set of the reference implementation, not of whichever path is deployed.
+
 `legacy` on each route points back at the resolver, the operation and the field it was
 collected from. That block is provenance and follows working rule 6 — a lead, not an
 authority. A route gradido2 invents rather than inherits carries `"legacy": null` and the file
@@ -257,11 +301,13 @@ so a failure names something.
 | Area | State |
 |---|---|
 | `const.json` | from legacy `shared/src/const`. Values exported by `shared-native` are deliberately absent, see working rule 5 |
-| `types/` | 18 enums from legacy `shared`, `database` and the backend, plus the `Timestamp` and `PasswordHash` conventions |
+| `types/` | 20 enums — 18 from legacy `shared`, `database` and the backend, plus `RightDomain` and `ScopeDimension`, which gradido2 invents — and the `Timestamp` and `PasswordHash` conventions |
 | `errors/` | database, domain and mutation errors; codes newly assigned |
-| `db/` | **29 tables — every one legacy has.** Column types, defaults, keys and indexes are decided; what is not is collected as `open` on the column or on the table |
+| `db/` | **28 tables — every one legacy has except `user_creation_groups`**, which could never hold more than one row and becomes the member setting `main_creation_group` — plus `settings`, `user_settings`, `roles`, `role_rights` and `user_role_scopes`, which gradido2 invents and legacy has no counterpart for. Column types, defaults, keys and indexes are decided; what is not is collected as `open` on the column or on the table |
+| `settings.json` | **24 runtime keys** — 21 instance settings from legacy's config, and in `user_settings.json` 3 member settings: 2 leaving `db/users.json` and `main_creation_group`, which replaces a table. Types, defaults and bounds are decided; the three publish-name enums are not |
+| `rights.json` | **79 rights in 10 domains**, each with its bit, plus the 6 default roles and their sets, the dimensions each domain exposes and the one evaluation rule both implementations share. Read off the `rights` and `roles` arrays of the routes; one grant and the role-name spelling are `open` |
 | `logging.json` | envelope, levels, 11 categories, 13 seed events, redaction |
-| `server/` | **135 routes** — 134 collected from legacy (121 backend, 13 federation) plus `peer.bootstrap`, which legacy has no counterpart for. Names, paths, methods, rights and roles are decided; request fields are filled in from the legacy arg classes, response shapes are not, except on `peer.bootstrap` which is new and therefore fully contracted |
+| `server/` | **139 routes** — 134 collected from legacy (121 backend, 13 federation), plus `peer.bootstrap` and the four in `backend/role.json`, which legacy has no counterpart for. Three legacy routes are marked `deprecated`, superseded by those four. Names, paths, methods, rights and roles are decided; request fields are filled in from the legacy arg classes, response shapes are not, except on `peer.bootstrap` which is new and therefore fully contracted |
 | `test-vectors/` | empty — **the most valuable missing piece** |
 
 Next, in this order:
@@ -270,19 +316,23 @@ Next, in this order:
    highest cost of divergence and the lowest cost of testing. `shared-native` already has
    the implementation and `../gradido/shared-native/tests/calculateDecay.test.js` has cases
    to lift.
-2. **The five columns whose type has no answer.** `users.location` and `communities.location`
+2. **The routes behind the settings tables.** `settings.json` and the two tables are written;
+   nothing reads or writes them yet. What is missing is the admin route that changes a value —
+   which is also where the staleness bound in `db/settings.json` has to be answered, because
+   an admin frontend that appears not to work is the first thing anyone will notice.
+3. **The five columns whose type has no answer.** `users.location` and `communities.location`
    (MariaDB geometry, and neither PostgreSQL without PostGIS nor SQLite has one),
    `user_avatars.avatar_small` and `avatar_full` (a variable-length blob, which the vocabulary
    above has no entry for — and which may not need one, if the column becomes an object key),
    and `crea_records.hours` (the only floating point value in the schema; a count of minutes
    would remove it). Each is written as `open` on its column.
-3. **Response shapes.** The routes exist, but every response that is not a scalar still
+4. **Response shapes.** The routes exist, but every response that is not a scalar still
    says `open: shape of X not contracted yet`. Those are the legacy `@ObjectType` models in
    `../gradido/backend/src/graphql/model/`. Along with them, the four request types the
    vocabulary has no answer for yet: `Location`, `PublishNameType`,
    `GmsPublishLocationType`, `CreaBatchContribution` — and legacy's `Float` return on
    `gdt.getBalance`.
-4. **Media objects**, once the storage decision is settled (see `../Architecture.md`,
+5. **Media objects**, once the storage decision is settled (see `../Architecture.md`,
    *Media storage*). What will need contracting is not the backend but the behavior around
    it: the object key derived from a user, which rendition may be shown to whom, accepted
    content types and size bounds. Legacy's avatar limits were removed from `const.json`

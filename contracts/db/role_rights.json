@@ -1,0 +1,88 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "role_rights",
+  "description": "One row per right a created role grants or takes away, relative to the default role it inherits from. Rights are stored as strings here and used as a uint64 bitset at runtime; the string and its bit are declared in ../rights.json.",
+  "source": null,
+  "origin": "gradido2",
+  "columns": [
+    {
+      "name": "id",
+      "type": "uint64",
+      "nullable": false,
+      "identity": true
+    },
+    {
+      "name": "role_id",
+      "type": "uint64",
+      "nullable": false,
+      "references": {
+        "table": "roles",
+        "column": "id"
+      },
+      "onDelete": "cascade",
+      "description": "Points at a row in roles, which only ever holds roles an admin created. A default role has no row here and none in roles either — its rights are in code, in ../rights.json, and nothing in the database can add to them or take from them."
+    },
+    {
+      "name": "domain",
+      "type": "varchar(32)",
+      "nullable": false,
+      "enum": "RightDomain",
+      "description": "The rights domain the right belongs to. One uint64 bitset exists per domain, which is why the domain is stored and not derived from the right name.",
+      "reference": "../rights.json"
+    },
+    {
+      "name": "right_name",
+      "type": "varchar(64)",
+      "nullable": false,
+      "description": "A right from ../rights.json within that domain. Called right_name and not right because RIGHT is a reserved word in both PostgreSQL and MariaDB and the column would have to be quoted in every statement in both implementations.",
+      "reference": "../rights.json"
+    },
+    {
+      "name": "granted",
+      "type": "bool",
+      "nullable": false,
+      "default": "true",
+      "description": "true grants the right on top of the inherited set, false takes it away. This is what 'inherit from a default role to extend or restrict it' needs and what the original sketch had no room for."
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp_ms",
+      "nullable": false,
+      "default": "now"
+    }
+  ],
+  "primaryKey": [
+    "id"
+  ],
+  "unique": [
+    {
+      "name": "role_domain_right",
+      "columns": [
+        "role_id",
+        "domain",
+        "right_name"
+      ]
+    }
+  ],
+  "indexes": [
+    {
+      "name": "role_id",
+      "columns": [
+        "role_id"
+      ]
+    }
+  ],
+  "notes": [
+    "The resolution, in full: effective[domain] = (inherited[domain] | grant_mask[domain]) & ~revoke_mask[domain], where inherited is the mask ../rights.json declares for roles.parent_role, or zero when parent_role is NULL. grant_mask is the OR of the bits of the rows with granted = true, revoke_mask the same for granted = false.",
+    "The order rows are read in cannot change the result: a revoke always wins over a grant, and the unique key makes a row that grants and a row that revokes the same right in the same domain impossible in the first place. So there is no precedence rule for either implementation to get wrong, and no ORDER BY the query has to carry.",
+    "A row whose domain or right_name is not in ../rights.json is skipped with a warning, never rejected and never treated as a right of value zero. Same reason db/settings.json gives: an older binary must survive a database written by a newer one, and 'unknown' must not silently become 'bit 0'.",
+    "An admin who revokes a right the inherited role never had writes a row that changes nothing. That is allowed and kept: it survives the parent's default set changing in a later release, which is precisely when someone wants to know that the revoke was meant.",
+    "Every write here also writes roles.updated_at for the same role_id, in the same transaction. That is what lets an instance skip a rebuild and what makes the local invalidation exact; the bound on how stale another instance may be is the 10 minute cache TTL, the same one that bounds settings and the session.",
+    "Rows are deleted when a right is taken back out of a role, and cascade when the role is deleted. Unlike settings there is no tombstone to keep honest, because roles.updated_at is written either way.",
+    "The bitset is never stored. A mask column would be a second source of truth for the same fact, and the string is the half that still means something after a release renumbers nothing but adds rights around it.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json.",
+    "Identifiers are uint64 throughout; see contracts/AGENTS.md."
+  ],
+  "open": []
+}

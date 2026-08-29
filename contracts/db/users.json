@@ -25,13 +25,10 @@
       "description": "Stable public identifier. Legacy stores it as char(36); gradido2 uses a uuid column."
     },
     {
-      "name": "community_uuid",
-      "type": "uuid",
-      "nullable": true,
-      "references": {
-        "table": "communities",
-        "column": "community_uuid"
-      }
+      "name": "community_id",
+      "type": "uint64",
+      "nullable": false,
+      "description": "community from user"
     },
     {
       "name": "alias",
@@ -48,7 +45,7 @@
         "table": "user_contacts",
         "column": "id"
       },
-      "description": "The contact row holding the login email."
+      "description": "The contact row holding the login and contact email."
     },
     {
       "name": "first_name",
@@ -95,38 +92,6 @@
       "convention": "PasswordHash"
     },
     {
-      "name": "referrer_id",
-      "type": "uint64",
-      "nullable": true,
-      "default": null
-    },
-    {
-      "name": "contribution_link_id",
-      "type": "uint64",
-      "nullable": true,
-      "default": null
-    },
-    {
-      "name": "publisher_id",
-      "type": "uint64",
-      "nullable": false,
-      "default": "0"
-    },
-    {
-      "name": "hide_amount_gdd",
-      "type": "bool",
-      "nullable": false,
-      "default": "false",
-      "open": "Legacy declares no explicit column name; the snake_case form here follows the TypeORM default and must be confirmed against the live schema."
-    },
-    {
-      "name": "hide_amount_gdt",
-      "type": "bool",
-      "nullable": false,
-      "default": "false",
-      "open": "same as hide_amount_gdd"
-    },
-    {
       "name": "about_me",
       "type": "text",
       "nullable": true,
@@ -147,8 +112,8 @@
       "maxChars": "SALUTATION_MAX_LENGTH"
     },
     {
-      "name": "crea_signature",
-      "type": "varchar(255)",
+      "name": "avatar_id",
+      "type": "uint64",
       "nullable": true,
       "default": null
     },
@@ -226,24 +191,23 @@
   "unique": [
     {
       "name": "uuid_key",
-      "columns": ["gradido_id", "community_uuid"]
+      "columns": ["gradido_id", "community_id"]
     },
     {
       "name": "alias_key",
-      "columns": ["alias", "community_uuid"]
+      "columns": ["alias", "community_id"]
     }
   ],
   "indexes": [
     {
       "name": "idx_users_created_id_uuid",
-      "columns": ["created_at", "id", "community_uuid"]
+      "columns": ["created_at", "id", "community_id"]
     }
   ],
   "notes": [
     "The uniqueness of gradido_id is per community, not global — migration 0073 replaced the single-column unique when foreign users were introduced. An implementation that assumes a global unique gradido_id is wrong.",
-    "A lookup by gradido_id alone is served by the leading column of uuid_key. Legacy lost this index once and read 1.9x slower without noticing.",
     "created_at, deleted_at and gms_registered_at are UTC milliseconds; see types/Timestamp.json. deleted_at null means not deleted — never 0.",
     "Identifiers are uint64 throughout. Legacy is inconsistent here — users.id is int unsigned while referrer_id, contribution_link_id and publisher_id, which point at it, are bigint unsigned. A foreign key narrower than its target truncates silently in C, so gradido2 uses one width everywhere.",
-    "A user has at most one password representation: password (legacy) or password_hash (current), selected by password_encryption_type. Both implementations must read the type first and never sniff the columns."
+    "A user has at most one password representation: password (legacy) or password_hash (current), selected by password_encryption_type."
   ]
 }

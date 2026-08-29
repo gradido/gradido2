@@ -65,6 +65,15 @@
       "messageTemplate": "unknown community: {communityUuid}",
       "parameters": [{ "name": "communityUuid", "type": "string" }],
       "httpStatus": 404
+    },
+    {
+      "code": 3008,
+      "name": "ROUTE_NOT_IMPLEMENTED",
+      "legacyName": null,
+      "messageTemplate": "route not implemented on this server: {route}",
+      "parameters": [{ "name": "route", "type": "string" }],
+      "httpStatus": 501,
+      "note": "A route this deployment's implementation does not serve yet. Distinct from 3004 and from a plain 404: the route exists in the contract, this server does not have it. A deployment runs one implementation and never proxies to the other, so the frontend must surface this rather than expect a retry to land elsewhere. Invented by gradido2; legacy had no counterpart."
     }
   ]
 }

@@ -1,0 +1,67 @@
+{
+  "contractVersion": 1,
+  "kind": "table",
+  "name": "settings",
+  "description": "Instance-wide settings an admin may change at runtime. The same kind of value as const.json holds, but changeable without a release. A generic table with a contracted key set: the shape is open, the keys are not.",
+  "source": null,
+  "origin": "gradido2",
+  "columns": [
+    {
+      "name": "key",
+      "type": "varchar(64)",
+      "nullable": false,
+      "description": "A key from ../settings.json with scope 'instance'. Lowercase, dotted, '<group>.<name>' — email.code_valid_minutes, dlt.connector_url. Stable forever, like every other name in contracts/.",
+      "reference": "../settings.json"
+    },
+    {
+      "name": "value",
+      "type": "text",
+      "nullable": true,
+      "description": "The value in the same text form contracts/ uses everywhere: decimal string for every numeric type, 'true' or 'false' for bool, UTC milliseconds for an instant. Parsed according to the type the registry declares for the key, never sniffed.",
+      "note": "NULL is not 'unset' — an absent row is unset. NULL is an explicit null and is only legal for a key whose registry entry allows it, the way crea_settings.effort NULL means 'disabled'."
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp_ms",
+      "nullable": false,
+      "default": "now",
+      "description": "Written on every write, including one that stores the registry default again. MAX(updated_at) over this table is the freshness marker every instance polls."
+    },
+    {
+      "name": "updated_by_user_id",
+      "type": "uint64",
+      "nullable": true,
+      "default": null,
+      "references": {
+        "table": "users",
+        "column": "id"
+      },
+      "description": "The admin who made the change. NULL for a value written by a migration or by an operator outside the application."
+    }
+  ],
+  "primaryKey": [
+    "key"
+  ],
+  "unique": [],
+  "indexes": [],
+  "notes": [
+    "The table is generic, the key set is not. Every key, its contract type, its default and its bounds live in ../settings.json; this table stores only the deviation from that default. Without the registry a value is an untyped string and the two implementations parse it differently, which is the exact failure contracts/ exists to prevent.",
+    "An absent row means the registry default. Nothing seeds this table, and a key added in a release works on the day it ships without a migration.",
+    "Rows are never deleted. 'Reset to default' writes the default value explicitly. That is what makes MAX(updated_at) a complete change signal — a DELETE would move nothing and an instance would keep serving the overridden value forever.",
+    "A row whose key is not in the registry is ignored with a warning, never rejected: an older binary must survive a database written by a newer one. A row whose value does not parse as the registry type falls back to the registry default and logs an error at that level — it must not abort startup and must not be read as a partial parse.",
+    "Both implementations cache this table in memory and re-read it when the marker moves, and in any case within 10 minutes: that TTL is the contracted upper bound on how stale an instance's copy may be, the same one that bounds the role rights cache. How often an instance looks inside that bound is infrastructure and belongs to each implementation; that it looks at MAX(updated_at), that it gives up and re-reads after 10 minutes, and what it does with a value it cannot parse is behavior and is contracted here. See Architecture.md, Multiple instances — an admin writing on instance A must reach instance B.",
+    "No secrets. API keys, JWT secrets and passwords come from the OS secret store; see Architecture.md, Config. The test is simple: if a leak of the value is an incident, it is not a setting.",
+    "Not scoped by community. An instance has exactly one home community (communities.foreign = false), and a foreign community's settings are not this instance's business.",
+    "COMMUNITY_NAME, COMMUNITY_URL and COMMUNITY_DESCRIPTION do not belong here. They are columns on the home community row in communities and would become a second source of truth.",
+    "Timestamps are UTC milliseconds; see types/Timestamp.json.",
+    "No index beyond the primary key, deliberately. The table holds tens of rows, is read once per process and polled by a scan that touches all of them. An index on updated_at would cost a write and save nothing."
+  ],
+  "open": [
+    {
+      "question": "Does crea_settings fold into this table?",
+      "detail": "crea_settings is a singleton row holding model, effort and fast_mode, and its own notes name this as an open design decision. As keys they would be crea.model, crea.effort and crea.fast_mode, and the two NULLs whose meaning is specific ('use the environment default', 'disabled') are exactly what the registry's nullable flag is for. thank_you_card_settings does not fold in: there the existence of the row is the on/off switch and the PIN is a secret.",
+      "why_it_matters": "Two mechanisms for the same job means the admin frontend implements both.",
+      "status": "unanswered"
+    }
+  ]
+}

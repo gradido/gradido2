@@ -1,0 +1,221 @@
+{
+  "contractVersion": 1,
+  "kind": "settings",
+  "description": "The key set behind db/settings.json. Same kind of value as const.json holds, but changeable at runtime instead of at release. The tables are generic; this file is what makes a row typed, bounded and readable by both implementations.",
+  "origin": "gradido2",
+  "valueEncoding": "Every value in the database is text, in the same form contracts/ uses everywhere: a decimal string for every numeric type, 'true' or 'false' for bool, UTC milliseconds for an instant. 'default' below carries that same text form, so a default and a stored value are never encoded differently.",
+  "settings": {
+    "logging.level": {
+      "group": "logging",
+      "scope": "instance",
+      "type": "uint32",
+      "default": "30",
+      "min": "10",
+      "max": "60",
+      "reference": "logging.json levels",
+      "description": "The threshold below which a line is not emitted. The number is the contract, the spelling is not — see logging.json.",
+      "note": "Also needed before the database is open, so env carries a boot level and this key takes over once the settings table has been read. The two disagreeing during startup is expected and is not a bug.",
+      "source": "config-schema/src/commonSchema.ts LOG_LEVEL"
+    },
+
+    "auth.jwt_expires_seconds": {
+      "group": "auth",
+      "scope": "instance",
+      "type": "uint32",
+      "unit": "seconds",
+      "default": "600",
+      "min": "60",
+      "max": "86400",
+      "description": "Lifetime of a login token, and therefore how long after closing the tab a member stays signed in.",
+      "note": "Legacy accepts either '10m' or a number of seconds. gradido2 takes seconds only: a duration grammar is a second parser to agree on, and the two implementations would agree on it approximately.",
+      "source": "backend/src/config/schema.ts JWT_EXPIRES_IN"
+    },
+    "auth.redeem_jwt_expires_seconds": {
+      "group": "auth",
+      "scope": "instance",
+      "type": "uint32",
+      "unit": "seconds",
+      "default": "600",
+      "min": "60",
+      "max": "86400",
+      "description": "Lifetime of the token that carries a redeem across communities.",
+      "source": "backend/src/config/schema.ts REDEEM_JWT_TOKEN_EXPIRATION"
+    },
+
+    "email.code_valid_minutes": {
+      "group": "email",
+      "scope": "instance",
+      "type": "uint32",
+      "unit": "minutes",
+      "default": "1440",
+      "min": "1",
+      "max": "43200",
+      "description": "How long a code sent by mail stays usable.",
+      "source": "backend/src/config/schema.ts EMAIL_CODE_VALID_TIME"
+    },
+    "email.code_request_minutes": {
+      "group": "email",
+      "scope": "instance",
+      "type": "uint32",
+      "unit": "minutes",
+      "default": "10",
+      "min": "1",
+      "max": "43200",
+      "description": "How long a member must wait before asking for a new code. Raising it is the lever against someone hammering the mail sender.",
+      "source": "backend/src/config/schema.ts EMAIL_CODE_REQUEST_TIME"
+    },
+
+    "federation.validate_community_interval_ms": {
+      "group": "federation",
+      "scope": "instance",
+      "type": "uint32",
+      "unit": "milliseconds",
+      "default": "60000",
+      "min": "1000",
+      "max": "3600000",
+      "description": "How often known communities are re-validated.",
+      "source": "backend/src/config/schema.ts FEDERATION_VALIDATE_COMMUNITY_TIMER"
+    },
+
+    "dlt.active": {
+      "group": "dlt",
+      "scope": "instance",
+      "type": "bool",
+      "default": "false",
+      "description": "Whether transactions are written to the distributed ledger.",
+      "source": "config-schema/src/commonSchema.ts DLT_ACTIVE"
+    },
+    "dlt.connector_url": {
+      "group": "dlt",
+      "scope": "instance",
+      "type": "varchar(255)",
+      "default": "http://localhost:6010",
+      "description": "Base URL of the dlt-connector. Read when dlt.active is true.",
+      "source": "config-schema/src/commonSchema.ts DLT_CONNECTOR_URL"
+    },
+
+    "gdt.active": {
+      "group": "gdt",
+      "scope": "instance",
+      "type": "bool",
+      "default": "false",
+      "description": "Whether the GDT service is queried.",
+      "source": "config-schema/src/commonSchema.ts GDT_ACTIVE"
+    },
+    "gdt.api_url": {
+      "group": "gdt",
+      "scope": "instance",
+      "type": "varchar(255)",
+      "default": "https://gdt.gradido.net",
+      "description": "Base URL of the GDT API. Read when gdt.active is true.",
+      "source": "config-schema/src/commonSchema.ts GDT_API_URL"
+    },
+
+    "gms.active": {
+      "group": "gms",
+      "scope": "instance",
+      "type": "bool",
+      "default": "false",
+      "description": "Whether the Geographic Member Search integration is offered.",
+      "source": "config-schema/src/commonSchema.ts GMS_ACTIVE"
+    },
+    "gms.api_url": {
+      "group": "gms",
+      "scope": "instance",
+      "type": "varchar(255)",
+      "default": "http://localhost:4044/",
+      "description": "Base URL of the GMS API.",
+      "source": "backend/src/config/schema.ts GMS_API_URL"
+    },
+    "gms.dashboard_url": {
+      "group": "gms",
+      "scope": "instance",
+      "type": "varchar(255)",
+      "default": "http://localhost:8080/",
+      "description": "Where a member is sent to see the map.",
+      "source": "backend/src/config/schema.ts GMS_DASHBOARD_URL"
+    },
+    "gms.create_user_throw_errors": {
+      "group": "gms",
+      "scope": "instance",
+      "type": "bool",
+      "default": "false",
+      "description": "Whether a failure to create the member in GMS fails the registration, or is only logged. False means a GMS outage does not stop people signing up.",
+      "source": "backend/src/config/schema.ts GMS_CREATE_USER_THROW_ERRORS"
+    },
+
+    "matching.active": {
+      "group": "matching",
+      "scope": "instance",
+      "type": "bool",
+      "default": "false",
+      "description": "Whether the matching feature — entries, map, list — is offered to members. Deliberately separate from gms.active: that one switches the older integration and is on in production, and hanging matching off it would publish unfinished work the moment an instance enables the old service.",
+      "source": "config-schema/src/commonSchema.ts MATCHING_ACTIVE"
+    },
+
+    "humhub.active": {
+      "group": "humhub",
+      "scope": "instance",
+      "type": "bool",
+      "default": "false",
+      "description": "Whether the HumHub based community server is connected.",
+      "source": "config-schema/src/commonSchema.ts HUMHUB_ACTIVE"
+    },
+    "humhub.api_url": {
+      "group": "humhub",
+      "scope": "instance",
+      "type": "varchar(255)",
+      "nullable": true,
+      "default": null,
+      "description": "Base URL of the HumHub API. NULL is the not-configured case and is only reachable while humhub.active is false — legacy declares no default for it either.",
+      "source": "config-schema/src/commonSchema.ts HUMHUB_API_URL"
+    },
+
+    "klicktipp.active": {
+      "group": "klicktipp",
+      "scope": "instance",
+      "type": "bool",
+      "default": "false",
+      "description": "Whether members are subscribed to the Klicktipp newsletter service.",
+      "source": "backend/src/config/schema.ts KLICKTIPP"
+    },
+    "klicktipp.api_url": {
+      "group": "klicktipp",
+      "scope": "instance",
+      "type": "varchar(255)",
+      "default": "https://api.klicktipp.com",
+      "description": "Base URL of the Klicktipp API. https only.",
+      "note": "The credentials that go with it — user, password and the two API keys — are not settings. They travel together and they travel through the secret store.",
+      "source": "backend/src/config/schema.ts KLICKTTIPP_API_URL"
+    },
+
+    "crea.active": {
+      "group": "crea",
+      "scope": "instance",
+      "type": "bool",
+      "default": "false",
+      "description": "Whether the AI moderation assistant is available. One switch for the assistant and its chat window, so the two are never half on.",
+      "note": "The API key behind it is a secret and is not in this file.",
+      "source": "config-schema/src/commonSchema.ts ANTHROPIC_ACTIVE"
+    },
+    "crea.stub": {
+      "group": "crea",
+      "scope": "instance",
+      "type": "bool",
+      "default": "false",
+      "description": "Return a canned evaluation instead of calling the API, so the UI, the database path and the deterministic parts can be exercised without a key. An opt-in preview, off in production.",
+      "source": "backend/src/config/schema.ts CREA_STUB"
+    }
+  },
+  "notes": [
+    "A key is an identifier and follows the rule the rest of contracts/ follows: rename nothing, reuse nothing. To retire one, mark it deprecated and leave it here — a database written by an older release still holds rows under the old name.",
+    "'default' is what an implementation returns when no row exists, and every implementation returns exactly this. It is not a suggestion and it is not re-derived from an environment variable.",
+    "A default of null is only legal together with nullable: true. Everywhere else null in the database is a value that failed to parse, and the reading implementation falls back to this default and logs an error — see db/settings.json.",
+    "min, max and the string bounds are validation for the admin frontend and for both implementations, which must reject the same value. A bound is not decoration: auth.jwt_expires_seconds without a max is an admin-editable path to a token that never expires.",
+    "No secrets. ANTHROPIC_API_KEY, JWT_SECRET, HUMHUB_JWT_KEY, GMS_WEBHOOK_SECRET, LOGIN_APP_SECRET, LOGIN_SERVER_KEY and the Klicktipp credentials stay in the OS secret store; see Architecture.md, Config. If a leak of the value is an incident, it is not a setting.",
+    "Deliberately not here, with the reason: COMMUNITY_NAME, COMMUNITY_URL, COMMUNITY_DESCRIPTION and COMMUNITY_LOCATION are columns on the home community row in db/communities.json; DECAY_START_TIME comes from shared-native and a copy here would be a second source of truth for a determinism-critical value (working rule 5); COMMUNITY_REDEEM_URL and every EMAIL_LINK_* are derived from the community URL and are constants in code; BACKEND_PORT, NODE_ENV, PRODUCTION, DEBUG, APP_VERSION, BUILD_COMMIT and the database connection are needed before the settings table can be read and stay in env; LOG4JS_CONFIG, LOG_FILES_BASE_PATH and USE_CRYPTO_WORKER are per-implementation infrastructure (working rule 4); GMS_USER_SEARCH_FRONTEND_ROUTE is frontend-only (working rule 3); GRAPHIQL has no meaning without GraphQL, which gradido2 does not have.",
+    "crea.model, crea.effort and crea.fast_mode are deliberately absent. They live in db/crea_settings.json today, and whether that singleton folds into the settings table is an open question recorded there and in db/settings.json. Writing them here before it is answered would create the second source of truth the question exists to avoid."
+  ],
+  "open": [
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "RightDomain",
+  "representation": "string",
+  "description": "The domains rights are grouped into. One domain is one uint64 bitset at runtime, which is why a right is only identified by domain and name together. The rights of each domain are in ../rights.json; this file is the closed set of domain names that db/role_rights.json stores.",
+  "source": null,
+  "origin": "gradido2",
+  "unknownValuePolicy": "ignore_and_warn",
+  "values": [
+    { "name": "USER", "value": "user" },
+    { "name": "CONTRIBUTION", "value": "contribution" },
+    { "name": "TRANSACTION", "value": "transaction" },
+    { "name": "COMMUNITY", "value": "community" },
+    { "name": "CREATION_GROUP", "value": "creation_group" },
+    { "name": "CREA", "value": "crea" },
+    { "name": "GDT", "value": "gdt" },
+    { "name": "MATCHING", "value": "matching" },
+    { "name": "NEWSLETTER", "value": "newsletter" },
+    { "name": "THANK_YOU_CARD", "value": "thank_you_card" }
+  ],
+  "notes": [
+    "The stored value is the lowercase snake_case form, never the enum name. It is what appears in role_rights.domain and it is stable forever.",
+    "Adding a domain is free and needs no migration. Moving an existing right from one domain to another is not: the bit only means anything together with the domain, so that is a renumbering — see ../rights.json."
+  ]
+}

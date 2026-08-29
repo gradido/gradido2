@@ -22,6 +22,14 @@ Two rules from `../AGENTS.md` govern everything here:
   need no code change anywhere: no shared state, no route only served here, no role only
   filled here.
 
+And one that governs how this path is deployed:
+
+- **A deployment runs this path or the TypeScript path, never both.** A route not implemented
+  here answers `ROUTE_NOT_IMPLEMENTED`; it is never proxied to TypeScript, because the session
+  cache is in-process and per implementation. Lagging behind is a smaller route set on a
+  fast-path deployment, not a mixed deployment. `../Architecture.md`, *One implementation per
+  deployment*, has the reasoning.
+
 When TypeScript changes: identify whether business behavior changed, locate the
 corresponding domain path here, assess whether it is affected, update only when required.
 Do **not** force artificial parity. Preserve the business semantics, write idiomatic C.

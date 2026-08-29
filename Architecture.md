@@ -17,6 +17,7 @@ Gradido2 uses a **reconstructible, session-local working context**.
 The database remains the source of truth. The session is a materialized, ephemeral view of the data the current user has already needed.
 
 > RAM may forget. The database must not.
+Don't move data to computation when you can move computation to data.
 
 A server restart, session loss, or request being routed to another instance must never make the application incorrect. The missing in-memory state is rebuilt lazily from the persistent source.
 
@@ -51,6 +52,10 @@ The consequence is that the TypeScript path must stay *independently shippable*,
 its own single-binary release. A fallback that cannot produce a release is a specification,
 not an insurance policy.
 
+"Fallback" throughout these documents means the path the *project* falls back to, not a
+request-level fallback. No request ever moves from one implementation to the other — see
+*One implementation per deployment* below.
+
 ### Density
 
 Measured in a test project, same pipeline (JWT → PostgreSQL → JSON) on both stacks:
@@ -69,6 +74,31 @@ each with its own SessionContext map. Eight workers mean eight working sets for 
 users, or sticky sessions — which this architecture rejects. A multithreaded fast server has
 one session map across all cores. The session model of this document therefore works fully
 only on the fast path.
+
+### One implementation per deployment
+
+A deployment runs **either** the TypeScript path **or** the fast path, never both in front of
+the same database. Nothing sits before them splitting routes — no nginx map, no proxy pass by
+prefix — and a route the fast path has not implemented is not forwarded to TypeScript. The
+server answers `ROUTE_NOT_IMPLEMENTED` (`contracts/errors/api.json`) and the frontend surfaces
+the error.
+
+**The reason is the cache, not deployment taste.** The consistency model below rests on an
+asymmetry: an own write updates the session in place, because the process that made the change
+is the process that holds the session; a foreign write is noticed later through a freshness
+marker on the data. Split one user's requests across two implementations and both halves hold
+a session for that user, each treating its own writes as precise updates, and neither carrying
+a marker the other reads. What that produces is not a cold session — that is acceptable, see
+*Multiple instances* — but a warm and wrong one.
+
+Making the mixed case work would mean contracting the cache: shared generation counters, a
+shared invalidation channel, one session model implemented identically twice. That is
+infrastructure, which `contracts/AGENTS.md` deliberately keeps per implementation, and it
+would couple the two paths at exactly the point where their independence is the whole idea.
+
+What does not change is that **the fast path may lag**. Lagging means a deployment on the fast
+path serves fewer routes than one on TypeScript, and whoever chose that path chose that. It
+never means one deployment serving both.
 
 ## Four kinds of code
 
@@ -547,9 +577,14 @@ times as many of them.
                  Database
 ```
 
+Both instances run the same implementation; mixing the two paths behind one load balancer is
+a different thing and is ruled out above, under *One implementation per deployment*.
+
 A user may reach another instance and therefore encounter a cold session. That is acceptable.
 
 Sticky sessions, shared session state, Redis, or distributed cache infrastructure are not required for correctness. They may be introduced later as performance optimizations if justified.
+
+The same answer covers the process-global caches an instance keeps of data an admin can change — the settings and the role rights. Each carries a maximum TTL of 10 minutes and is invalidated immediately on the instance that made the change, so an edit on A reaches B within the TTL. That bound is the contract; there is no cross-instance invalidation to build and no poll interval to agree on.
 
 ## Logging
 
@@ -700,6 +735,8 @@ Cache invalidation is part of the business semantics of an operation and should 
 - Rights are stored as strings in the database and used as a bitset at runtime. Unknown strings from the database are ignored and logged as a warning.
 - Max 64 rights per domain, so a domain's rights fit into the bits of a uint64
 - Global cache for role rights, max TTL 10 minutes, invalidated when an admin edits a role
+- A role is *assigned*, and the assignment carries how far it reaches. An account may hold
+  several, they combine by OR, and a scope narrows one assignment rather than the account
 - Routes that need no permission (login, viewing community info, ...) are grouped in one file
 - A request whose token is older than `JWT_TOKEN_REISSUE_AFTER_MS` (1 minute) is answered
   with a fresh one, so an active user's login keeps moving in whole minutes and ends
@@ -710,12 +747,202 @@ Cache invalidation is part of the business semantics of an operation and should 
 Tables:
 
 ```text
-roles:      id, parent_role (varchar, optional), role (varchar), description (text)
-role_rights: id, role_id, domain, right (varchar), created_at
+roles             id, name (varchar, unique), parent_role (varchar, optional),
+                  description, created_at, updated_at, updated_by_user_id
+role_rights       id, role_id, domain, right_name (varchar), granted (bool), created_at
+user_roles        id, user_id, role (varchar), created_at, updated_at
+user_role_scopes  id, user_role_id, dimension (varchar), target_id (uint64), created_at
 ```
 
-`parent_role` is a string rather than a foreign key because the default roles are
-defined in code and have no database row. `role_rights` stores one right per row.
+Four tables, and only the last one is new thinking. `user_roles` is a **role assignment**:
+this account holds this role, as far as its scopes reach. The same role may be assigned twice
+with different scopes, which is how "moderates `#feuerwehr`, and everything in community Y"
+is said. The scope hangs off the assignment — not off the role, which is shared, and not off
+the account, which may hold two assignments that reach differently.
+
+Both `parent_role` and `user_roles.role` are names rather than foreign keys: the default roles
+are defined in code and have no row anywhere to point at. `user_roles` holds only the accounts
+whose role is *not* the default `USER` — no row means `USER`. A name there is resolved against
+`RoleNames` first and against `roles` second, so a created role can never shadow a default one;
+an unknown name is ignored with a warning and the account falls back to `USER`.
+
+`granted` is what makes *restrict* expressible. It is resolved when a role's masks are computed,
+against the default set of `parent_role`, and it exists **only** inside a role definition — never
+on an assignment. That keeps every assignment purely positive, so several of them combine by OR
+and no question of the form "why may they not do this" turns into a search across assignments:
+
+```text
+mask[domain] = (inherited[domain] | grant_mask) & ~revoke_mask
+```
+
+### The scope model
+
+One generic table instead of one table per dimension. `user_role_scopes` says: this assignment
+is restricted, in this dimension, to these ids. **No row for a dimension means unrestricted in
+that dimension**; there is no mode column and no empty list, because a moderator who should see
+nothing loses the assignment instead. `target_id` is reserved at `0` for the resources that have
+no value in the dimension — a contribution with no creation group — and identity columns start
+at 1, so it cannot collide.
+
+`target_id` carries no foreign key, and that is the deliberate trade: the schema exists four
+times over (C/PostgreSQL, C/SQLite, Drizzle/PostgreSQL, Drizzle/SQLite), and a dimension that
+costs four migrations and four sets of generated access code is a dimension nobody adds. Here a
+dimension costs one enum value.
+
+What a scope bites on is decided **per domain, not per right**. Each domain in
+`contracts/rights.json` declares which dimensions its resources carry:
+
+```text
+contribution  exposes [creation_group]
+community     exposes [community]
+user          exposes []
+```
+
+So a moderator scoped to two creation groups is restricted when confirming a contribution and
+not restricted when searching users — without anyone having written that down 79 times, once per
+right. A right that acts on one resource is marked `bound`, and a bound right checked without a
+resource fails closed: that flag is what keeps a forgotten argument from silently widening a
+permission.
+
+The whole check, and there is no second one:
+
+```text
+allowed(grants, right, resource?) =
+  ∃ g ∈ grants:
+      bit(right) ∈ g.mask[domain(right)]
+    ∧ ∀ (d, ids) ∈ g.scopes:
+          d ∉ domain(right).exposes  ∨  ids ∩ values(resource, d) ≠ ∅
+```
+
+A *grant* is what a session holds per `user_roles` row: the role's masks, pointing into the
+global role cache, and its scope sets. Both are read once when the session is built and answered
+from memory afterwards — no join per request. Where a scope still reaches the database is the
+list query, as an `IN` over the ids the session already holds, built from the same set as the
+per-resource check so that a list and an action cannot disagree.
+
+`values(resource, d)` is the only code a new dimension needs. Everything else — which dimensions
+exist, which domain exposes them, which rights are bound, what a role may do — is data.
+
+### Writing it
+
+An assignment is addressed by its id, never by the account plus a role name — that is what an
+account holding two of them makes necessary, and it is the whole reason the write routes are
+new ones rather than the old ones with a wider argument. `contracts/server/backend/role.json`:
+
+```text
+role.listAssignments  userId                            -> assignments
+role.assign           userId, role                      -> assignments
+role.unassign         userRoleId                        -> assignments
+role.setScope         userRoleId, dimension, targetIds  -> assignments
+```
+
+`role.assign` adds an assignment instead of replacing the account's others, and it takes the
+role as text, so a role an admin created is assignable — the route it replaces typed that field
+as the `RoleNames` enum and therefore could not. A new assignment starts unrestricted;
+`role.setScope` replaces one dimension of it in full, and an empty `targetIds` removes the
+restriction. All four answer with the account's assignments as they are now, so nothing has to
+reconstruct the state after a write.
+
+`role.setScope` is also where a target id is checked against the dimension it names. It is the
+only place that can: `user_role_scopes.target_id` carries no foreign key, so an id written past
+this route survives until the session cache drops it with a warning nobody reads.
+
+The three routes that address an account — `user.setRole`,
+`creationGroup.getModeratorScope`, `creationGroup.setModeratorScope` — are marked `deprecated`
+where they stand. They cannot say which assignment they mean, but a name in `contracts/` is
+never reused, and an admin frontend that still calls them keeps working until it is changed.
+
+The 10 minute cache TTL above is also the staleness bound *between* instances, for role rights as
+for settings: an admin editing a role on instance A invalidates A immediately, and B is right
+again within the TTL. There is no cross-instance invalidation to build, which is the same trade
+the session makes with `SESSION_HARD_TIMEOUT_MS`.
+
+How it hangs together — dashed means no foreign key, and `RoleNames_im_Code` is the enum
+rather than a table:
+
+```mermaid
+erDiagram
+    users {
+        uint64 id PK
+    }
+    user_roles {
+        uint64 id PK
+        uint64 user_id FK
+        varchar role "RoleNames-Wert ODER roles.name"
+    }
+    user_role_scopes {
+        uint64 id PK
+        uint64 user_role_id FK
+        varchar dimension "creation_group | community"
+        uint64 target_id "0 = ohne Wert in dieser Dimension"
+    }
+    roles {
+        uint64 id PK
+        varchar name UK
+        varchar parent_role "RoleNames-Wert, kein FK"
+    }
+    role_rights {
+        uint64 id PK
+        uint64 role_id FK
+        varchar domain
+        varchar right_name
+        bool granted
+    }
+    creation_groups {
+        uint64 id PK
+        varchar tag UK
+    }
+    communities {
+        uint64 id PK
+    }
+    contributions {
+        uint64 id PK
+        uint64 user_id FK
+    }
+    contribution_creation_groups {
+        uint64 id PK
+        uint64 contribution_id FK
+        uint64 creation_group_id FK
+    }
+    user_settings {
+        uint64 user_id PK,FK
+        varchar key PK "main_creation_group"
+        text value "creation_groups.id als Dezimalstring"
+    }
+    RoleNames_im_Code {
+        varchar value "USER, MODERATOR, ADMIN, ..."
+    }
+
+    users             ||--o{ user_roles                   : "nur wenn Rolle != USER"
+    users             ||--o{ user_settings                : "main_creation_group"
+    users             ||--o{ contributions                : "erstellt"
+    roles             ||--o{ role_rights                  : "gewaehrt / entzieht"
+    user_roles        ||--o{ user_role_scopes             : "keine Zeile = unbeschraenkt"
+    contributions     ||--o{ contribution_creation_groups : "getaggt mit"
+    creation_groups   ||--o{ contribution_creation_groups : "taggt"
+    creation_groups   |o..o{ user_role_scopes             : "target_id, dimension=creation_group"
+    communities       |o..o{ user_role_scopes             : "target_id, dimension=community"
+    creation_groups   |o..o{ user_settings                : "value, kein FK"
+    user_roles        }o..o| roles                        : "role = name"
+    RoleNames_im_Code |o..o{ roles                        : "parent_role"
+    RoleNames_im_Code |o..o{ user_roles                   : "role, wenn Default-Rolle"
+```
+
+The two dashed edges into `user_role_scopes` are the same column: `target_id` points into a
+different table per dimension, which is what buys the single generic table.
+
+Two paths lead from an account to creation groups and they are easy to confuse. The
+`main_creation_group` setting is the member's *own* choice, which pre-fills the group field when
+they submit. `user_role_scopes` under the `creation_group` dimension is what they may *see* as a
+moderator. Same target, opposite meaning.
+
+No path leads from `users` to a right directly: it is always
+`users -> user_roles -> (code | roles -> role_rights)`, which is what keeps a right cacheable per
+role instead of per account.
+
+The rights themselves, their bit positions and the default roles' sets are contracted in
+[contracts/rights.json](contracts/rights.json); the tables in
+[contracts/db/](contracts/db/roles.json).
 
 ## DCI: Data, Context, Interaction
 
