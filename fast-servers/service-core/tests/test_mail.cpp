@@ -24,6 +24,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <thread>
 #include <vector>
@@ -31,6 +32,18 @@
 extern "C" {
 #include "service_core/log.h"
 #include "service_core/mail.h"
+
+/*
+ * The subject encoder, declared here rather than reached through a header.
+ *
+ * It is not public API -- the only component allowed to call it is the one it lives in -- and
+ * service-core/src is deliberately off this test's include path, because a test that can only
+ * see the component's include directory is what proves the header carries its own dependencies
+ * (build.zig says so where the test executables are wired up). A single extern declaration is
+ * the smaller of the two exceptions. It has to match mail.c; if it stops matching, the encoder
+ * tests below fail at the first assertion rather than quietly.
+ */
+sc_status sc_mail_encode_subject(char *dst, size_t cap, const char *subject, size_t *out_len);
 }
 
 namespace
@@ -129,6 +142,263 @@ TEST_F(MailTest, EnqueueRefusesEverythingIncomplete)
     mail.body = nullptr;
     EXPECT_EQ(sc_mail_enqueue(mailer, &mail), SC_ERR_INVALID_ARGUMENT);
     EXPECT_EQ(sc_mail_pending(mailer), 0u);
+
+    sc_mailer_destroy(mailer);
+}
+
+/* ---------------------------------------------------------------- *
+ * the subject
+ * ---------------------------------------------------------------- */
+
+/* Enough room that only the encoder's own bounds can be the reason something does not fit. */
+constexpr size_t kSubjectCap = 1024;
+
+std::string encoded(const char *subject, sc_status expect = SC_OK)
+{
+    std::vector<char> buf(kSubjectCap, '\xEE');
+    size_t len = 0;
+    EXPECT_EQ(sc_mail_encode_subject(buf.data(), buf.size(), subject, &len), expect)
+        << "subject: " << subject;
+    if (expect != SC_OK)
+        return {};
+    EXPECT_EQ(buf[len], '\0') << "not terminated";
+    EXPECT_EQ(std::string(buf.data()).size(), len) << "length disagrees with the terminator";
+    return std::string(buf.data(), len);
+}
+
+/* ASCII is the common case and stays readable on the wire -- an encoded-word there would be
+ * correct and unhelpful. */
+TEST_F(MailTest, LeavesAnAsciiSubjectAlone)
+{
+    EXPECT_EQ(encoded("Account activation"), "Account activation");
+    EXPECT_EQ(encoded(""), "");
+    /* Every printable ASCII character, including the ones RFC 2047 would have to escape. */
+    EXPECT_EQ(encoded("=?UTF-8?B?_ '\"()<>@,;:\\/[]?.="), "=?UTF-8?B?_ '\"()<>@,;:\\/[]?.=");
+}
+
+/* The bug this whole path exists for: every locale but en produces one of these. */
+TEST_F(MailTest, EncodesANonAsciiSubject)
+{
+    /* "E-Mail Überprüfung", the subject that went out as raw UTF-8. */
+    EXPECT_EQ(encoded("E-Mail \xC3\x9C" "berpr\xC3\xBC" "fung"),
+              "=?UTF-8?B?RS1NYWlsIMOcYmVycHLDvGZ1bmc=?=");
+    /* Non-Latin scripts are the same path, and the ones where a byte string guessed as Latin-1
+     * is not merely ugly but unreadable. */
+    EXPECT_EQ(encoded("\xCE\x95\xCE\xBB\xCE\xBB\xCE\xAC\xCE\xB4\xCE\xB1"),
+              "=?UTF-8?B?zpXOu867zqzOtM6x?=");
+}
+
+/*
+ * Folding, and the two limits it is folded to: RFC 2047 gives an encoded-word 75 characters, and
+ * RFC 5322 recommends 78 for the line -- of which "Subject: " has already spent nine.
+ */
+TEST_F(MailTest, FoldsALongSubjectIntoSeveralEncodedWords)
+{
+    /* 60 U+00E4, so 120 bytes: three words, and no chunk that lands on the ASCII path. */
+    std::string subject;
+    for (int i = 0; i < 60; i++)
+        subject += "\xC3\xA4";
+
+    const std::string out = encoded(subject.c_str());
+    ASSERT_NE(out.find("\r\n "), std::string::npos) << "a subject this long was not folded";
+
+    size_t words = 0;
+    size_t line_start = 0;
+    for (size_t i = 0; i <= out.size(); i++) {
+        if (i != out.size() && !(out[i] == '\r' && i + 2 < out.size() && out[i + 1] == '\n'))
+            continue;
+        const std::string line = out.substr(line_start, i - line_start);
+        /* The first line carries "Subject: " in front of it; every folded one carries a space,
+         * which is already part of the separator counted here. */
+        const size_t prefix = (line_start == 0) ? 9u : 1u;
+        EXPECT_LE(line.size() + prefix, 78u) << "line over RFC 5322's 78: " << line;
+        EXPECT_LE(line.size(), 75u) << "encoded-word over RFC 2047's 75: " << line;
+        EXPECT_EQ(line.compare(0, 10, "=?UTF-8?B?"), 0) << "not an encoded-word: " << line;
+        EXPECT_EQ(line.compare(line.size() - 2, 2, "?="), 0) << "unterminated word: " << line;
+        words++;
+        line_start = i + 3; /* past "\r\n " */
+        i += 2;
+    }
+    EXPECT_GT(words, 1u);
+}
+
+/** Decodes one encoded-word's base64 payload. Empty on anything that is not valid base64. */
+std::string b64_decode(const std::string &in)
+{
+    static const char *kAlphabet =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    uint32_t acc = 0;
+    int bits = 0;
+    if (in.empty() || in.size() % 4 != 0)
+        return {};
+    for (char c : in) {
+        if (c == '=')
+            break;
+        const char *at = std::strchr(kAlphabet, c);
+        if (at == nullptr || c == '\0')
+            return {};
+        acc = (acc << 6) | static_cast<uint32_t>(at - kAlphabet);
+        bits += 6;
+        if (bits >= 8) {
+            bits -= 8;
+            out += static_cast<char>((acc >> bits) & 0xFF);
+        }
+    }
+    return out;
+}
+
+/** Splits an encoded subject at its folds and returns what each word decodes to. */
+std::vector<std::string> decode_words(const std::string &out)
+{
+    std::vector<std::string> words;
+    for (size_t at = 0; at < out.size();) {
+        const size_t fold = out.find("\r\n ", at);
+        const std::string word = out.substr(at, fold == std::string::npos ? fold : fold - at);
+        EXPECT_EQ(word.compare(0, 10, "=?UTF-8?B?"), 0) << word;
+        EXPECT_EQ(word.compare(word.size() - 2, 2, "?="), 0) << word;
+        words.push_back(b64_decode(word.substr(10, word.size() - 12)));
+        if (fold == std::string::npos)
+            break;
+        at = fold + 3;
+    }
+    return words;
+}
+
+/** True when @p s is a run of complete UTF-8 sequences -- none started before it, none cut off. */
+bool whole_characters(const std::string &s)
+{
+    size_t i = 0;
+    while (i < s.size()) {
+        const unsigned char c = static_cast<unsigned char>(s[i]);
+        const size_t width = (c < 0x80) ? 1u : (c >> 5) == 0x06 ? 2u : (c >> 4) == 0x0E ? 3u
+                             : (c >> 3) == 0x1E                 ? 4u
+                                                                : 0u;
+        if (width == 0 || i + width > s.size())
+            return false; /* a continuation byte first, or a sequence running past the end */
+        for (size_t k = 1; k < width; k++)
+            if ((static_cast<unsigned char>(s[i + k]) & 0xC0) != 0x80)
+                return false;
+        i += width;
+    }
+    return true;
+}
+
+/*
+ * RFC 2047 2: an encoded-word "encodes an integral number of characters". A receiver decodes the
+ * words one at a time, so a character split across two of them is a replacement character in
+ * somebody's inbox -- which is exactly what a fixed 42-byte chunk would produce, 42 being no
+ * multiple of 3 or 4.
+ *
+ * Padding inside a word, on the other hand, is not a symptom of anything: a chunk shortened to
+ * land on a character boundary is often no multiple of three, and RFC 2047 asks each word to
+ * decode on its own, which is what the padding is for.
+ */
+TEST_F(MailTest, NeverSplitsACharacterAcrossTwoEncodedWords)
+{
+    /* Four-byte characters, the worst case: the split can land on any of three continuation
+     * bytes, so the padding walks it over every offset it can take. */
+    for (int pad = 0; pad < 8; pad++) {
+        std::string subject(static_cast<size_t>(pad), 'a');
+        for (int i = 0; i < 20; i++)
+            subject += "\xF0\x9F\x92\xB6"; /* U+1F4B6 */
+
+        const std::vector<std::string> words = decode_words(encoded(subject.c_str()));
+        ASSERT_GT(words.size(), 1u) << "at pad " << pad << ": nothing was folded";
+
+        std::string joined;
+        for (const std::string &word : words) {
+            EXPECT_TRUE(whole_characters(word)) << "word cut mid-character, at pad " << pad;
+            joined += word;
+        }
+        /* And decoding them one at a time gives the subject back, byte for byte. */
+        EXPECT_EQ(joined, subject) << "at pad " << pad;
+    }
+}
+
+/* The same round trip over the three shorter widths and over a subject that mixes them. */
+TEST_F(MailTest, EncodedWordsDecodeBackToTheSubject)
+{
+    const char *const cases[] = {
+        "E-Mail \xC3\x9C" "berpr\xC3\xBC" "fung",
+        "\xCE\x95\xCE\xBB\xCE\xBB\xCE\xAC\xCE\xB4\xCE\xB1 \xD0\x9F\xD1\x80\xD0\xBE\xD0\xB2",
+        "a \xC3\xA4 \xE2\x82\xAC \xF0\x9F\x92\xB6 and back to ascii",
+    };
+    for (const char *subject : cases) {
+        std::string joined;
+        for (const std::string &word : decode_words(encoded(subject)))
+            joined += word;
+        EXPECT_EQ(joined, std::string(subject));
+    }
+
+    /* Long enough to fold, and every width crossing the splits. */
+    std::string mixed;
+    while (mixed.size() < SC_MAIL_SUBJECT_MAX - 8)
+        mixed += "a\xC3\xA4\xE2\x82\xAC\xF0\x9F\x92\xB6";
+    std::string joined;
+    for (const std::string &word : decode_words(encoded(mixed.c_str())))
+        joined += word;
+    EXPECT_EQ(joined, mixed);
+}
+
+/*
+ * The subject is the field here most likely to carry user data, and `Subject: %s` with a newline
+ * in the value is header injection -- everything after it a header of somebody else's choosing.
+ * Encoding it away would hide the attempt; refusing it answers it.
+ */
+TEST_F(MailTest, RefusesASubjectThatWouldInjectAHeader)
+{
+    encoded("hello\r\nBcc: someone@elsewhere.invalid", SC_ERR_MALFORMED);
+    encoded("hello\nBcc: someone@elsewhere.invalid", SC_ERR_MALFORMED);
+    encoded("hello\rthere", SC_ERR_MALFORMED);
+    /* And the rest of C0, plus DEL. A tab is not among them: a header may hold one. */
+    encoded("hello\x01there", SC_ERR_MALFORMED);
+    encoded("hello\x7Fthere", SC_ERR_MALFORMED);
+    EXPECT_EQ(encoded("hello\tthere"), "hello\tthere");
+}
+
+/* The house rule again, this time on the one field that is measured before it is encoded: the
+ * bound is on the subject the caller passed, not on what it becomes. */
+TEST_F(MailTest, RefusesASubjectThatWouldHaveToBeTruncated)
+{
+    const std::string too_long(SC_MAIL_SUBJECT_MAX, 'x');
+    encoded(too_long.c_str(), SC_ERR_TOO_LONG);
+
+    const std::string fits(SC_MAIL_SUBJECT_MAX - 1, 'x');
+    EXPECT_EQ(encoded(fits.c_str()).size(), fits.size());
+
+    /* And a caller offering less room than the encoded form needs is told so rather than handed
+     * a subject that stops halfway. */
+    std::vector<char> small(32, '\xEE');
+    EXPECT_EQ(sc_mail_encode_subject(small.data(), small.size(), "\xC3\x9C" " berpr\xC3\xBC" "fung "
+                                                                "\xC3\x9C" " berpr\xC3\xBC" "fung",
+                                     nullptr),
+              SC_ERR_TOO_LONG);
+}
+
+/* What the mailer does with all of the above: the refusals reach the caller of enqueue, and
+ * nothing lands on the queue. */
+TEST_F(MailTest, EnqueueRefusesASubjectAHeaderCannotCarry)
+{
+    sc_mailer *mailer = nullptr;
+    sc_mail_config config = base_config();
+    ASSERT_EQ(sc_mailer_create(&config, &mailer), SC_OK);
+
+    sc_mail mail = one_mail();
+    mail.subject = "hello\r\nBcc: someone@elsewhere.invalid";
+    EXPECT_EQ(sc_mail_enqueue(mailer, &mail), SC_ERR_MALFORMED);
+
+    const std::string too_long(SC_MAIL_SUBJECT_MAX, 'x');
+    mail = one_mail();
+    mail.subject = too_long.c_str();
+    EXPECT_EQ(sc_mail_enqueue(mailer, &mail), SC_ERR_TOO_LONG);
+    EXPECT_EQ(sc_mail_pending(mailer), 0u);
+
+    /* The arena the refused mails borrowed went back, so the queue is still worth its capacity. */
+    mail = one_mail();
+    mail.subject = "E-Mail \xC3\x9C" "berpr\xC3\xBC" "fung";
+    EXPECT_EQ(sc_mail_enqueue(mailer, &mail), SC_OK);
+    EXPECT_EQ(sc_mail_pending(mailer), 1u);
 
     sc_mailer_destroy(mailer);
 }
@@ -456,9 +726,11 @@ TEST_F(MailTest, SendsThroughARealRelay)
     ASSERT_EQ(sc_mailer_create(&config, &mailer), SC_OK);
 
     /* A body with every line ending this thing is meant to normalise, and a line that starts
-     * with a dot -- which curl stuffs and this code must not. */
+     * with a dot -- which curl stuffs and this code must not. The subject is the one that went
+     * out as raw UTF-8: whether a receiver accepts the encoded form is the question only a real
+     * relay can answer, and it is why this test exists. */
     sc_mail mail = one_mail();
-    mail.subject = "service-core mail test";
+    mail.subject = "service-core: E-Mail \xC3\x9C" "berpr\xC3\xBC" "fung";
     mail.body = "first line\nsecond line\r\nthird line\r.leading dot\nlast";
 
     uint32_t sent = 0;
@@ -469,7 +741,12 @@ TEST_F(MailTest, SendsThroughARealRelay)
     EXPECT_EQ(failed, 0u);
 
     /* The second mail is the one that proves the session was kept: it rides the connection the
-     * first one opened. */
+     * first one opened. Its subject is long enough to fold, which is the case worth putting on a
+     * real wire -- a folded header is the only thing this module writes that contains a CRLF of
+     * its own, and curl's dot-stuffing reader is watching for exactly that sequence. */
+    mail.subject = "service-core: eine \xC3\x9C" "berschrift, die lang genug ist, um "
+                   "\xC3\xBC" "ber mehrere Zeilen gefaltet zu werden, mit Umlauten "
+                   "\xC3\xA4\xC3\xB6\xC3\xBC und einem \xE2\x82\xAC";
     ASSERT_EQ(sc_mail_enqueue(mailer, &mail), SC_OK);
     EXPECT_EQ(sc_mail_flush(mailer, &sent, &failed), SC_OK);
     EXPECT_EQ(sent, 1u);

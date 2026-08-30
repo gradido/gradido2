@@ -73,7 +73,11 @@
  * address inside them is therefore 254, and one more byte carries the terminator.
  */
 #define SC_MAIL_ADDR_MAX 255
-/* Folded by the receiver if it has to be; refused here if it would not fit. */
+/*
+ * Bytes of subject, terminator included, and the same ceiling for the sender's display name.
+ * A longer one is refused rather than shortened -- see sc_mail.subject, which is also where the
+ * encoding this bound is measured before happens.
+ */
 #define SC_MAIL_SUBJECT_MAX 256
 /* smtp://host:port, smtps://host:port */
 #define SC_MAIL_URL_MAX 128
@@ -202,6 +206,21 @@ typedef struct sc_mail_config {
 typedef struct sc_mail {
     /* The single recipient. */
     const char *to;
+    /*
+     * Plain UTF-8, at most SC_MAIL_SUBJECT_MAX - 1 bytes.
+     *
+     * A header field body is US-ASCII -- RFC 5322 2.2 -- so a subject that is not gets encoded
+     * on the way out, as RFC 2047 base64 encoded-words folded across as many lines as it takes.
+     * That is not cosmetic: raw UTF-8 in a header reaches the receiver unlabelled and is
+     * displayed on a guess, and a relay without 8BITMIME may refuse the message. Every locale
+     * this project ships but `en` produces such a subject. One that is pure ASCII is passed
+     * through untouched.
+     *
+     * A subject carrying a control character is refused with SC_ERR_MALFORMED. The one that
+     * matters is a bare CR or LF: in a header that is injection, everything after it becoming a
+     * header of somebody else's choosing, and the subject is the field here most likely to
+     * carry user data. Encoding it away would hide the attempt instead of answering it.
+     */
     const char *subject;
     /*
      * Plain UTF-8, NUL terminated, with whatever line endings the caller has: a bare LF is
@@ -254,9 +273,11 @@ void sc_mailer_destroy(sc_mailer *mailer);
  * already exist -- and it is built outside the queue lock, so several threads can enqueue at
  * once.
  *
- * Answers SC_ERR_QUEUE_FULL when queue_max mails are already waiting, and SC_ERR_TOO_LONG for a
- * message that does not fit message_max. The caller decides what a full queue means, because
- * only it knows whether this mail may be dropped or the work behind it must stop.
+ * Answers SC_ERR_QUEUE_FULL when queue_max mails are already waiting, SC_ERR_TOO_LONG for a
+ * message that does not fit message_max or a recipient or subject past its own bound, and
+ * SC_ERR_MALFORMED for a subject that could not go into a header at all. The caller decides what
+ * a full queue means, because only it knows whether this mail may be dropped or the work behind
+ * it must stop.
  */
 sc_status sc_mail_enqueue(sc_mailer *mailer, const sc_mail *mail);
 
