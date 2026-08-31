@@ -230,7 +230,12 @@ src/main.c        role selection, the quit flag, one thread per role
 service-core/     logging, config, the HTTP surface and its two backends,
                   the cache table, JWT, the mail client, the database
                   connection and its two drivers. Threads and locks come
-                  from libuv
+                  from libuv.
+                  email.{h,c} and email_gen.{h,c} are copies: the e-mail
+                  renderer is built out of the pug templates by
+                  packages/email-native and written into this tree by that
+                  package's build. Change it in packages/email-native, not
+                  here -- AGENTS.md section 3c
 backend-core/     the backend domain. Empty, and the emptiness is the point
 backend/          the HTTP server the frontend talks to
 federation/       the HTTP server other communities talk to

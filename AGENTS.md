@@ -87,6 +87,9 @@ packages/          TypeScript, reference implementation
   frontend-core    UI code shared by admin and frontend
   shared           code shared by frontend and backend: route definitions, schemas
   shared-native    determinism-critical C, called via N-API and linked by fast-servers
+  email-native     the e-mail templates as C: the pug sources plus the codegen that
+                   turns them into a byte pool and an op list at build time. Behind
+                   N-API here, copied into fast-servers/service-core by its build
 
 fast-servers/      C, mirrors the domain structure of packages/
                    has its own AGENTS.md and Architecture.md — read them before

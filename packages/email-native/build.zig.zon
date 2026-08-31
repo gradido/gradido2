@@ -1,0 +1,49 @@
+.{
+    .name = .email_native,
+    .version = "0.1.0",
+    .fingerprint = 0xbd12ce47e524513d,
+    .minimum_zig_version = "0.15.1",
+    .dependencies = .{
+        // The build template, kept in sync by `c-cpp-zig-build`.
+        // Add your own dependencies here with `zig fetch --save <url>`.
+        .c_cpp_zig_build = .{ .path = ".zig-native" },
+
+        // libcurl, for service-core's SMTP client. Every pin below is the one
+        // fast-servers/build.zig.zon carries, so the addon and the C server link the
+        // same code -- see AGENTS.md section 13 on why they must not drift.
+        //
+        // Its TLS is mbedtls, and that is what makes an addon viable at all: it lives
+        // inside a process that already has a TLS library -- OpenSSL in Node,
+        // BoringSSL in Bun -- and a second one exporting the same SSL_*/EVP_* symbols
+        // would leave link order to decide which of them verifies a certificate.
+        // mbedtls has its own API and its own symbol prefix, so nothing collides.
+        // curl pins mbedtls itself and fetches it lazily.
+        .curl = .{
+            .url = "git+https://github.com/allyourcodebase/curl.git#fc863d6cbc4a694ff5bb11fc59470142c8682e2b",
+            .hash = "curl-8.18.0-mFDAWK_0AABsv8MPtSIjAPCVElXbt1vbzgBOs7plIlUJ",
+        },
+        // The platform layer mail.c and log.c use for threads and time.
+        .libuv = .{
+            .url = "git+https://github.com/allyourcodebase/libuv.git#c1ccce24e1077ae7780857c89fb4b3aeb9080315",
+            .hash = "libuv-1.52.0-htqqvzNqAAAB6cHIx-wIffe_mqMW5GOKjHeDBJYHGwls",
+        },
+        // The arena allocator and the fixed-size pool mail.c queues its messages in.
+        // Same pin as fast-servers and as packages/shared-native, so one layout of
+        // the same structs.
+        .arnm = .{
+            .url = "https://github.com/gradido/arnm/archive/refs/tags/v0.7.2.tar.gz",
+            .hash = "arnm-0.7.2-ZdhGsCwFGgA0uOWsPFL1vPE1tCGvc2TkG-A5oUQrPVgw",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "include",
+        "locales",
+        "napi",
+        "src",
+        "templates",
+        "tls",
+        "tools",
+    },
+}

@@ -1,0 +1,17 @@
+/*
+ * The addon exports its Node-API entry point and nothing else.
+ *
+ * Not tidiness: without this, every symbol of the statically linked libuv,
+ * mbedtls and arnm is global in the addon, and a *global* symbol is
+ * preemptible -- so the addon's own uv_cond_init() call binds to whatever the
+ * host executable defines under that name, not to the libuv linked in here.
+ * Node happens to define the real one; Bun defines a stub that aborts the
+ * process. Making them local settles the call at link time, and takes the
+ * dynamic symbol table (~112 KB of .dynsym/.dynstr/.hash) with it.
+ */
+{
+  global:
+    napi_register_module_v1;
+  local:
+    *;
+};

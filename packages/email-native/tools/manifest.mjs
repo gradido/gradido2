@@ -1,0 +1,124 @@
+// What the extractor cannot read off the pug sources by itself: which variables
+// drive a branch, and how C decides that branch at runtime.
+//
+// Everything else -- the variable list, its order, the struct fields -- is
+// derived from the templates themselves, so the pug files stay the single
+// source of truth.
+
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+// The package root, so the defaults hold wherever node is invoked from.
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+// Paths are arguments so that build.zig can collect the output in the build
+// cache instead of in the source tree. The defaults are the templates this
+// package carries -- imported from gradido's core/src/emails/templates, and the
+// single source of truth for both implementations from here on.
+const arg = (name, fallback) => {
+  const i = process.argv.indexOf('--' + name)
+  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback
+}
+
+export const TEMPLATE_ROOT = path.resolve(arg('templates', path.join(ROOT, 'templates')))
+export const LOCALE_DIR = path.resolve(arg('locales', path.join(ROOT, 'locales')))
+export const OUT_DIR = path.resolve(arg('out', path.join(ROOT, 'gen')))
+// The pug output, checked in. tools/snapshots.mjs writes it, the tests and
+// tools/verify.mjs compare against it.
+export const SNAPSHOT_DIR = path.resolve(
+  arg('snapshots', path.join(ROOT, 'tests', '__snapshots__')),
+)
+export const IR_PATH = path.resolve(arg('ir', path.join(OUT_DIR, 'ir.json')))
+
+export const LOCALES = ['en', 'de', 'es', 'fr', 'nl', 'it', 'tr', 'ru', 'pt', 'el']
+
+// Marker for a local: replaced by a sentinel when extracting, by a test value
+// when verifying.
+export const S = (name) => ({ __slot: name })
+
+// GE_HAS(x) == (x != NULL && *x != 0). The argument is the pug variable name;
+// the C struct field is its snake_case spelling.
+const snake = (s) => s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
+const has = (f) => `GE_HAS(v->${snake(f)})`
+
+// The `timeDurationObject.minutes == 0` branch from includes/requestNewLink.pug
+const durationCond = {
+  id: 'duration',
+  cases: [
+    { c: has('minutes'), locals: { timeDurationObject: { hours: S('hours'), minutes: S('minutes') } } },
+    { c: null, locals: { timeDurationObject: { hours: S('hours'), minutes: 0 } } },
+  ],
+}
+
+export const TEMPLATES = {
+  accountActivation: {
+    conditions: [
+      { id: 'logo', cases: [{ c: has('logoUrl') }, { c: null, locals: { logoUrl: null } }] },
+      durationCond,
+    ],
+  },
+  accountMultiRegistration: {
+    conditions: [
+      { id: 'helper', cases: [{ c: has('helperLink') }, { c: null, locals: { helperLink: null } }] },
+    ],
+  },
+  addedContributionMessage: {},
+  assistedRegistrationConfirm: { conditions: [durationCond] },
+  contributionChangedByModerator: {},
+  contributionConfirmed: {},
+  contributionDeleted: {},
+  contributionDenied: {},
+  customEmail: {
+    conditions: [
+      {
+        id: 'reply',
+        cases: [
+          { c: `${has('senderCommunityUuid')} && ${has('senderUuid')}` },
+          { c: null, locals: { senderCommunityUuid: null, senderUuid: null } },
+        ],
+      },
+    ],
+  },
+  emailChangeConfirm: {},
+  emailChangeDone: {},
+  emailChangeNotice: {},
+  emailChangeSupport: {
+    // Real switches, not strings -> bool fields in the struct
+    flags: ['typoCorrection', 'takeBack'],
+    conditions: [
+      {
+        id: 'todo',
+        cases: [
+          { c: `v->${snake('typoCorrection')}`, locals: { typoCorrection: true, takeBack: false } },
+          { c: `v->${snake('takeBack')}`, locals: { typoCorrection: false, takeBack: true } },
+          { c: null, locals: { typoCorrection: false, takeBack: false } },
+        ],
+      },
+    ],
+  },
+  resetPassword: { conditions: [durationCond] },
+  thankYouCardPaid: {},
+  transactionLinkRedeemed: {},
+  transactionReceived: {
+    conditions: [
+      {
+        id: 'reply',
+        cases: [
+          { c: `${has('senderCommunityUuid')} && ${has('senderUuid')}` },
+          { c: null, locals: { senderCommunityUuid: null, senderUuid: null } },
+        ],
+      },
+    ],
+  },
+}
+
+// Inline attachments (cid:) referenced from layout/header/footer -- these go
+// into the binary as bytes.
+export const ASSETS = [
+  ['gradidoheader', 'gradido-header.png', 'image/png'],
+  ['facebookicon', 'facebook-icon.png', 'image/png'],
+  ['telegramicon', 'telegram-icon.png', 'image/png'],
+  ['twittericon', 'twitter-icon.png', 'image/png'],
+  ['youtubeicon', 'youtube-icon.png', 'image/png'],
+  ['chatboxicon', 'chatbox-icon.png', 'image/png'],
+]
