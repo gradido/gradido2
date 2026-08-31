@@ -1,0 +1,18 @@
+extend ../layout.pug
+
+block content
+  h2=  t('emails.transactionLinkRedeemed.title', { senderAlias })
+  .text-block
+    include ../includes/salutation.pug
+    p= t('emails.transactionLinkRedeemed.hasRedeemedYourLink', { senderAlias, senderCommunity })
+  .content
+    h2= t('emails.general.transactionDetails')
+    div(class="p_content")= t('emails.general.amountGDD', { amountGDD: transactionAmount })
+      br
+      span.human-text= t('emails.transactionLinkRedeemed.memo', { transactionMemo })
+      br
+      = t('emails.general.detailsYouFindOnLinkToYourAccount')
+    
+    a.button-3(href=`${communityURL}/transactions`) #{t('emails.general.toAccount')}
+
+    include ../includes/doNotReply.pug

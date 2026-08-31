@@ -1,0 +1,25 @@
+Bir üye e-posta adresini değiştirdi
+
+Üye: {firstName|&<>"'ä} {lastName|&<>"'ä} ({alias|&<>"'ä})
+
+Önceki adres: {oldEmail|&<>"'ä}
+
+Yeni adres: {newEmail|&<>"'ä}
+
+GDT sunucusu için bu hesabın ilk adresi geçerli olmaya devam eder: {gdtEmail|&<>"'ä}.
+Önceki adres hiç onaylanmadı (kurulum sırasında yazım hatası) – GDT sunucusunda birleştirilecek bir şey yok. Lütfen yalnızca yeni adresi Klick-Tipp'e ekleyin.
+
+Sevgiler,
+Gradido ekibin
+
+Başka sorun olursa lütfen desteğimize başvur.
+support@gradido.net
+
+Künye [https://gradido.net/de/impressum/]
+
+Gizlilik politikası [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

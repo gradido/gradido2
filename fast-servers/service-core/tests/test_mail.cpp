@@ -31,19 +31,11 @@
 
 extern "C" {
 #include "service_core/log.h"
-#include "service_core/mail.h"
+#include "service_core/email/mailer.h"
 
-/*
- * The subject encoder, declared here rather than reached through a header.
- *
- * It is not public API -- the only component allowed to call it is the one it lives in -- and
- * service-core/src is deliberately off this test's include path, because a test that can only
- * see the component's include directory is what proves the header carries its own dependencies
- * (build.zig says so where the test executables are wired up). A single extern declaration is
- * the smaller of the two exceptions. It has to match mail.c; if it stops matching, the encoder
- * tests below fail at the first assertion rather than quietly.
- */
-sc_status sc_mail_encode_subject(char *dst, size_t cap, const char *subject, size_t *out_len);
+/* sc_mail_encode_subject() arrives with email/message.h, which mailer.h includes. It used to be
+ * declared here by hand, because the encoder had no header of its own -- the split into
+ * message / transport / mailer gave it one. */
 }
 
 namespace
@@ -174,6 +166,187 @@ TEST_F(MailTest, LeavesAnAsciiSubjectAlone)
     EXPECT_EQ(encoded(""), "");
     /* Every printable ASCII character, including the ones RFC 2047 would have to escape. */
     EXPECT_EQ(encoded("=?UTF-8?B?_ '\"()<>@,;:\\/[]?.="), "=?UTF-8?B?_ '\"()<>@,;:\\/[]?.=");
+}
+
+/* ------------------------------------------------------------------ *
+ * the headers around the subject
+ * ------------------------------------------------------------------ */
+
+/** Formats one mail and returns its header block, or "" when sc_mail_format refused it. */
+std::string headers(const sc_mail_origin &origin, const sc_mail &mail, sc_status expect = SC_OK)
+{
+    std::vector<char> buf(64 * 1024);
+    sc_mail_message   out{};
+    EXPECT_EQ(sc_mail_format(&origin, &mail, 1, 1788172396000LL, buf.data(), buf.size(), &out),
+              expect);
+    if (expect != SC_OK)
+        return {};
+    const std::string message(out.data, out.len);
+    return message.substr(0, message.find("\r\n\r\n"));
+}
+
+/*
+ * Header injection through the recipient, which is what this check exists for.
+ *
+ * It was reproducible: a bare LF in `to` put a `Bcc:` of the caller's choosing into the
+ * message and a test relay delivered it. The subject had been checked since the beginning;
+ * the two addresses had not.
+ */
+TEST_F(MailTest, RefusesAControlCharacterInAnAddress)
+{
+    const sc_mail_origin origin{"noreply@gradido.net", nullptr, nullptr};
+
+    sc_mail injected{"victim@example.org\nBcc: attacker@evil.test", "s", "b"};
+    headers(origin, injected, SC_ERR_MALFORMED);
+
+    sc_mail crlf{"victim@example.org\r\nBcc: attacker@evil.test", "s", "b"};
+    headers(origin, crlf, SC_ERR_MALFORMED);
+
+    const sc_mail_origin bad_sender{"noreply@gradido.net\r\nX-Spoofed: yes", nullptr, nullptr};
+    sc_mail plain{"member@example.org", "s", "b"};
+    headers(bad_sender, plain, SC_ERR_MALFORMED);
+
+    /* And the honest case still goes through. */
+    EXPECT_NE(headers(origin, plain).find("To: member@example.org"), std::string::npos);
+}
+
+/*
+ * A display name is a phrase, not a string: an unquoted comma makes `Gradido Akademie, e.V.`
+ * two addresses, and a raw umlaut is 8-bit in a header RFC 5322 2.2 says is US-ASCII -- the
+ * same bug the subject was fixed for, one line further up in the same header block.
+ */
+TEST_F(MailTest, QuotesOrEncodesTheDisplayName)
+{
+    sc_mail mail{"member@example.org", "s", "b"};
+
+    const sc_mail_origin plain{"noreply@gradido.net", "Gradido", nullptr};
+    EXPECT_NE(headers(plain, mail).find("From: Gradido <noreply@gradido.net>"), std::string::npos);
+
+    const sc_mail_origin comma{"noreply@gradido.net", "Gradido Akademie, e.V.", nullptr};
+    EXPECT_NE(headers(comma, mail).find("From: \"Gradido Akademie, e.V.\" <noreply@gradido.net>"),
+              std::string::npos);
+
+    const sc_mail_origin umlaut{"noreply@gradido.net", "Gradido F\xC3\xB6rderverein", nullptr};
+    EXPECT_NE(headers(umlaut, mail).find("From: =?UTF-8?B?"), std::string::npos);
+
+    const sc_mail_origin injected{"noreply@gradido.net", "Gradido\r\nX-Spoofed: yes", nullptr};
+    headers(injected, mail, SC_ERR_MALFORMED);
+}
+
+/* ------------------------------------------------------------------ *
+ * the MIME structure
+ * ------------------------------------------------------------------ */
+
+/** The whole formatted message, or "" when sc_mail_format refused it. */
+std::string formatted(const sc_mail_origin &origin, const sc_mail &mail,
+                      sc_status expect = SC_OK)
+{
+    std::vector<char> buf(256 * 1024);
+    sc_mail_message   out{};
+    EXPECT_EQ(sc_mail_format(&origin, &mail, 1, 1788172396000LL, buf.data(), buf.size(), &out),
+              expect);
+    return expect == SC_OK ? std::string(out.data, out.len) : std::string();
+}
+
+/** Every line of @p message, without the CRLFs. */
+std::vector<std::string> lines_of(const std::string &message)
+{
+    std::vector<std::string> lines;
+    size_t                   pos = 0;
+    for (size_t at = message.find("\r\n"); at != std::string::npos;
+         at = message.find("\r\n", pos)) {
+        lines.push_back(message.substr(pos, at - pos));
+        pos = at + 2;
+    }
+    if (pos < message.size())
+        lines.push_back(message.substr(pos));
+    return lines;
+}
+
+const sc_mail_origin kOrigin{"noreply@gradido.net", "Gradido", nullptr};
+
+/*
+ * The two things quoted-printable is here for, and both were wrong before it: a UTF-8 body went
+ * out with no Content-Transfer-Encoding at all -- 7bit by RFC 2045 6.1 -- and a rendered
+ * document has lines far past the 998 RFC 5322 2.1.1 allows.
+ */
+TEST_F(MailTest, EncodesTheBodyQuotedPrintable)
+{
+    sc_mail mail{"member@example.org", "s", "Gr\xC3\xBC\xC3\x9F" "e, Bj\xC3\xB6rn", nullptr,
+                 nullptr, 0};
+    const std::string message = formatted(kOrigin, mail);
+
+    EXPECT_NE(message.find("Content-Type: text/plain; charset=utf-8\r\n"), std::string::npos);
+    EXPECT_NE(message.find("Content-Transfer-Encoding: quoted-printable\r\n"), std::string::npos);
+    /* ü as =C3=BC, and nothing above 126 anywhere in the message. */
+    EXPECT_NE(message.find("Gr=C3=BC=C3=9Fe, Bj=C3=B6rn"), std::string::npos);
+    for (unsigned char c : message)
+        ASSERT_LE(c, 126) << "an 8-bit byte survived the encoding";
+}
+
+TEST_F(MailTest, KeepsEveryLineWithinTheLimit)
+{
+    /* One line of 4000 characters, which is what a rendered document's CSS looks like. */
+    const std::string long_line(4000, 'x');
+    sc_mail mail{"member@example.org", "s", long_line.c_str(), nullptr, nullptr, 0};
+
+    for (const std::string &line : lines_of(formatted(kOrigin, mail))) {
+        EXPECT_LE(line.size(), 998u) << "RFC 5322 2.1.1";
+        if (line.size() > 76)
+            EXPECT_EQ(line.rfind("Content-", 0), 0u) << "only a header may be long: " << line;
+    }
+}
+
+/* RFC 2046 5.1.4: the alternatives in increasing order of faithfulness, so a receiver takes the
+ * last one it understands. */
+TEST_F(MailTest, TextAndHtmlBecomeMultipartAlternative)
+{
+    sc_mail mail{"member@example.org", "s", "plain", "<p>rich</p>", nullptr, 0};
+    const std::string message = formatted(kOrigin, mail);
+
+    EXPECT_NE(message.find("Content-Type: multipart/alternative; boundary=\""),
+              std::string::npos);
+    const size_t plain = message.find("Content-Type: text/plain");
+    const size_t html = message.find("Content-Type: text/html");
+    ASSERT_NE(plain, std::string::npos);
+    ASSERT_NE(html, std::string::npos);
+    EXPECT_LT(plain, html) << "the richer alternative comes last";
+    /* Opened twice, closed once. */
+    EXPECT_NE(message.find("_alt--\r\n"), std::string::npos);
+}
+
+/*
+ * The images the templates refer to as cid:. Until this existed the references pointed at
+ * nothing and every mail arrived with six broken images.
+ */
+TEST_F(MailTest, HtmlWithImagesBecomesMultipartRelated)
+{
+    const unsigned char png[] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
+    const sc_mail_asset asset{"gradidoheader", "gradido-header.png", "image/png", png,
+                              sizeof png};
+    sc_mail mail{"member@example.org", "s", nullptr, "<img src=\"cid:gradidoheader\">", &asset, 1};
+    const std::string message = formatted(kOrigin, mail);
+
+    EXPECT_NE(message.find("Content-Type: multipart/related; type=\"text/html\"; boundary=\""),
+              std::string::npos);
+    EXPECT_NE(message.find("Content-ID: <gradidoheader>\r\n"), std::string::npos);
+    EXPECT_NE(message.find("Content-Transfer-Encoding: base64\r\n"), std::string::npos);
+    EXPECT_NE(message.find("Content-Disposition: inline; filename=\"gradido-header.png\"\r\n"),
+              std::string::npos);
+    /* The PNG signature, base64 encoded. */
+    EXPECT_NE(message.find("iVBORw0KGgo="), std::string::npos);
+    EXPECT_NE(message.find("_rel--\r\n"), std::string::npos);
+}
+
+TEST_F(MailTest, RefusesAMailWithNeitherTextNorHtml)
+{
+    sc_mail nothing{"member@example.org", "s", nullptr, nullptr, nullptr, 0};
+    formatted(kOrigin, nothing, SC_ERR_INVALID_ARGUMENT);
+
+    /* An asset without HTML has nothing to be related to. */
+    const sc_mail_asset asset{"cid", "f.png", "image/png", nullptr, 0};
+    sc_mail orphan{"member@example.org", "s", "text", nullptr, &asset, 1};
+    formatted(kOrigin, orphan, SC_ERR_INVALID_ARGUMENT);
 }
 
 /* The bug this whole path exists for: every locale but en produces one of these. */

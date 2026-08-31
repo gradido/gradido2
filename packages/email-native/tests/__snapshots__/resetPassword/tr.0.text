@@ -1,0 +1,34 @@
+Şifreyi sıfırla
+
+Merhaba {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+sen ya da bir başkası, bu hesap için şifre sıfırlama talebinde bulundu.
+
+
+Şifreyi sıfırla
+
+Eğer sendin, lütfen buraya tıkla.
+sıfırla [{resetLink|&<>"'ä}]
+Veya bağlantıyı tarayıcı pencerene kopyala.
+{resetLink|&<>"'ä}
+
+
+Yeni geçerli bağlantı iste
+
+Bağlantı {hours|&<>"'ä} saat {minutes|&<>"'ä} dakika geçerlidir. Bağlantının geçerlilik süresi dolduysa, buradan yeni bir bağlantı gönderilmesini isteyebilirsin.
+Yeni bağlantı [{resendLink|&<>"'ä}]
+
+Sevgiler,
+Gradido ekibin
+
+Başka sorun olursa lütfen desteğimize başvur.
+support@gradido.net
+
+Künye [https://gradido.net/de/impressum/]
+
+Gizlilik politikası [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

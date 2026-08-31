@@ -1,0 +1,25 @@
+Un membro ha cambiato il proprio indirizzo e-mail
+
+Membro: {firstName|&<>"'ä} {lastName|&<>"'ä} ({alias|&<>"'ä})
+
+Indirizzo precedente: {oldEmail|&<>"'ä}
+
+Nuovo indirizzo: {newEmail|&<>"'ä}
+
+Per il server GDT conta ancora il primo indirizzo di questo account: {gdtEmail|&<>"'ä}.
+Per favore associa il nuovo indirizzo a questo account sul server GDT e aggiorna Klick-Tipp.
+
+Cordiali saluti,
+il tuo team Gradido
+
+Per ulteriori domande, contatta il nostro supporto.
+support@gradido.net
+
+Note legali [https://gradido.net/de/impressum/]
+
+Informativa sulla privacy [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

@@ -1,0 +1,33 @@
+extend ../layout.pug
+
+block content
+  h2= t('emails.accountMultiRegistration.title')
+  .text-block
+    include ../includes/salutation.pug
+    p
+      = t('emails.accountMultiRegistration.emailReused')
+      br
+      = t('emails.accountMultiRegistration.emailExists')
+  .content
+    h2= t('emails.resetPassword.title')
+    div(class="p_content")= t('emails.accountMultiRegistration.onForgottenPasswordClickLink')      
+    a.button-3(href=resendLink) #{t('emails.general.reset')}
+    div(class="p_content")= t('emails.general.orCopyLink')
+
+    a.clink(href=resendLink) #{resendLink}
+
+    //- EM-013, the doorbell model: only present when the attempt carried a redeem code
+    //- (the café case). The guest's name is deliberately NOT in this mail — registrant
+    //- input never travels into a stranger's mailbox; the page behind the button shows it.
+    if helperLink
+      h2= t('emails.accountMultiRegistration.helperTitle')
+      div(class="p_content")= t('emails.accountMultiRegistration.helperIntro')
+      a.button-3(href=helperLink) #{t('emails.accountMultiRegistration.helperButton')}
+      div(class="p_content")= t('emails.general.orCopyLink')
+
+      a.clink(href=helperLink) #{helperLink}
+
+    h2(style="color: red")= t('emails.accountMultiRegistration.contactSupport')
+    div(class="p_content")= t('emails.accountMultiRegistration.ifYouAreNotTheOne')
+
+    a.clink(href='mailto:' + supportEmail)= supportEmail

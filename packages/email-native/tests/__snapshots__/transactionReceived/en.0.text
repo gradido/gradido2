@@ -1,0 +1,27 @@
+{senderAlias|&<>"'ä} has sent you {transactionAmount|&<>"'ä} Gradido
+
+Hello {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+You have just received {transactionAmount|&<>"'ä} GDD from {senderAlias|&<>"'ä}.
+
+
+Message
+
+{memo|&<>"'ä}
+Reply [{communityURL|&<>"'ä}/send/{senderCommunityUuid|&<>"'ä}/{senderUuid|&<>"'ä}?art=email]
+To account [{communityURL|&<>"'ä}/transactions]
+
+Kind regards,
+your Gradido team
+
+If you have any further questions, please contact our support.
+support@gradido.net
+
+Impressum [https://gradido.net/de/impressum/]
+
+Privacy Policy [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

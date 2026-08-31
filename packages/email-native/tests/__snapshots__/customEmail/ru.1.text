@@ -1,0 +1,22 @@
+Здравствуйте, {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+вы только что получили сообщение от {senderAlias|&<>"'ä}
+
+{subject|&<>"'ä}
+{memo|&<>"'ä}
+В аккаунт [{communityURL|&<>"'ä}/transactions]
+
+С наилучшими пожеланиями,
+ваша команда Gradido
+
+Если у вас есть другие вопросы, пожалуйста, обратитесь в нашу поддержку.
+support@gradido.net
+
+Правовая информация [https://gradido.net/de/impressum/]
+
+Политика конфиденциальности [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland
