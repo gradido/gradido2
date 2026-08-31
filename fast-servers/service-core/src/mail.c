@@ -50,6 +50,27 @@
 
 /* A Date: header, "Mon, 25 Aug 2026 10:20:30 +0000", plus room. */
 #define SC_MAIL_DATE_MAX 48
+/*
+ * Bytes of subject one RFC 2047 encoded-word carries.
+ *
+ * The word itself must stay under 76 characters (RFC 2047 2: "An encoded-word may not be more
+ * than 75 characters long"), and it should also leave the first line under the 78 that RFC 5322
+ * recommends -- "Subject: " has already spent nine of those. 42 input bytes are 56 base64
+ * characters with no padding, so a word is 10 + 56 + 2 = 68: 77 on the first line, 69 on every
+ * folded one, both inside both limits.
+ */
+#define SC_MAIL_EW_CHUNK 42
+/*
+ * Room for the encoded form of the longest subject there can be.
+ *
+ * A chunk is at most SC_MAIL_EW_CHUNK bytes and at least three fewer, because a four-byte
+ * character straddling the split pushes it back that far -- so the smaller figure bounds how
+ * many words a subject can become. Each costs "=?UTF-8?B?" and "?=" around base64 of a full
+ * chunk, plus the "\r\n " that joins it to the next.
+ */
+#define SC_MAIL_EW_WORDS (((SC_MAIL_SUBJECT_MAX - 1) / (SC_MAIL_EW_CHUNK - 3)) + 1)
+#define SC_MAIL_EW_COST (10 + 4 * ((SC_MAIL_EW_CHUNK + 2) / 3) + 2 + 3)
+#define SC_MAIL_SUBJECT_ENCODED_MAX (SC_MAIL_EW_WORDS * SC_MAIL_EW_COST + 1)
 /* "seq.unixms@domain" */
 #define SC_MAIL_MSGID_MAX (64 + SC_MAIL_ADDR_MAX)
 /*
@@ -298,6 +319,153 @@ static size_t crlf_copy(char *dst, const char *body)
 }
 
 /* ------------------------------------------------------------------ *
+ * the subject
+ * ------------------------------------------------------------------ */
+
+/*
+ * Why a subject is not simply copied into the header.
+ *
+ * A header field body is US-ASCII. RFC 5322 2.2 says so, and it is not a formality: a raw UTF-8
+ * subject arrives as an unlabelled byte string and what the receiver makes of it is a guess.
+ * Some guess right often enough to hide the bug, some show mojibake, and a relay without
+ * 8BITMIME may refuse the message. Every locale this project ships but `en` produces one.
+ *
+ * So a subject with a byte above 0x7F goes out as RFC 2047 encoded-words -- `=?UTF-8?B?...?=`,
+ * folded onto as many lines as it takes. Base64 and not quoted-printable, although Q would be
+ * shorter for German: Q has to escape '?', '_', '=', space and every special of the context the
+ * word appears in, and a list like that got slightly wrong yields a subject that decodes to
+ * something else rather than one that visibly fails. B has no list.
+ *
+ * A pure ASCII subject is left exactly as it is, which keeps the common case readable on the
+ * wire and keeps all of this out of the path where it has nothing to do.
+ */
+
+static const char k_b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/** Encodes @p n bytes into @p dst, padded, no line breaks. Returns what it wrote. */
+static size_t b64_encode(char *dst, const unsigned char *src, size_t n)
+{
+    size_t out = 0;
+    size_t i = 0;
+    for (; i + 3 <= n; i += 3) {
+        const uint32_t v = ((uint32_t)src[i] << 16) | ((uint32_t)src[i + 1] << 8) | src[i + 2];
+        dst[out++] = k_b64[(v >> 18) & 0x3F];
+        dst[out++] = k_b64[(v >> 12) & 0x3F];
+        dst[out++] = k_b64[(v >> 6) & 0x3F];
+        dst[out++] = k_b64[v & 0x3F];
+    }
+    if (i < n) {
+        const int have_two = (i + 1 < n);
+        const uint32_t v =
+            ((uint32_t)src[i] << 16) | (have_two ? ((uint32_t)src[i + 1] << 8) : 0u);
+        dst[out++] = k_b64[(v >> 18) & 0x3F];
+        dst[out++] = k_b64[(v >> 12) & 0x3F];
+        dst[out++] = have_two ? k_b64[(v >> 6) & 0x3F] : '=';
+        dst[out++] = '=';
+    }
+    return out;
+}
+
+/*
+ * How many bytes the next encoded-word takes from @p p, of the @p left that remain.
+ *
+ * SC_MAIL_EW_CHUNK unless that would split a character. RFC 2047 2 is explicit that an
+ * encoded-word has to decode on its own -- "each ... encodes an integral number of characters"
+ * -- and a receiver decoding the words separately gets a replacement character at every seam
+ * otherwise. So the split walks back off any continuation byte (10xxxxxx) to the start of the
+ * character it belongs to, at most three times: a longer run is not UTF-8, and input that is
+ * not UTF-8 is chunked where it says rather than searched for a boundary it does not have.
+ */
+static size_t chunk_len(const char *p, size_t left)
+{
+    size_t n = SC_MAIL_EW_CHUNK;
+    if (left <= n)
+        return left;
+    for (int back = 0; back < 3; back++) {
+        if (((unsigned char)p[n] & 0xC0) != 0x80)
+            break;
+        n--;
+    }
+    /* Three steps back from SC_MAIL_EW_CHUNK cannot reach zero, so the walk always advances. */
+    return n;
+}
+
+/**
+ * Writes the Subject: value for @p subject into @p dst, encoded if it has to be, and reports its
+ * length in @p out_len. Always NUL terminates on success; @p out_len may be NULL.
+ *
+ * Answers SC_ERR_MALFORMED for a subject carrying a control character. A bare CR or LF is the
+ * one that matters: `Subject: %s` with a newline in the value is header injection, and everything
+ * after it is a header of somebody else's choosing -- the subject being the one field here that
+ * carries user data. Encoding it away would hide the attempt rather than answer it, so it is
+ * refused, and so is every other C0 byte and DEL. A tab is left alone; a header may hold one.
+ *
+ * Answers SC_ERR_TOO_LONG for a subject past SC_MAIL_SUBJECT_MAX, and for one whose encoded form
+ * would not fit @p cap. With cap = SC_MAIL_SUBJECT_ENCODED_MAX the second cannot happen -- that
+ * is what the arithmetic behind the macro is for -- and the branch is there for a caller that
+ * offers less.
+ *
+ * Not static because test_mail.cpp checks it directly; there is no header for it, because the
+ * only component that may call it is this one. See the note at its declaration there.
+ */
+sc_status sc_mail_encode_subject(char *dst, size_t cap, const char *subject, size_t *out_len)
+{
+    const char *p;
+    size_t left;
+    size_t out = 0;
+    int is_ascii = 1;
+
+    if (dst == NULL || cap == 0 || subject == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+
+    for (p = subject; *p != '\0'; p++) {
+        const unsigned char c = (unsigned char)*p;
+        if ((c < 0x20 && c != '\t') || c == 0x7F)
+            return SC_ERR_MALFORMED;
+        if (c >= 0x80)
+            is_ascii = 0;
+    }
+    left = (size_t)(p - subject);
+    if (left >= SC_MAIL_SUBJECT_MAX)
+        return SC_ERR_TOO_LONG;
+
+    if (is_ascii) {
+        if (left + 1 > cap)
+            return SC_ERR_TOO_LONG;
+        memcpy(dst, subject, left + 1);
+        if (out_len != NULL)
+            *out_len = left;
+        return SC_OK;
+    }
+
+    p = subject;
+    while (left > 0) {
+        const size_t take = chunk_len(p, left);
+        /* "\r\n " before every word but the first, "=?UTF-8?B?" and "?=" around each, and the
+         * terminator this has to leave room for. */
+        const size_t need = (out > 0 ? 3u : 0u) + 10u + 4u * ((take + 2u) / 3u) + 2u + 1u;
+        if (out + need > cap)
+            return SC_ERR_TOO_LONG;
+        if (out > 0) {
+            dst[out++] = '\r';
+            dst[out++] = '\n';
+            dst[out++] = ' ';
+        }
+        memcpy(dst + out, "=?UTF-8?B?", 10);
+        out += 10;
+        out += b64_encode(dst + out, (const unsigned char *)p, take);
+        dst[out++] = '?';
+        dst[out++] = '=';
+        p += take;
+        left -= take;
+    }
+    dst[out] = '\0';
+    if (out_len != NULL)
+        *out_len = out;
+    return SC_OK;
+}
+
+/* ------------------------------------------------------------------ *
  * the rings
  * ------------------------------------------------------------------ */
 
@@ -375,8 +543,10 @@ static sc_status render(sc_mailer *mailer, const sc_mail *mail, arnm *arena, uin
                         sc_mail_entry *entry)
 {
     char date[SC_MAIL_DATE_MAX];
+    char subject[SC_MAIL_SUBJECT_ENCODED_MAX];
     const char *fmt;
     int header_len;
+    sc_status status;
     size_t body_len;
     size_t total;
     size_t written;
@@ -387,14 +557,28 @@ static sc_status render(sc_mailer *mailer, const sc_mail *mail, arnm *arena, uin
      * exactly the kind of thing that wastes an afternoon when someone correlates a log line with
      * a delivered mail. */
     const int64_t now_ms = sc_now_ms();
+
+    /* Before anything else, because it is the only part of a mail that can be refused for what
+     * it contains rather than for how large it is -- and because a subject that is not going out
+     * should not first cost a Message-ID and a formatted date. */
+    status = sc_mail_encode_subject(subject, sizeof subject, mail->subject, NULL);
+    if (status != SC_OK)
+        return status;
+
     render_date(date, sizeof date, (time_t)(now_ms / 1000));
     snprintf(entry->msgid, sizeof entry->msgid, "%llu.%lld@%s", (unsigned long long)sequence,
              (long long)now_ms, mailer->msgid_domain);
 
     /*
-     * No 8-bit transfer encoding is declared: the body is announced as UTF-8 text and handed to
-     * the relay as it is. Every relay this project will speak to advertises 8BITMIME, and a
+     * No 8-bit transfer encoding is declared: the *body* is announced as UTF-8 text and handed
+     * to the relay as it is. Every relay this project will speak to advertises 8BITMIME, and a
      * quoted-printable encoder is a thing to add when one of them does not, not before.
+     *
+     * The subject is the exception, and not for the relay's sake: a header field body is
+     * US-ASCII whatever the relay can carry, so `subject` above is already an RFC 2047
+     * encoded-word sequence whenever it had to become one. It may therefore contain the folding
+     * "\r\n " and is placed on its line accordingly -- as a %s that is complete, not a value to
+     * be wrapped here.
      */
     fmt = mailer->from_name[0] != '\0'
               ? "Date: %s\r\n"
@@ -415,7 +599,7 @@ static sc_status render(sc_mailer *mailer, const sc_mail *mail, arnm *arena, uin
                 "\r\n";
 
     header_len = snprintf(NULL, 0, fmt, date, mailer->from_name, mailer->from, entry->to,
-                          mail->subject, entry->msgid);
+                          subject, entry->msgid);
     if (header_len < 0)
         return SC_ERR_MALFORMED;
 
@@ -433,7 +617,7 @@ static sc_status render(sc_mailer *mailer, const sc_mail *mail, arnm *arena, uin
         return SC_ERR_TOO_LONG;
 
     snprintf((char *)buffer, (size_t)header_len + 1, fmt, date, mailer->from_name, mailer->from,
-             entry->to, mail->subject, entry->msgid);
+             entry->to, subject, entry->msgid);
     written = (size_t)header_len;
     written += crlf_copy((char *)buffer + written, mail->body);
     if (written < 2 || buffer[written - 1] != '\n') {
