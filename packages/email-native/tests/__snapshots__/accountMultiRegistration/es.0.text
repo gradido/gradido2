@@ -1,0 +1,43 @@
+Nuevo intento de registro con tu correo electrónico
+
+Hola {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+tu dirección de correo electrónico acaba de utilizarse de nuevo para registrar una cuenta en Gradido.
+Sin embargo, ya existe una cuenta para tu dirección de correo electrónico.
+
+
+Restablecer contraseña
+
+Si has olvidado tu contraseña, haz clic aquí.
+restablecer [{resendLink|&<>"'ä}]
+O copia el enlace en la ventana de tu navegador.
+{resendLink|&<>"'ä}
+
+
+¿Estás ayudando a alguien en un café Gradido?
+
+Si a tu lado hay una persona que acaba de usar tu dirección de correo electrónico para empezar una cuenta de Gradido: continúa aquí la configuración. Juntos introducís su propia dirección de correo, y su contraseña la elige ella misma.
+Estoy ayudando a alguien a crear una cuenta [{helperLink|&<>"'ä}]
+O copia el enlace en la ventana de tu navegador.
+{helperLink|&<>"'ä}
+
+
+Contactar con el soporte
+
+Si no has intentado registrarte de nuevo, ponte en contacto con nuestro soporte:
+{supportEmail|&<>"'ä}
+
+Un cordial saludo,
+tu equipo de Gradido
+
+Si tienes más preguntas, ponte en contacto con nuestro soporte.
+support@gradido.net
+
+Aviso legal [https://gradido.net/de/impressum/]
+
+Política de privacidad [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

@@ -22,18 +22,6 @@
             .url = "git+https://github.com/allyourcodebase/curl.git#fc863d6cbc4a694ff5bb11fc59470142c8682e2b",
             .hash = "curl-8.18.0-mFDAWK_0AABsv8MPtSIjAPCVElXbt1vbzgBOs7plIlUJ",
         },
-        // The platform layer mail.c and log.c use for threads and time.
-        .libuv = .{
-            .url = "git+https://github.com/allyourcodebase/libuv.git#c1ccce24e1077ae7780857c89fb4b3aeb9080315",
-            .hash = "libuv-1.52.0-htqqvzNqAAAB6cHIx-wIffe_mqMW5GOKjHeDBJYHGwls",
-        },
-        // The arena allocator and the fixed-size pool mail.c queues its messages in.
-        // Same pin as fast-servers and as packages/shared-native, so one layout of
-        // the same structs.
-        .arnm = .{
-            .url = "https://github.com/gradido/arnm/archive/refs/tags/v0.7.2.tar.gz",
-            .hash = "arnm-0.7.2-ZdhGsCwFGgA0uOWsPFL1vPE1tCGvc2TkG-A5oUQrPVgw",
-        },
     },
     .paths = .{
         "build.zig",

@@ -1,0 +1,22 @@
+Ciao {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+hai appena ricevuto un messaggio da {senderAlias|&<>"'ä}
+
+{subject|&<>"'ä}
+{memo|&<>"'ä}
+All'account [{communityURL|&<>"'ä}/transactions]
+
+Cordiali saluti,
+il tuo team Gradido
+
+Per ulteriori domande, contatta il nostro supporto.
+support@gradido.net
+
+Note legali [https://gradido.net/de/impressum/]
+
+Informativa sulla privacy [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

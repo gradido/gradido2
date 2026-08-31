@@ -96,26 +96,38 @@ export function renderOne() {
 }
 
 // ---------------------------------------------------------------- native
-export function benchNative({ port, n, connections, ca, mail }) {
+/**
+ * `connections` is a concurrency limit here, not a worker count: the addon opens one
+ * connection per mail and the sends run on the libuv thread pool, so what this controls is
+ * how many are in flight. Beyond UV_THREADPOOL_SIZE (4 by default) a higher number buys
+ * nothing -- which is itself worth seeing in the table.
+ */
+export async function benchNative({ port, n, connections, ca, mail }) {
   const mailer = new email.Mailer({
     url: `${ca ? 'smtps' : 'smtp'}://127.0.0.1:${port}`,
     from: 'noreply@gradido.net',
     fromName: 'Gradido',
     starttls: 0, // the relay offers none; smtps is TLS from the first byte
     cainfo: ca ? ca.cert : undefined,
-    workers: connections,
-    workerMax: connections,
-    queueMax: n,
   })
+  let sent = 0
+  let failed = 0
+  let next = 0
   const t0 = process.hrtime.bigint()
-  for (let i = 0; i < n; i++) {
-    mailer.enqueue({ to: `m${i}@example.org`, subject: mail.subject, body: mail.html })
+
+  const worker = async () => {
+    for (let i = next++; i < n; i = next++) {
+      await mailer
+        .sendMail({ to: `m${i}@example.org`, subject: mail.subject, body: mail.html })
+        .then(() => sent++)
+        .catch(() => failed++)
+    }
   }
-  const drained = mailer.drain(180_000)
+  await Promise.all(Array.from({ length: connections }, worker))
+
   const ns = Number(process.hrtime.bigint() - t0)
-  const stats = mailer.stats
   mailer.close()
-  return { ns, sent: stats.sent, failed: stats.failed, drained }
+  return { ns, sent, failed, drained: failed === 0 }
 }
 
 // ------------------------------------------------------------ nodemailer

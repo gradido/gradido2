@@ -1,0 +1,25 @@
+Een lid heeft zijn e-mailadres gewijzigd
+
+Lid: {firstName|&<>"'ä} {lastName|&<>"'ä} ({alias|&<>"'ä})
+
+Vorig adres: {oldEmail|&<>"'ä}
+
+Nieuw adres: {newEmail|&<>"'ä}
+
+Voor de GDT-server telt nog steeds het eerste adres van dit account: {gdtEmail|&<>"'ä}.
+Terugwijziging naar een eerder adres van dit account – op de GDT-server valt niets samen te voegen. Werk alleen Klick-Tipp bij.
+
+Hartelijke groet,
+je Gradido-team
+
+Neem bij verdere vragen contact op met onze support.
+support@gradido.net
+
+Colofon [https://gradido.net/de/impressum/]
+
+Privacybeleid [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

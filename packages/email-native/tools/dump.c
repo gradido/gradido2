@@ -1,6 +1,6 @@
 /* Renders everything that is in the binary with fixed test values into a
  * directory. Counterpart to tools/verify.mjs. */
-#include "service_core/email_gen.h"
+#include "service_core/email/templates.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,8 +51,9 @@ int main(int argc, char **argv)
                 }
                 write_file(dir, ti->name, ge_locale_code(l), c, "html", &m.html);
                 write_file(dir, ti->name, ge_locale_code(l), c, "subject", &m.subject);
-                bytes += m.html.len + m.subject.len;
-                n += 2;
+                write_file(dir, ti->name, ge_locale_code(l), c, "text", &m.text);
+                bytes += m.html.len + m.subject.len + m.text.len;
+                n += 3;
                 ge_mail_free(&m);
             }
         }

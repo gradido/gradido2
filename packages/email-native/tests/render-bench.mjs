@@ -70,23 +70,37 @@ console.log(`  renderBytes() vs pug: ${(pugNs / bytesNs).toFixed(2)}x`)
 console.log('  (the C render itself is ~0.6 us -- the rest is the N-API boundary:')
 console.log('   21 KB of UTF-8 turned into a JS string, or copied into a Buffer)')
 
-/* The path that never crosses it: render into the arena and hand the pointer
- * straight to the mailer. Workers off, so this measures render + enqueue and
- * nothing goes on a socket. */
-if (email.Mailer && typeof globalThis.Bun === 'undefined') {
-  const M = 2000
+/*
+ * The path that never crosses the boundary: render into the arena, format the MIME message from
+ * there, hand the buffer to a thread pool thread. No JS string of the document is ever made.
+ *
+ * What this used to measure was "render + enqueue", with `workers: 0` so nothing went on a
+ * socket. There is no queue any more -- every send dials -- so the number below is the
+ * *synchronous* half: everything send() does before the work leaves for the pool. The relay is
+ * a closed port, every promise rejects, and each one is caught the moment it is made; what
+ * happens on the pool thread afterwards is measured by tests/mail-bench.mjs instead.
+ */
+if (email.Mailer) {
+  const M = 500
   const mailer = new email.Mailer({
-    url: 'smtp://127.0.0.1:1',
+    url: 'smtp://127.0.0.1:1', // refused immediately, so the pool threads are not held
     from: 'noreply@gradido.net',
-    workers: 0,
-    workerMax: 2,
-    queueMax: M,
+    timeoutMs: 100,
   })
+  const pending = []
   const t0 = process.hrtime.bigint()
-  for (let i = 0; i < M; i++) mailer.send('member@example.org', TEMPLATE, LOCALE, values)
+  for (let i = 0; i < M; i++)
+    pending.push(mailer.send('member@example.org', TEMPLATE, LOCALE, values).catch(() => {}))
   const ns = Number(process.hrtime.bigint() - t0) / M
+  await Promise.all(pending)
   mailer.close()
-  console.log(`\n  sendTemplate() (render + queue, no JS string)`)
-  console.log(`  ${''.padEnd(28)} ${ns.toFixed(0).padStart(7)} ns/mail   ${(1e9 / ns / 1e3).toFixed(0).padStart(6)} k/s`)
-  console.log(`  vs pug render alone: ${(pugNs / ns).toFixed(1)}x faster, and that is before nodemailer`)
+
+  console.log('\n  send(), the synchronous half: render + MIME')
+  console.log(
+    `  ${''.padEnd(28)} ${ns.toFixed(0).padStart(7)} ns/mail   ` +
+      `${(1e9 / ns / 1e3).toFixed(0).padStart(6)} k/s`,
+  )
+  console.log(`  ${(ns / napiNs).toFixed(1)}x what render() costs, and it is mostly the encodings:`)
+  console.log('  quoted-printable over 21 KB of HTML and base64 over 28 KB of inline images.')
+  console.log('  A mail on the wire is ~64 KB where the document alone is 21 KB.')
 }

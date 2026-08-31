@@ -116,12 +116,10 @@ test('smtps: the trimmed mbedtls handshakes and verifies the chain', {
     from: 'noreply@gradido.net',
     fromName: 'Gradido',
     cainfo: ca.cert,
-    workers: 1,
-    workerMax: 2,
   })
   t.after(() => mailer.close())
 
-  mailer.send('member@example.org', 'accountActivation', 'de', {
+  const sending = mailer.send('member@example.org', 'accountActivation', 'de', {
     firstName: 'Björn',
     lastName: 'Müller & Söhne',
     activationLink: 'https://gradido.net/activate?code=abc&t=1',
@@ -132,7 +130,7 @@ test('smtps: the trimmed mbedtls handshakes and verifies the chain', {
 
   const body = await received(relay)
   assert.ok(body.includes('To: member@example.org'))
-  assert.ok(mailer.drain(10_000), 'queue drained')
+  await sending
   assert.equal(mailer.stats.sent, 1)
   assert.match(relay.versions[0], /^TLSv1\.[23]$/, `negotiated ${relay.versions[0]}`)
 })
@@ -158,18 +156,17 @@ test('smtps: an unknown CA is refused, not ignored', { skip: !haveOpenssl }, asy
     url: `smtps://127.0.0.1:${port}`,
     from: 'noreply@gradido.net',
     cainfo: other.cert,
-    workers: 1,
-    workerMax: 2,
     timeoutMs: 1200,
   })
   t.after(() => mailer.close())
 
-  mailer.enqueue({ to: 'member@example.org', subject: 's', body: 'b' })
-
-  /* Deliberately not drain(): it blocks this thread, and the relay needs it to
-   * run the handshake. Wait on the loop instead -- long enough for the attempt
-   * to fail, short of the 30 s retry delay, and inside Bun's 5 s test timeout. */
-  await new Promise((r) => setTimeout(r, 3000))
+  /* The rejection is the assertion: the certificate is not the one the relay was signed by,
+   * so mbedtls refuses the chain and curl says so. Nothing blocks this thread -- the send
+   * runs on a pool thread and the relay needs this one to run its handshake. */
+  await assert.rejects(
+    mailer.sendMail({ to: 'member@example.org', subject: 's', body: 'b' }),
+    /certificate|SSL|TLS/i,
+  )
 
   /* What matters is that nothing was delivered. Whether the *server* saw a
    * connection is a property of the test harness, not of the client: Node's

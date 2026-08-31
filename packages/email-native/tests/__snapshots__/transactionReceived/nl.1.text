@@ -1,0 +1,26 @@
+{senderAlias|&<>"'ä} heeft je {transactionAmount|&<>"'ä} Gradido gestuurd
+
+Hallo {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+je hebt zojuist {transactionAmount|&<>"'ä} GDD ontvangen van {senderAlias|&<>"'ä}.
+
+
+Bericht
+
+{memo|&<>"'ä}
+Naar het account [{communityURL|&<>"'ä}/transactions]
+
+Hartelijke groet,
+je Gradido-team
+
+Neem bij verdere vragen contact op met onze support.
+support@gradido.net
+
+Colofon [https://gradido.net/de/impressum/]
+
+Privacybeleid [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

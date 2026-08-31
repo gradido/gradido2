@@ -7,10 +7,11 @@
 // makes a pug upgrade or an edited template visible as a diff instead of as a
 // silently different mail.
 
+import { convert } from 'html-to-text'
 import fs from 'fs'
 import path from 'path'
 import pug from 'pug'
-import { LOCALE_DIR, LOCALES, TEMPLATE_ROOT, TEMPLATES } from './manifest.mjs'
+import { LOCALE_DIR, LOCALES, TEMPLATE_ROOT, TEMPLATES, TEXT_OPTIONS } from './manifest.mjs'
 import { combosOf, fixture } from './variants.mjs'
 
 export { fixture }
@@ -102,6 +103,28 @@ export function* renderAll() {
             snapshot: snapshotName(template, locale, combo, kind),
             dump: dumpName(template, locale, combo, kind),
             text,
+          }
+
+          /*
+           * The plain text alternative, from the same rendering.
+           *
+           * The build does this the other way round -- html-to-text over the *sentinel* HTML,
+           * then the slots are filled by C -- and the two agree because TEXT_OPTIONS turns off
+           * the one transformation that would depend on the value: word wrapping. A value with
+           * a line break in it would still diverge, and the fixture values deliberately have
+           * none.
+           */
+          if (kind === 'html') {
+            const plain = convert(text, TEXT_OPTIONS).trim()
+            yield {
+              template,
+              locale,
+              combo,
+              kind: 'text',
+              snapshot: snapshotName(template, locale, combo, 'text'),
+              dump: dumpName(template, locale, combo, 'text'),
+              text: plain,
+            }
           }
         }
       }

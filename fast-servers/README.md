@@ -228,14 +228,16 @@ when one fails, so a green `zig build` says nothing about them either way.
 ```text
 src/main.c        role selection, the quit flag, one thread per role
 service-core/     logging, config, the HTTP surface and its two backends,
-                  the cache table, JWT, the mail client, the database
-                  connection and its two drivers. Threads and locks come
-                  from libuv.
-                  email.{h,c} and email_gen.{h,c} are copies: the e-mail
-                  renderer is built out of the pug templates by
-                  packages/email-native and written into this tree by that
-                  package's build. Change it in packages/email-native, not
-                  here -- AGENTS.md section 3c
+                  the cache table, JWT, the database connection and its two
+                  drivers. Threads and locks come from libuv
+service-core/email/
+                  the mail half, in three layers: message (the bytes),
+                  transport (one SMTP session) and mailer (queue, retry,
+                  worker pool). render and templates are the template
+                  renderer, and those two are copies -- built out of the pug
+                  templates by packages/email-native and written into this
+                  tree by that package's build. Change them there, not here
+                  -- AGENTS.md section 3c
 backend-core/     the backend domain. Empty, and the emptiness is the point
 backend/          the HTTP server the frontend talks to
 federation/       the HTTP server other communities talk to

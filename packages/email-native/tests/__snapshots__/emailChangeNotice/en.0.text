@@ -1,0 +1,32 @@
+Your e-mail address is about to change
+
+Hello {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+A change of the e-mail address of your Gradido account to {newEmail|&<>"'ä} has been requested.
+
+Until the new address is confirmed, this one stays in force. If that was you, there is nothing more to do.
+
+
+That was not you?
+
+That was not you? Then click here – the change is revoked and this address stays.
+Revoke change [{revokeLink|&<>"'ä}]
+Or copy the link into your browser window.
+{revokeLink|&<>"'ä}
+If you revoke the change, please change your password afterwards as well.
+The link is valid until {validUntil|&<>"'ä} – after that the requested change expires by itself.
+
+Kind regards,
+your Gradido team
+
+If you have any further questions, please contact our support.
+support@gradido.net
+
+Impressum [https://gradido.net/de/impressum/]
+
+Privacy Policy [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

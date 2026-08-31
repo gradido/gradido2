@@ -1,0 +1,34 @@
+Passwort zurücksetzen
+
+Hallo {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+Du oder jemand anderes, hast für dieses Konto ein Zurücksetzen des Passworts angefordert.
+
+
+Passwort zurücksetzen
+
+Wenn Du es warst, klicke bitte hier.
+zurücksetzen [{resetLink|&<>"'ä}]
+Oder kopiere den Link in Dein Browserfenster.
+{resetLink|&<>"'ä}
+
+
+Neuen gültigen Link anfordern
+
+Der Link hat eine Gültigkeit von {hours|&<>"'ä} Stunden und {minutes|&<>"'ä} Minuten. Sollte die Gültigkeit des Links bereits abgelaufen sein, kannst Du Dir hier einen neuen Link schicken lassen.
+Neuer Link [{resendLink|&<>"'ä}]
+
+Liebe Grüße
+Dein Gradido-Team
+
+Bei weiteren Fragen kontaktiere bitte unseren Support.
+support@gradido.net
+
+Impressum [https://gradido.net/de/impressum/]
+
+Datenschutzerklärung [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

@@ -112,6 +112,37 @@ export const TEMPLATES = {
   },
 }
 
+/*
+ * How the HTML becomes the plain text alternative -- html-to-text, at build time, over the
+ * *sentinel* HTML, so the slots survive into the text program and C fills them at runtime.
+ *
+ * Four decisions, and three of them are not cosmetic:
+ *
+ *   wordwrap off       Reflow would depend on the value in a slot, and then the text a caller
+ *                      gets would not be the text this pipeline produced. Every line stays as
+ *                      long as its content -- quoted-printable wraps it on the wire anyway.
+ *   headings not
+ *   uppercased         html-to-text uppercases h1-h6 by default, which would uppercase the
+ *                      sentinel with them: \u0001FIRSTNAME\u0002 names no slot this renderer has.
+ *   images skipped     Their formatter prints "alt src", and src is a cid: reference that means
+ *                      nothing without the HTML part.
+ *   .socialmedia
+ *   skipped            Four icon links with no text: as plain text they are four bare URLs
+ *                      glued together, which is worse than leaving them out.
+ */
+export const TEXT_OPTIONS = {
+  wordwrap: false,
+  selectors: [
+    { selector: 'img', format: 'skip' },
+    { selector: '.socialmedia', format: 'skip' },
+    { selector: 'a', options: { hideLinkHrefIfSameAsText: true } },
+    ...['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].map((selector) => ({
+      selector,
+      options: { uppercase: false },
+    })),
+  ],
+}
+
 // Inline attachments (cid:) referenced from layout/header/footer -- these go
 // into the binary as bytes.
 export const ASSETS = [

@@ -1,0 +1,27 @@
+Пользователь {senderAlias|&<>"'ä} отправил вам {transactionAmount|&<>"'ä} Gradido
+
+Здравствуйте, {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+вы только что получили {transactionAmount|&<>"'ä} GDD от {senderAlias|&<>"'ä}.
+
+
+Сообщение
+
+{memo|&<>"'ä}
+Ответить [{communityURL|&<>"'ä}/send/{senderCommunityUuid|&<>"'ä}/{senderUuid|&<>"'ä}?art=email]
+В аккаунт [{communityURL|&<>"'ä}/transactions]
+
+С наилучшими пожеланиями,
+ваша команда Gradido
+
+Если у вас есть другие вопросы, пожалуйста, обратитесь в нашу поддержку.
+support@gradido.net
+
+Правовая информация [https://gradido.net/de/impressum/]
+
+Политика конфиденциальности [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

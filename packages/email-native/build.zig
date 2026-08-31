@@ -6,13 +6,13 @@
 //! Before any of it, two codegen steps run into the zig cache:
 //!
 //!   node tools/extract.mjs  ->  ir.json                    (pug + i18n, build time only)
-//!   node tools/gen_c.mjs    ->  service_core/email_gen.h + email_gen.c
+//!   node tools/gen_c.mjs    ->  service_core/email/templates.h + templates.c
 //!
 //! Every pug, JSON and PNG file under templates/ and locales/ is registered as an input,
 //! so the codegen re-runs exactly when a template changes and is skipped otherwise -- zig
 //! hashes contents, not mtimes, so a bare `touch` triggers nothing.
 //!
-//! The default step also runs `check`: the C binary renders all 540 documents and they
+//! The default step also runs `check`: the C binary renders all 810 documents and they
 //! are compared against tests/__snapshots__, the checked-in pug output. A build whose
 //! tables no longer match the templates fails there rather than in a mail.
 //!
@@ -58,8 +58,8 @@ pub fn build(b: *std.Build) !void {
     // lets `zig build check` run in CI without the npm helper.
     const want_addon = b.option(bool, "addon", "build the Node-API addon (default: true)") orelse true;
 
-    // Off leaves out sc_mailer and everything under it -- curl, mbedtls, libuv. The
-    // point of the switch is that the difference is measurable.
+    // Off leaves out the sending half and everything under it -- curl and mbedtls. The point
+    // of the switch is that the difference is measurable.
     const want_mailer = b.option(bool, "mailer", "include the SMTP mailer (default: true)") orelse true;
     // Only to put a number on what TLS costs. A build with -Dtls=false speaks SMTP
     // in the clear and has no business anywhere near a relay.
@@ -95,11 +95,12 @@ pub fn build(b: *std.Build) !void {
     // Part of the default step: `npx czb` is what the turbo build runs, and the copy
     // into fast-servers happens straight after it.
     const install_gen_h = b.addInstallFileWithDir(
-        gen_dir.path(b, "service_core/email_gen.h"),
+        gen_dir.path(b, "service_core/email/templates.h"),
         .prefix,
-        "gen/service_core/email_gen.h",
+        "gen/service_core/email/templates.h",
     );
-    const install_gen_c = b.addInstallFileWithDir(gen_dir.path(b, "email_gen.c"), .prefix, "gen/email_gen.c");
+    const install_gen_c =
+        b.addInstallFileWithDir(gen_dir.path(b, "templates.c"), .prefix, "gen/templates.c");
     b.getInstallStep().dependOn(&install_gen_h.step);
     b.getInstallStep().dependOn(&install_gen_c.step);
 
@@ -119,7 +120,7 @@ pub fn build(b: *std.Build) !void {
         target = addon.target;
         optimize = addon.optimize;
 
-        // The public header is include/service_core/email.h -- the path it has in
+        // The public header is include/service_core/email/render.h -- the path it has in
         // fast-servers, so there is one include spelling and not two.
         addon.addIncludePath("include");
         for (addon.compiles) |compile| {
@@ -128,7 +129,7 @@ pub fn build(b: *std.Build) !void {
             // Bun at all.
             compile.setVersionScript(b.path("napi/exports.map"));
             compile.addIncludePath(gen_dir);
-            compile.addCSourceFile(.{ .file = gen_dir.path(b, "email_gen.c"), .flags = &cflags });
+            compile.addCSourceFile(.{ .file = gen_dir.path(b, "templates.c"), .flags = &cflags });
         }
         if (want_mailer) {
             addon.addDefine("GE_WITH_MAILER", "1");
@@ -180,9 +181,11 @@ pub fn build(b: *std.Build) !void {
         .dependOn(&verify.step);
 }
 
-/// service-core's mail client, and the four translation units it needs. Compiled
-/// straight out of the fast-servers checkout rather than vendored, so the addon and
-/// the C server cannot drift apart.
+/// service-core's mail, minus its worker pool: email/message.c formats the RFC 5322 bytes and
+/// email/transport.c sends one message over one curl session. Both are compiled straight out of
+/// the fast-servers checkout rather than vendored, so the addon and the C server cannot send
+/// different mail -- and neither of them knows about threads, which is why nothing below links
+/// libuv or arnm. The queue and the workers stay in fast-servers, where the load is.
 fn addMailer(
     b: *std.Build,
     compiles: []const *std.Build.Step.Compile,
@@ -310,20 +313,18 @@ fn addMailer(
         }
     }
 
-    const libuv = b.dependency("libuv", .{ .target = target, .optimize = optimize });
-    const arnm = b.dependency("arnm", .{ .target = target, .optimize = optimize });
-
     for (compiles) |compile| {
         compile.addIncludePath(root.path(b, "include"));
-        compile.addIncludePath(arnm.path("include"));
         compile.addCSourceFiles(.{
             .root = root,
-            .files = &.{ "src/mail.c", "src/log.c", "src/status.c", "src/atomic.c" },
+            // status.c is sc_status_str; atomic.c is the compare-and-swap that stands in for
+            // uv_once in sc_mail_global_init(). log.c is deliberately absent: message.c and
+            // transport.c report through return values, and the log is where libuv came in.
+            .files = &.{ "src/email/message.c", "src/email/transport.c", "src/status.c",
+                         "src/atomic.c" },
             .flags = &cflags,
         });
         compile.linkLibrary(libcurl);
-        compile.linkLibrary(libuv.artifact("uv"));
-        compile.linkLibrary(arnm.artifact("arnm"));
     }
 }
 
@@ -338,8 +339,8 @@ fn addExe(
     const mod = b.createModule(.{ .target = target, .optimize = optimize, .link_libc = true });
     mod.addIncludePath(b.path("include"));
     mod.addIncludePath(gen_dir);
-    mod.addCSourceFiles(.{ .files = &.{ root_c, "src/email.c" }, .flags = &cflags });
-    mod.addCSourceFile(.{ .file = gen_dir.path(b, "email_gen.c"), .flags = &cflags });
+    mod.addCSourceFiles(.{ .files = &.{ root_c, "src/render.c" }, .flags = &cflags });
+    mod.addCSourceFile(.{ .file = gen_dir.path(b, "templates.c"), .flags = &cflags });
     return b.addExecutable(.{ .name = name, .root_module = mod });
 }
 

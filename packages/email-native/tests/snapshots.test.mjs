@@ -52,7 +52,7 @@ test('pug renders what the snapshots say', () => {
     if (!rendered.has(stale)) differ.push(`${stale}: snapshot for a document nobody renders`)
 
   assert.deepEqual(differ, [], `${differ.length} document(s) differ -- ${HINT}`)
-  // 17 templates x 10 locales x variants x {html, subject}. A template that stopped
+  // 17 templates x 10 locales x variants x {html, subject, text}. A template that stopped
   // being rendered at all would otherwise pass the loop above in silence.
-  assert.equal(rendered.size, 540)
+  assert.equal(rendered.size, 810)
 })

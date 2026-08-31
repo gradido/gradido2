@@ -235,7 +235,9 @@ endif()
 # --- components -----------------------------------------------------------------------------
 
 # The two HTTP backends live beside each other in service-core/src; exactly one is compiled.
-file(GLOB SERVICE_CORE_SRC "service-core/src/*.c")
+# The email half sits one level down, in service-core/src/email; build.zig walks the tree,
+# this build has to name it.
+file(GLOB SERVICE_CORE_SRC "service-core/src/*.c" "service-core/src/email/*.c")
 if(FS_ENABLE_H2O)
   list(REMOVE_ITEM SERVICE_CORE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/service-core/src/http_fallback.c")
 else()

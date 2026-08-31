@@ -1,0 +1,29 @@
+Tu contribución al bien común ha sido modificada
+
+Hola {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+tu contribución al bien común «{contributionMemo|&<>"'ä}» acaba de ser modificada por {senderAlias|&<>"'ä} y ahora dice «{contributionMemoUpdated|&<>"'ä}»
+
+
+Detalles de la contribución
+
+Encontrarás tus contribuciones al bien común y los mensajes relacionados en tu cuenta de Gradido.
+A la contribución [{contributionFrontendLink|&<>"'ä}]
+O copia el enlace en la ventana de tu navegador.
+{contributionFrontendLink|&<>"'ä}
+Por favor, no respondas a este correo electrónico.
+
+Un cordial saludo,
+tu equipo de Gradido
+
+Si tienes más preguntas, ponte en contacto con nuestro soporte.
+support@gradido.net
+
+Aviso legal [https://gradido.net/de/impressum/]
+
+Política de privacidad [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

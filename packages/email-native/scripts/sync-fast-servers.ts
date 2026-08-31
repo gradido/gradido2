@@ -1,10 +1,10 @@
 /**
  * Puts the renderer into fast-servers, as C it compiles rather than C it generates.
  *
- * Four files: the two hand-written ones from this package and the two `build.zig` wrote
- * out of the pug templates. They land where every other service-core file lands — the
- * public headers under `include/service_core/`, the translation units in `src/` — so the
- * C build picks them up by walking those directories and needs no entry of its own.
+ * Four files: the renderer this package owns and the two `build.zig` wrote out of the pug
+ * templates. They land beside the rest of service-core's email code — the public headers
+ * under `include/service_core/email/`, the translation units in `src/email/` — so the C
+ * build picks them up by walking those directories and needs no entry of its own.
  *
  * Why copy at all, rather than let `fast-servers/build.zig` run the codegen the way this
  * package's build does: the codegen is `node tools/gen_c.mjs`, and pug is a JS library.
@@ -30,11 +30,14 @@ const GEN = join(ROOT, 'build', 'gen')
 
 const SERVICE_CORE = join(FAST_SERVERS, 'service-core')
 
+const INCLUDE = join(SERVICE_CORE, 'include', 'service_core', 'email')
+const SRC = join(SERVICE_CORE, 'src', 'email')
+
 const FILES = [
-  { from: join(ROOT, 'include', 'service_core', 'email.h'), to: join(SERVICE_CORE, 'include', 'service_core', 'email.h') },
-  { from: join(ROOT, 'src', 'email.c'), to: join(SERVICE_CORE, 'src', 'email.c') },
-  { from: join(GEN, 'service_core', 'email_gen.h'), to: join(SERVICE_CORE, 'include', 'service_core', 'email_gen.h') },
-  { from: join(GEN, 'email_gen.c'), to: join(SERVICE_CORE, 'src', 'email_gen.c') },
+  { from: join(ROOT, 'include', 'service_core', 'email', 'render.h'), to: join(INCLUDE, 'render.h') },
+  { from: join(ROOT, 'src', 'render.c'), to: join(SRC, 'render.c') },
+  { from: join(GEN, 'service_core', 'email', 'templates.h'), to: join(INCLUDE, 'templates.h') },
+  { from: join(GEN, 'templates.c'), to: join(SRC, 'templates.c') },
 ]
 
 const exists = async (path: string) => {

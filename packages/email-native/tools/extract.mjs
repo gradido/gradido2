@@ -1,10 +1,11 @@
 // Renders every pug template once per locale and per branch variant, with
 // sentinels where the user data goes, then splits the result into
 // [literal, slot, literal, ...]. Output: <out>/ir.json
+import { convert } from 'html-to-text'
 import pug from 'pug'
 import fs from 'fs'
 import path from 'path'
-import { TEMPLATE_ROOT, LOCALE_DIR, OUT_DIR, LOCALES, TEMPLATES } from './manifest.mjs'
+import { TEMPLATE_ROOT, LOCALE_DIR, OUT_DIR, LOCALES, TEMPLATES, TEXT_OPTIONS } from './manifest.mjs'
 
 // U+0001 / U+0002 never occur in HTML or CSS, and pug's escaper leaves them
 // alone -- so they survive attribute contexts too.
@@ -61,7 +62,7 @@ function chunkify(html, kind) {
     if (i % 2 === 0) {
       if (parts[i]) ops.push({ t: 'lit', s: kind === 'text' ? unescapeHtml(parts[i]) : parts[i] })
     } else {
-      ops.push({ t: 'slot', name: parts[i], esc: kind === 'text' ? 'raw' : 'html' })
+      ops.push({ t: 'slot', name: parts[i], esc: kind === 'html' ? 'html' : 'raw' })
     }
   }
   return ops
@@ -146,8 +147,10 @@ for (const [name, spec] of Object.entries(TEMPLATES)) {
     const fn = pug.compileFile(file, { basedir: TEMPLATE_ROOT, filename: file })
     const vars = pugVars(fn).filter((v) => v !== 't' && v !== 'locale' && !flags.includes(v))
     renders[kind] = []
+    if (kind === 'html') renders.text = []
     for (const locale of LOCALES) {
       const perCombo = []
+      const perComboText = []
       for (const combo of combos) {
         // Baseline: every template variable becomes its own sentinel ...
         const locals = { t: makeT(locale), locale: sentinel('locale') }
@@ -162,8 +165,19 @@ for (const [name, spec] of Object.entries(TEMPLATES)) {
         const ops = chunkify(kind === 'subject' ? out.trim() : out, kind === 'subject' ? 'text' : 'html')
         for (const op of ops) if (op.t === 'slot') slotNames.add(op.name)
         perCombo.push(ops)
+
+        /* The plain text alternative comes off the same rendering, sentinels and all -- so the
+         * text a receiver without HTML sees is derived from the one document, not maintained
+         * beside it. html-to-text decodes the entities on its way, which is why the literals
+         * are taken as they are here and only the slots are marked raw. */
+        if (kind === 'html') {
+          const text = convert(out, TEXT_OPTIONS).trim()
+          const textOps = chunkify(text, 'plain')
+          perComboText.push(textOps)
+        }
       }
       renders[kind].push(perCombo)
+      if (kind === 'html') renders.text.push(perComboText)
     }
   }
 

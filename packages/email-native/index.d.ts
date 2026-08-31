@@ -1,14 +1,17 @@
 /// <reference types="node" />
 
-/** One rendered mail. `subject` is plain text, `html` is the document. */
+/** One rendered mail: the subject, the HTML document, and the plain text alternative. */
 export interface RenderedMail {
   subject: string
   html: string
+  /** Produced from the same document at build time — what a receiver without HTML sees. */
+  text: string
 }
 
 export interface RenderedMailBytes {
   subject: Buffer
   html: Buffer
+  text: Buffer
 }
 
 /** What a template accepts, read off the pug sources at build time. */
@@ -26,6 +29,7 @@ export interface TemplateInfo {
 export interface Limits {
   maxStaticHtml: number
   maxStaticSubject: number
+  maxStaticText: number
   maxSlotRefs: number
   /** What the addon's own arena was sized to. */
   arenaBytes: number
@@ -53,33 +57,34 @@ export interface MailerConfig {
   starttls?: number
   /** Development only. */
   insecure?: boolean
-  /** 0 sends on the calling thread via drain(); 1 or more starts workers. */
-  workers?: number
-  /**
-   * Ceiling on worker threads. Leave it set: 0 makes the C side ask libuv how
-   * many cores the machine has, which Bun's N-API shim cannot answer and which
-   * aborts the process there (oven-sh/bun#18546).
-   */
-  workerMax?: number
-  queueMax?: number
-  messageMax?: number
+  /** Round trip one send is given. Default 10000. */
   timeoutMs?: number
+  /**
+   * How many sends may be on the libuv thread pool at once. Default `UV_THREADPOOL_SIZE - 1`,
+   * so one thread stays free for the `fs`, `dns` and `crypto` work that shares that pool.
+   */
+  maxConcurrent?: number
 }
 
 export interface MailerStats {
-  queued: number
   sent: number
-  retried: number
   failed: number
+  /** Sends on the libuv thread pool and not settled yet — never more than `limit`. */
   pending: number
-  workers: number
+  /** Sends waiting for a slot, because `limit` are already in flight. */
+  waiting: number
+  /** What `maxConcurrent` resolved to. */
+  limit: number
 }
 
 export interface Mail {
   to: string
   subject: string
-  /** Sent as text/plain; see the README on what the mailer cannot do yet. */
-  body: string
+  /** The plain text alternative. `body` is the older name for the same thing. */
+  text?: string
+  body?: string
+  /** The HTML alternative. Both together make a multipart/alternative message. */
+  html?: string
 }
 
 /** Renders into JS strings. The 21 KB of UTF-8 costs more than the render. */
@@ -104,16 +109,27 @@ export function assets(): Asset[]
 
 export class Mailer {
   constructor(config: MailerConfig)
-  /** Renders and queues without the document ever becoming a JS value. */
+  /**
+   * Renders and sends, without the document ever becoming a JS value. One connection per
+   * mail, on a libuv thread pool thread; the promise resolves with the Message-ID once the
+   * relay has taken it, and rejects with the relay's own words when it has not.
+   *
+   * The pool has four threads by default (UV_THREADPOOL_SIZE) and shares them with fs, dns
+   * and crypto -- so four sends may be in flight. Bulk mail belongs in fast-servers.
+   */
   send(
     to: string,
     template: string,
     locale: string,
     values: Record<string, string | boolean | null | undefined>,
-  ): void
-  enqueue(mail: Mail): void
+  ): Promise<string>
+  /**
+   * A message the caller rendered itself: text, HTML, or both as a multipart/alternative.
+   * Inline images are not attached to this one — `send()` is what carries the templates'
+   * six `cid:` images.
+   */
+  sendMail(mail: Mail): Promise<string>
   readonly stats: MailerStats
-  /** Blocks. Shutdown and tests only. */
-  drain(timeoutMs?: number): boolean
+  /** Refuses further sends. Mails already out settle their promises first. */
   close(): void
 }

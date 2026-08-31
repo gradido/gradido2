@@ -1,22 +1,37 @@
 /*
  * Node-API surface for the two C halves of this package:
  *
- *   the renderer   src/email.c + the generated table
- *   the mailer     service-core's sc_mailer, libcurl over mbedTLS
+ *   the renderer   src/render.c + the generated table
+ *   the mailer     service-core's email/message.c and email/transport.c, libcurl over mbedTLS
  *
- * Nothing here calls back into JS from a foreign thread, and that is what keeps
- * it small: sc_mail_enqueue does not block and does not report, so there is no
- * threadsafe function, no async work and no interaction with the event loop.
- * The worker threads belong to sc_mailer and never see a napi_env.
+ * **One connection per mail, on a libuv thread pool thread.** The addon does not use
+ * service-core's sc_mailer: that one holds sessions open and runs a worker pool of its own,
+ * which is what a server sending thousands of mails a second wants and not what a Node process
+ * sending one per request wants. Here every send is a napi_async_work -- execute() opens a
+ * session, hands over one message and closes it, complete() settles a Promise on the JS thread.
+ * The same shape nodemailer has by default, and the reason this file links no libuv at all.
+ *
+ * The cost is named rather than hidden: a new session per mail is a TCP handshake, a TLS
+ * handshake and the SMTP greeting dialogue, so against a remote relay it is round trips and not
+ * microseconds. And the pool has four threads by default (UV_THREADPOOL_SIZE), shared with
+ * fs, dns and crypto -- four mails may be in flight, each holding its thread for the whole
+ * session. For registration and notification mail that is the right trade; for a newsletter it
+ * is what fast-servers exists for.
+ *
+ * execute() runs on a thread with no napi_env: nothing in it may call napi_*, which is why a job
+ * carries everything it needs and reports back through plain C fields.
  */
 #include <node_api.h>
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
-#include "service_core/email_gen.h"
+#include "service_core/email/templates.h"
 #ifdef GE_WITH_MAILER
-#include "service_core/mail.h"
+#include "service_core/email/message.h"
+#include "service_core/email/transport.h"
 #endif
 
 #define MAX_SLOTS 32
@@ -83,9 +98,9 @@ static uint32_t js_prop_u32(napi_env env, napi_value obj, const char *name, uint
 
 /* ------------------------------------------------------------------- arena */
 
-/* One arena for the whole addon. JS is single threaded, and every render is
- * finished -- copied into JS strings or handed to sc_mail_enqueue, which
- * copies -- before the next one starts. */
+/* One arena for the whole addon. JS is single threaded, and every render is finished --
+ * copied into JS strings, or formatted into the job's own buffer -- before the next one
+ * starts. Nothing a pool thread touches lives in here. */
 static ge_arena_t g_arena;
 static bool       g_arena_ready;
 
@@ -165,12 +180,14 @@ static napi_value fn_render(napi_env env, napi_callback_info info)
     free_owned(owned, ti->n_slots);
     if (rc != 0) return throw_msg(env, "render failed");
 
-    napi_value out, subject, html;
+    napi_value out, subject, html, text;
     CHECK(napi_create_object(env, &out));
     CHECK(napi_create_string_utf8(env, mail.subject.data, mail.subject.len, &subject));
     CHECK(napi_create_string_utf8(env, mail.html.data, mail.html.len, &html));
+    CHECK(napi_create_string_utf8(env, mail.text.data, mail.text.len, &text));
     CHECK(napi_set_named_property(env, out, "subject", subject));
     CHECK(napi_set_named_property(env, out, "html", html));
+    CHECK(napi_set_named_property(env, out, "text", text));
     return out;
 }
 
@@ -206,31 +223,74 @@ static napi_value fn_render_bytes(napi_env env, napi_callback_info info)
     free_owned(owned, ti->n_slots);
     if (rc != 0) return throw_msg(env, "render failed");
 
-    napi_value out, subject, html;
+    napi_value out, subject, html, text;
     void      *copy;
     CHECK(napi_create_object(env, &out));
     CHECK(napi_create_buffer_copy(env, mail.subject.len, mail.subject.data, &copy, &subject));
     CHECK(napi_create_buffer_copy(env, mail.html.len, mail.html.data, &copy, &html));
+    CHECK(napi_create_buffer_copy(env, mail.text.len, mail.text.data, &copy, &text));
     CHECK(napi_set_named_property(env, out, "subject", subject));
     CHECK(napi_set_named_property(env, out, "html", html));
+    CHECK(napi_set_named_property(env, out, "text", text));
     return out;
 }
 
 #ifdef GE_WITH_MAILER
 /* --------------------------------------------------------------- mailer */
 
-/* Wrapped so that close() and the finalizer cannot both destroy it. */
+/*
+ * The relay, as JavaScript described it, with the strings copied.
+ *
+ * `relay` and `origin` point into the char pointers below, so the box is what keeps them alive
+ * and nothing here may be moved. Every field is read on the JS thread except `relay`, which a
+ * pool thread reads while a send runs -- it is written once, at create, and never again.
+ *
+ * `inflight` and the counters are touched only on the JS thread (send queues, complete settles),
+ * so they need no atomics. `closed` is what makes close() safe while a send is out: it refuses
+ * new sends, and whoever sees the last job finish frees the box.
+ */
 typedef struct {
-    sc_mailer *m;
+    sc_mail_relay  relay;
+    sc_mail_origin origin;
+    char    *url, *from, *from_name, *user, *pass, *cainfo;
+    uint64_t sequence;
+    uint32_t inflight;
+    uint32_t sent, failed;
+    bool     closed;
 } mailer_box;
+
+/* One send in flight. Owns its copies, because the JS values are gone by the time it runs. */
+typedef struct {
+    mailer_box     *box;
+    napi_deferred   deferred;
+    napi_async_work work;
+    char           *to;
+    char           *message;
+    size_t          len;
+    char            msgid[SC_MAIL_MSGID_MAX];
+    sc_status       status;
+    char            error[SC_MAIL_ERROR_MAX];
+} send_job;
+
+static void mailer_free(mailer_box *box)
+{
+    free(box->url);
+    free(box->from);
+    free(box->from_name);
+    free(box->user);
+    free(box->pass);
+    free(box->cainfo);
+    free(box);
+}
 
 static void finalize_mailer(napi_env env, void *data, void *hint)
 {
     (void)env;
     (void)hint;
     mailer_box *box = (mailer_box *)data;
-    if (box->m) sc_mailer_destroy(box->m);
-    free(box);
+    box->closed = true;
+    /* A job still in flight holds the box; its completion frees it. */
+    if (box->inflight == 0) mailer_free(box);
 }
 
 static mailer_box *unwrap(napi_env env, napi_value v)
@@ -247,49 +307,31 @@ static napi_value fn_create_mailer(napi_env env, napi_callback_info info)
     CHECK(napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
     if (argc < 1) return throw_msg(env, "createMailer(config)");
 
-    char *url = js_prop_string(env, argv[0], "url");
-    char *from = js_prop_string(env, argv[0], "from");
-    char *from_name = js_prop_string(env, argv[0], "fromName");
-    char *user = js_prop_string(env, argv[0], "user");
-    char *pass = js_prop_string(env, argv[0], "pass");
-    char *cainfo = js_prop_string(env, argv[0], "cainfo");
+    mailer_box *box = (mailer_box *)calloc(1, sizeof *box);
+    if (!box) return throw_msg(env, "out of memory");
 
-    sc_mail_config cfg = {
-        .url = url,
-        .from = from,
-        .from_name = from_name,
-        .user = user,
-        .pass = pass,
-        .cainfo = cainfo,
-        .starttls = (int)js_prop_u32(env, argv[0], "starttls", 1),
-        .insecure = js_prop_bool(env, argv[0], "insecure") ? 1 : 0,
-        .workers = js_prop_u32(env, argv[0], "workers", 1),
-        /* Worth naming rather than leaving at 0: the default asks libuv how many
-         * cores the machine has, and Bun's N-API libuv shim has no
-         * uv_available_parallelism yet -- oven-sh/bun#18546. A 0 here crashes
-         * the Bun process on createMailer. */
-        .worker_max = js_prop_u32(env, argv[0], "workerMax", 2),
-        .timeout_ms = (long)js_prop_u32(env, argv[0], "timeoutMs", 0),
-        .queue_max = js_prop_u32(env, argv[0], "queueMax", 0),
-        .message_max = js_prop_u32(env, argv[0], "messageMax", 0),
-    };
-
-    sc_mailer *m = NULL;
-    sc_status  st = sc_mailer_create(&cfg, &m);
-    free(url);
-    free(from);
-    free(from_name);
-    free(user);
-    free(pass);
-    free(cainfo);
-    if (st != SC_OK) return throw_msg(env, "sc_mailer_create failed");
-
-    mailer_box *box = (mailer_box *)malloc(sizeof *box);
-    if (!box) {
-        sc_mailer_destroy(m);
-        return throw_msg(env, "out of memory");
+    box->url = js_prop_string(env, argv[0], "url");
+    box->from = js_prop_string(env, argv[0], "from");
+    box->from_name = js_prop_string(env, argv[0], "fromName");
+    box->user = js_prop_string(env, argv[0], "user");
+    box->pass = js_prop_string(env, argv[0], "pass");
+    box->cainfo = js_prop_string(env, argv[0], "cainfo");
+    if (!box->url || !box->from) {
+        mailer_free(box);
+        return throw_msg(env, "createMailer needs at least { url, from }");
     }
-    box->m = m;
+
+    box->relay.url = box->url;
+    box->relay.from = box->from;
+    box->relay.user = box->user;
+    box->relay.pass = box->pass;
+    box->relay.cainfo = box->cainfo;
+    box->relay.starttls = (int)js_prop_u32(env, argv[0], "starttls", 1);
+    box->relay.insecure = js_prop_bool(env, argv[0], "insecure") ? 1 : 0;
+    box->relay.timeout_ms = (long)js_prop_u32(env, argv[0], "timeoutMs", 0);
+    box->origin.from = box->from;
+    box->origin.from_name = box->from_name;
+    box->origin.msgid_domain = NULL; /* email/message.c takes it out of `from` */
 
     napi_value ext;
     CHECK(napi_create_external(env, box, finalize_mailer, NULL, &ext));
@@ -303,39 +345,201 @@ static napi_value fn_close_mailer(napi_env env, napi_callback_info info)
     CHECK(napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
     mailer_box *box = argc ? unwrap(env, argv[0]) : NULL;
     if (!box) return throw_msg(env, "close(mailer)");
-    if (box->m) {
-        sc_mailer_destroy(box->m);
-        box->m = NULL;
-    }
+    /* Sends already out keep running and settle their promises; the last one frees the box.
+     * Nothing is cancelled -- a mail the relay may already have taken is not a thing to
+     * pretend never happened. */
+    box->closed = true;
     return NULL;
 }
 
-static napi_value fn_enqueue(napi_env env, napi_callback_info info)
+/* execute(): a pool thread, no napi_env, no napi_* call. */
+static void job_execute(napi_env env, void *data)
+{
+    (void)env;
+    send_job        *job = (send_job *)data;
+    sc_mail_session *session = sc_mail_session_open();
+    if (!session) {
+        job->status = SC_ERR_NO_MEMORY;
+        snprintf(job->error, sizeof job->error, "no SMTP session");
+        return;
+    }
+    job->status = sc_mail_session_send(session, &job->box->relay, job->to, job->message, job->len,
+                                       job->error, sizeof job->error);
+    sc_mail_session_close(session);
+}
+
+/* complete(): back on the JS thread, so this is where the promise is settled. */
+static void job_complete(napi_env env, napi_status status, void *data)
+{
+    send_job   *job = (send_job *)data;
+    mailer_box *box = job->box;
+    napi_value  value;
+
+    if (status == napi_ok && job->status == SC_OK) {
+        box->sent++;
+        /* The Message-ID, because it is the one identifier that reaches the relay's log too. */
+        if (napi_create_string_utf8(env, job->msgid, NAPI_AUTO_LENGTH, &value) == napi_ok)
+            napi_resolve_deferred(env, job->deferred, value);
+    } else {
+        char message[SC_MAIL_ERROR_MAX + SC_MAIL_ADDR_MAX + 32];
+        box->failed++;
+        snprintf(message, sizeof message, "%s: %s", job->to,
+                 job->error[0] != '\0' ? job->error : "send failed");
+        if (napi_create_string_utf8(env, message, NAPI_AUTO_LENGTH, &value) == napi_ok) {
+            napi_value error;
+            if (napi_create_error(env, NULL, value, &error) == napi_ok)
+                napi_reject_deferred(env, job->deferred, error);
+        }
+    }
+
+    napi_delete_async_work(env, job->work);
+    free(job->to);
+    free(job->message);
+    free(job);
+    if (--box->inflight == 0 && box->closed) mailer_free(box);
+}
+
+/*
+ * The six inline images, in the shape email/message.h wants them.
+ *
+ * Built once from the generated table: the bytes are in the binary already, and the two structs
+ * differ only because a message is not a thing that knows about templates.
+ */
+static sc_mail_asset g_assets[GE_ASSET_COUNT];
+static bool          g_assets_ready;
+
+static const sc_mail_asset *assets_for_templates(void)
+{
+    if (!g_assets_ready) {
+        for (unsigned i = 0; i < GE_ASSET_COUNT; i++) {
+            g_assets[i].cid = GE_ASSETS[i].cid;
+            g_assets[i].filename = GE_ASSETS[i].filename;
+            g_assets[i].content_type = GE_ASSETS[i].content_type;
+            g_assets[i].data = GE_ASSETS[i].data;
+            g_assets[i].size = GE_ASSETS[i].size;
+        }
+        g_assets_ready = true;
+    }
+    return g_assets;
+}
+
+/**
+ * Formats one mail and queues the send. Returns the promise, or NULL after throwing.
+ *
+ * Takes ownership of @p to whatever happens, and of nothing else: the subject and the two
+ * bodies are read here and may be arena memory the next render overwrites.
+ */
+static napi_value queue_send(napi_env env, mailer_box *box, char *to, const char *subject,
+                             const char *text, const char *html, const sc_mail_asset *assets,
+                             uint32_t asset_count)
+{
+    sc_mail         mail = {to, subject, text, html, assets, asset_count};
+    sc_mail_message formatted;
+    send_job       *job;
+    napi_value      promise, name;
+    size_t          cap;
+
+    /*
+     * One guess, then the exact figure: sc_mail_format() reports what it would have needed.
+     *
+     * The guess allows for what the encodings cost -- quoted-printable is at worst three bytes
+     * per byte, base64 is four per three -- so the second attempt is for the pathological case
+     * rather than the normal one.
+     */
+    cap = 4096;
+    if (text != NULL) cap += 3 * strlen(text);
+    if (html != NULL) cap += 3 * strlen(html);
+    for (uint32_t i = 0; i < asset_count; i++) cap += (assets[i].size * 4) / 3 + 256;
+    job = (send_job *)calloc(1, sizeof *job);
+    char *buffer = (char *)malloc(cap);
+    if (!job || !buffer) {
+        free(job);
+        free(buffer);
+        free(to);
+        return throw_msg(env, "out of memory");
+    }
+
+    sc_status st = sc_mail_format(&box->origin, &mail, ++box->sequence, (int64_t)time(NULL) * 1000,
+                                  buffer, cap, &formatted);
+    if (st == SC_ERR_TOO_LONG && formatted.len > cap) {
+        char *grown = (char *)realloc(buffer, formatted.len);
+        if (grown) {
+            buffer = grown;
+            cap = formatted.len;
+            st = sc_mail_format(&box->origin, &mail, box->sequence,
+                                (int64_t)time(NULL) * 1000, buffer, cap, &formatted);
+        }
+    }
+    if (st != SC_OK) {
+        /* A rejected promise and not a throw: this is the mail being wrong, the same class of
+         * failure as the relay refusing it, and a caller writing `send(...).catch(...)` must not
+         * have one of the two arrive as a synchronous exception instead. */
+        napi_deferred rejected;
+        napi_value    error, text;
+        free(job);
+        free(buffer);
+        free(to);
+        CHECK(napi_create_promise(env, &rejected, &promise));
+        CHECK(napi_create_string_utf8(env,
+                                      st == SC_ERR_MALFORMED
+                                          ? "a control character in the recipient, the sender, "
+                                            "the display name or the subject"
+                                          : "the mail does not fit",
+                                      NAPI_AUTO_LENGTH, &text));
+        CHECK(napi_create_error(env, NULL, text, &error));
+        CHECK(napi_reject_deferred(env, rejected, error));
+        return promise;
+    }
+
+    job->box = box;
+    job->to = to;
+    job->message = buffer;
+    job->len = formatted.len;
+    memcpy(job->msgid, formatted.msgid, sizeof job->msgid);
+
+    CHECK(napi_create_promise(env, &job->deferred, &promise));
+    CHECK(napi_create_string_utf8(env, "email-native:send", NAPI_AUTO_LENGTH, &name));
+    CHECK(napi_create_async_work(env, NULL, name, job_execute, job_complete, job, &job->work));
+    box->inflight++;
+    CHECK(napi_queue_async_work(env, job->work));
+    return promise;
+}
+
+/* A message the caller rendered itself. */
+static napi_value fn_send_mail(napi_env env, napi_callback_info info)
 {
     size_t     argc = 2;
     napi_value argv[2];
     CHECK(napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
-    if (argc < 2) return throw_msg(env, "enqueue(mailer, {to, subject, body})");
+    if (argc < 2) return throw_msg(env, "sendMail(mailer, {to, subject, body})");
 
     mailer_box *box = unwrap(env, argv[0]);
-    if (!box || !box->m) return throw_msg(env, "mailer is closed");
+    if (!box || box->closed) return throw_msg(env, "mailer is closed");
 
-    char   *to = js_prop_string(env, argv[1], "to");
-    char   *subject = js_prop_string(env, argv[1], "subject");
-    char   *body = js_prop_string(env, argv[1], "body");
-    sc_mail mail = { .to = to, .subject = subject, .body = body };
-    sc_status st = (to && subject && body) ? sc_mail_enqueue(box->m, &mail)
-                                           : SC_ERR_INVALID_ARGUMENT;
-    free(to);
+    char *to = js_prop_string(env, argv[1], "to");
+    char *subject = js_prop_string(env, argv[1], "subject");
+    /* `text` is the plain alternative and `html` the rich one; either alone is a single-part
+     * message, both together a multipart/alternative. `body` is what this took before there
+     * were two, and still means the text. */
+    char *text = js_prop_string(env, argv[1], "text");
+    char *html = js_prop_string(env, argv[1], "html");
+    if (!text) text = js_prop_string(env, argv[1], "body");
+
+    napi_value out = NULL;
+    if (to && subject && (text || html))
+        out = queue_send(env, box, to, subject, text, html, NULL, 0); /* takes `to` */
+    else {
+        free(to);
+        out = throw_msg(env, "sendMail needs { to, subject } and text or html");
+    }
     free(subject);
-    free(body);
-    if (st != SC_OK) return throw_msg(env, "sc_mail_enqueue failed");
-    return NULL;
+    free(text);
+    free(html);
+    return out;
 }
 
-/* The shape the package exists for: render straight out of the byte pool
- * into the arena, then hand the bytes to the mailer, which copies them into its
- * queue. No intermediate JS string, and no allocation on either side. */
+/* The shape the package exists for: render straight out of the byte pool into the arena, then
+ * format from there. The document never becomes a JS value. */
 static napi_value fn_send_template(napi_env env, napi_callback_info info)
 {
     size_t     argc = 5;
@@ -344,7 +548,7 @@ static napi_value fn_send_template(napi_env env, napi_callback_info info)
     if (argc < 5) return throw_msg(env, "sendTemplate(mailer, to, template, locale, values)");
 
     mailer_box *box = unwrap(env, argv[0]);
-    if (!box || !box->m) return throw_msg(env, "mailer is closed");
+    if (!box || box->closed) return throw_msg(env, "mailer is closed");
 
     int tpl, loc;
     if (!resolve(env, argv[2], argv[3], &tpl, &loc))
@@ -375,11 +579,13 @@ static napi_value fn_send_template(napi_env env, napi_callback_info info)
         return throw_msg(env, "render failed");
     }
 
-    sc_mail   mail = { .to = to, .subject = rendered.subject.data, .body = rendered.html.data };
-    sc_status st = sc_mail_enqueue(box->m, &mail);
-    free(to);
-    if (st != SC_OK) return throw_msg(env, "sc_mail_enqueue failed");
-    return NULL;
+    /* No text alternative yet -- the renderer has no text program, see the README. What this
+     * does have is the six images the templates refer to as cid:, which is what makes the HTML
+     * arrive whole. */
+    /* Both alternatives and the six images: a multipart/alternative whose HTML half is a
+     * multipart/related. The text comes out of the same document -- see tools/manifest.mjs. */
+    return queue_send(env, box, to, rendered.subject.data, rendered.text.data,
+                      rendered.html.data, assets_for_templates(), GE_ASSET_COUNT);
 }
 
 static napi_value fn_stats(napi_env env, napi_callback_info info)
@@ -388,38 +594,17 @@ static napi_value fn_stats(napi_env env, napi_callback_info info)
     napi_value argv[1];
     CHECK(napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
     mailer_box *box = argc ? unwrap(env, argv[0]) : NULL;
-    if (!box || !box->m) return throw_msg(env, "mailer is closed");
-
-    sc_mail_stats s;
-    sc_mail_get_stats(box->m, &s);
+    if (!box) return throw_msg(env, "stats(mailer)");
 
     napi_value out, v;
     CHECK(napi_create_object(env, &out));
 #define PUT(name, value)                                                                          \
     CHECK(napi_create_double(env, (double)(value), &v));                                          \
     CHECK(napi_set_named_property(env, out, name, v))
-    PUT("queued", s.queued);
-    PUT("sent", s.sent);
-    PUT("retried", s.retried);
-    PUT("failed", s.failed);
-    PUT("pending", s.pending);
-    PUT("workers", s.workers);
+    PUT("sent", box->sent);
+    PUT("failed", box->failed);
+    PUT("pending", box->inflight);
 #undef PUT
-    return out;
-}
-
-static napi_value fn_drain(napi_env env, napi_callback_info info)
-{
-    size_t     argc = 2;
-    napi_value argv[2];
-    CHECK(napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
-    mailer_box *box = argc ? unwrap(env, argv[0]) : NULL;
-    if (!box || !box->m) return throw_msg(env, "mailer is closed");
-    /* Blocks, so this is a test and shutdown helper -- not something a request
-     * handler calls. A production path would wrap it in napi_create_async_work. */
-    int32_t ms = (int32_t)js_prop_u32(env, argv[1], "timeoutMs", 5000);
-    napi_value out;
-    CHECK(napi_get_boolean(env, sc_mail_drain(box->m, ms) == SC_OK, &out));
     return out;
 }
 
@@ -507,6 +692,7 @@ static napi_value fn_limits(napi_env env, napi_callback_info info)
     CHECK(napi_set_named_property(env, out, name, v))
     PUT("maxStaticHtml", GE_MAX_STATIC_HTML);
     PUT("maxStaticSubject", GE_MAX_STATIC_SUBJECT);
+    PUT("maxStaticText", GE_MAX_STATIC_TEXT);
     PUT("maxSlotRefs", GE_MAX_SLOT_REFS);
     PUT("arenaBytes", GE_BUF_SIZE(512));
 #undef PUT
@@ -539,10 +725,9 @@ static napi_value Init(napi_env env, napi_value exports)
 #ifdef GE_WITH_MAILER
         { "createMailer", fn_create_mailer },
         { "closeMailer", fn_close_mailer },
-        { "enqueue", fn_enqueue },
+        { "sendMail", fn_send_mail },
         { "sendTemplate", fn_send_template },
         { "stats", fn_stats },
-        { "drain", fn_drain },
 #endif
     };
     for (size_t i = 0; i < sizeof entries / sizeof entries[0]; i++) {
@@ -551,6 +736,11 @@ static napi_value Init(napi_env env, napi_value exports)
                                    &fn));
         CHECK(napi_set_named_property(env, exports, entries[i].name, fn));
     }
+#ifdef GE_WITH_MAILER
+    /* curl_global_init(), here and not in a worker: it is not thread safe, and the pool threads
+     * that open sessions start later. */
+    sc_mail_global_init();
+#endif
     /* The arena outlives every call but not the environment. */
     napi_add_env_cleanup_hook(env, cleanup, NULL);
     return exports;

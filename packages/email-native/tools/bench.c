@@ -3,7 +3,7 @@
  *   2. What does a reused buffer buy over malloc/free per mail?
  */
 #define _POSIX_C_SOURCE 200809L
-#include "service_core/email_gen.h"
+#include "service_core/email/templates.h"
 
 #include <stdio.h>
 #include <stdlib.h>
