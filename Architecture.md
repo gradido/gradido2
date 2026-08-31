@@ -558,7 +558,7 @@ times as many of them.
 - Global Caches
   - communities
   - config
-  - last 500 (const) contributions (public data set) (for display contribution infos from other)
+  - contributions (public data set) (for display contribution infos from other)
 - last known id of transaction and similar tables
 - the SessionStore: the sessions, found by the slot their token carries — see *Session cache*
 - APIs (server connections to external services)
@@ -585,6 +585,19 @@ A user may reach another instance and therefore encounter a cold session. That i
 Sticky sessions, shared session state, Redis, or distributed cache infrastructure are not required for correctness. They may be introduced later as performance optimizations if justified.
 
 The same answer covers the process-global caches an instance keeps of data an admin can change — the settings and the role rights. Each carries a maximum TTL of 10 minutes and is invalidated immediately on the instance that made the change, so an edit on A reaches B within the TTL. That bound is the contract; there is no cross-instance invalidation to build and no poll interval to agree on.
+
+### Contribution Cache
+- use optional settings for deciding page side and max page count
+- store up to max page count * page side contributions in memory, fixed vector, continues, starting by last contribution, sorted by id, calculate vector index with shift parameter
+- on cache invalidate (atomic) (older than 10 Minutes) regenerate fresh on next request
+- new contribution replace oldest, round robin, update shift parameter
+- shared mutex, on cache invalidate or replace let currently locked reader finish, store conditions from reader requests which starting after invalidate 
+- after all reader finished, replace contribution or at invalidate reset arena vector bucket, bitmaps and memo storage, write new contributions list into cache (write lock) and woke all conditions from readers afterwards
+- memo is union { char[struct size], struct {uint8_t* bytes, uint16_t size, allocator*}} + uint8_t flag which one is used or size outside of struct, use dynamic growable buffer stacks per 64 Bytes, 128 Bytes, 256 Bytes and full size memo (512 Bytes)
+- (roaring) bitmaps for check which contributions are loaded, to fastly deciding which need loading, and for each (used) creation_group_id create (roaring) bitmap
+
+So Contributions (public data) stored in global cache for everyone, in memory filtering when ask for contributions from a specific creation_group_id,
+when result size smaller than expected (page size), db request, push all contributions which aren't in cache (bitmap check) into cache up to min allowed contribution id, only if not locked, if cache is currently locked, only return data to user and quit
 
 ## Logging
 
