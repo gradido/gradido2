@@ -530,12 +530,20 @@ zig    a dependency's artifact needs setLibCFile() of its own — it does
 biome  `check --write --unsafe` deletes console calls rather than flagging
        them. It removed a diagnostic in tests/integration once, silently.
        Read the diff after running it, or do not pass --unsafe.
-arnm   the json reader keeps its FIRST error and every getter after it
-       answers empty. A getter on a value of the wrong type therefore
-       silences the reads that follow, in another field entirely. Where a
-       value may legitimately not be what is wanted — an element of an
-       aud list, an optional member — ask arnm_json_reader_type_of() or
-       _has() first: neither records anything.
+arnm   the json reader is a table and not a cursor — 0.7.5 took the
+       cursor away. There is no getter per value and no call that says
+       what a value is. One walk fills every field the table names and
+       hands back a bit per field; a member of the wrong type stops that
+       walk, and the fields after it stay unset. Decide from the mask and
+       never from the walk's result: an absent member and one of the
+       wrong type are then the same "not there", which is the reading a
+       verifier wants, and neither can turn into a wrong answer about a
+       different field.
+arnm   a scalar handed out as a handle can never be read. The only two
+       calls that take one are the object walk and the array read, so an
+       array's string elements are out of reach — which is why jwt.c
+       refuses a list-valued `aud` rather than walking it. A member that
+       has to be read is a member a table converts where it stands.
 sodium its SHA-256 is the portable C one — crypto_hash/sha256/ has only
        a `cp/` directory, where AEGIS has an aesni one. It runs at about
        0.43 GB/s where OpenSSL does 2.2. At JWT sizes that gap mostly
@@ -556,6 +564,7 @@ Add to this list when something costs you an afternoon.
 
 ```text
 <component>/tests/    unit tests, beside the component they test
+tests/contract/       contracts/test-vectors/, run against this implementation
 tests/integration/    the assembled binary, driven over sockets by bun test
 ```
 
@@ -564,6 +573,24 @@ arnm and gradido-blockchain-core keep theirs. Those are one library each; this i
 test binary that links one component and has only that component's include directory on its
 search path is what proves a header carries its own dependencies. A shared test tree with all
 five paths on it can never fail that way.
+
+`tests/contract/` holds what tests neither a component nor the binary, but the **agreement**:
+`contracts/test-vectors/<subject>.json` is read here and by
+`packages/contract-tests/`, and each implementation is measured against the file rather than
+against the other. `contracts/AGENTS.md`, *test-vectors*, is the shape; `vectors.hpp` is the
+loader every subject shares.
+
+Two rules, and the second is the one that is easy to get wrong:
+
+- **A runner is not a unit test and does not live beside a component.** It needs arnm's header
+  to read the vector file, and a component test that sees a header its component does not carry
+  stops proving what the rule above exists to prove.
+- **What a vector decides does not get a second answer in a unit test.** Which payloads are
+  refused is shared behaviour; a copy of it in `service-core/tests/` is a second source of truth
+  for exactly the question the contract exists to answer once. What belongs in the unit test is
+  what a contract cannot express — null arguments, buffer bounds, a round trip through this
+  implementation's own signer. `service-core/tests/test_jwt.cpp` is written against that line
+  and says so at the top.
 
 `tests/integration/` holds what tests the assembled binary rather than a component. The suite
 runs against `http-probe` — once per HTTP backend, because the point is that both answer the

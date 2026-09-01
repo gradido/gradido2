@@ -120,11 +120,13 @@ endif()
 # brings is what service-core's jwt.c links against.
 #
 # The commit and not the tag: a tag can be moved, and this build has no business taking whatever
-# it resolves to today. It is v0.17.1.
+# it resolves to today. It is v0.20.0, which lives on the map_complete_transaction_json branch
+# rather than on master -- master is still v0.17.1, and this build wants the JSON mapping that
+# was written against arnm 0.7.5.
 set(USE_SODIUM ON CACHE BOOL "" FORCE)
 FetchContent_Declare(blockchain_core
   GIT_REPOSITORY https://github.com/gradido/gradido-blockchain-core.git
-  GIT_TAG 9aaf20d2fb603a7bbd0c19ff3f113b29ea0de4f8
+  GIT_TAG ca061e76d1a11804866630c196324602c9b6c4ea
 )
 FetchContent_MakeAvailable(blockchain_core)
 
@@ -369,6 +371,9 @@ if(FS_ENABLE_TESTS)
   # Unit tests live beside the component they test rather than in one tree at the root -- see
   # README.md, and build.zig, which explains why this project departs from its siblings here.
   add_subdirectory(service-core/tests)
+  # The vector runners. Not under service-core/tests for the reason that file gives: they need
+  # arnm's header and a component test may not see one.
+  add_subdirectory(tests/contract)
   add_subdirectory(tests/integration)
 endif()
 

@@ -103,6 +103,12 @@ enables the one test that watches the worker pool grow under a backlog and retir
 afterwards. Any relay that answers slowly will do. `SC_MAIL_TEST_LOG` turns the mailer's log
 lines back on while a test is being worked on.
 
+`tests/contract/` runs `contracts/test-vectors/` against this implementation —
+`test_jwt_contract` is the first, and `packages/contract-tests` runs the same file against the
+TypeScript path. Neither side is the authority; the file is, and a disagreement between the two
+implementations shows up as one named vector rather than as two suites that are both green.
+`AGENTS.md` section 7 has where a test goes and why.
+
 `tests/integration/` drives the built binary over raw sockets from `bun test`, once against each
 HTTP backend — see [its README](tests/integration/README.md), which also lists where the two
 backends genuinely differ.
@@ -243,5 +249,6 @@ backend/          the HTTP server the frontend talks to
 federation/       the HTTP server other communities talk to
 dht-node/         the peer discovery role, and the extern "C" boundary to the
                   rust-libp2p module that will sit behind it
+tests/contract    contracts/test-vectors/, run against this implementation
 tests/integration the probe server and the bun suite that drives it
 ```

@@ -12,8 +12,8 @@
         // backend-core will be written against. Same commit packages/shared-native pins, so the
         // two builds in this repository compile against one layout of the same structs.
         .blockchain_core = .{
-            .url = "git+https://github.com/gradido/gradido-blockchain-core.git#9aaf20d2fb603a7bbd0c19ff3f113b29ea0de4f8",
-            .hash = "blockchain_core-0.17.1-r94upvXcDgBsMqABC06mo_JNMWmYB6ZncwFYe0ylc1Pc",
+            .url = "git+https://github.com/gradido/gradido-blockchain-core.git#ca061e76d1a11804866630c196324602c9b6c4ea",
+            .hash = "blockchain_core-0.20.0-r94upuObEQCUnFKzKD-B3AigIijkjh_H7l-DJByNjgn4",
         },
         // libsodium, and the same pin the core carries: the two must be one package in the
         // build graph, or service-core would compile against one copy of sodium.h and link the
@@ -28,8 +28,8 @@
         // for the same reason libsodium is here -- and do not pin its vendored yyjson
         // separately, which would be a second definition of every yyjson_* symbol.
         .arnm = .{
-            .url = "https://github.com/gradido/arnm/archive/refs/tags/v0.7.2.tar.gz",
-            .hash = "arnm-0.7.2-ZdhGsCwFGgA0uOWsPFL1vPE1tCGvc2TkG-A5oUQrPVgw",
+            .url = "https://github.com/gradido/arnm/archive/refs/tags/v0.7.5.tar.gz",
+            .hash = "arnm-0.7.5-ZdhGsFiuGgBgKTeY_sObjyGhXvKbhB97imrlnNp9DVe9",
         },
         // The HTTP server on the fast path. build.zig copies the libh2o-evloop source list out
         // of this checkout's CMakeLists.txt, so the pin and that list have to move together.

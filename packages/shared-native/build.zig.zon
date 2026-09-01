@@ -8,15 +8,15 @@
         // Add your own dependencies here with `zig fetch --save <url>`.
         .c_cpp_zig_build = .{ .path = ".zig-native" },
         .blockchain_core = .{
-            .url = "git+https://github.com/gradido/gradido-blockchain-core.git#9aaf20d2fb603a7bbd0c19ff3f113b29ea0de4f8",
-            .hash = "blockchain_core-0.17.1-r94upvXcDgBsMqABC06mo_JNMWmYB6ZncwFYe0ylc1Pc",
+            .url = "git+https://github.com/gradido/gradido-blockchain-core.git#ca061e76d1a11804866630c196324602c9b6c4ea",
+            .hash = "blockchain_core-0.20.0-r94upuObEQCUnFKzKD-B3AigIijkjh_H7l-DJByNjgn4",
         },
         // arnm is what hostmem became -- arnm 0.5.0 renamed every symbol it has, and
         // blockchain_core 0.17.0 followed. Must stay the version blockchain_core builds
         // against, or the two would compile against different layouts of the same structs.
         .arnm = .{
-            .url = "https://github.com/gradido/arnm/archive/refs/tags/v0.7.2.tar.gz",
-            .hash = "arnm-0.7.2-ZdhGsCwFGgA0uOWsPFL1vPE1tCGvc2TkG-A5oUQrPVgw",
+            .url = "https://github.com/gradido/arnm/archive/refs/tags/v0.7.5.tar.gz",
+            .hash = "arnm-0.7.5-ZdhGsFiuGgBgKTeY_sObjyGhXvKbhB97imrlnNp9DVe9",
         },
     },
     .paths = .{ "build.zig", "build.zig.zon", "napi" },
