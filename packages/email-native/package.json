@@ -1,0 +1,56 @@
+{
+  "name": "@gradido/email-native",
+  "description": "The e-mail templates as C: pug rendered at build time into a byte pool and an op list, plus service-core's SMTP mailer, behind N-API. The same generated C is compiled by fast-servers.",
+  "private": true,
+  "license": "Apache-2.0",
+  "author": "Gradido Academy - https://www.gradido.net",
+  "repository": "git@github.com:gradido/gradido2.git",
+  "main": "./index.cjs",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.cjs",
+      "require": "./index.cjs"
+    }
+  },
+  "files": [
+    "index.cjs",
+    "index.d.ts",
+    "build.zig",
+    "build.zig.zon",
+    "include",
+    "locales",
+    "napi",
+    "scripts",
+    "src",
+    "templates",
+    "tls",
+    "tools"
+  ],
+  "scripts": {
+    "build": "c-cpp-zig-build && bun scripts/sync-fast-servers.ts",
+    "build:debug": "c-cpp-zig-build --debug && bun scripts/sync-fast-servers.ts",
+    "snapshots:update": "node tools/snapshots.mjs",
+    "info": "c-cpp-zig-build info",
+    "test": "node --test tests/",
+    "bench": "node tests/mail-bench.mjs && node tests/render-bench.mjs",
+    "lint": "biome check --error-on-warnings .",
+    "lint:fix": "biome check --error-on-warnings . --write",
+    "build:clean": "c-cpp-zig-build clean"
+  },
+  "zigNative": {
+    "optimize": "fast",
+    "napiVersion": 8
+  },
+  "devDependencies": {
+    "c-cpp-zig-build": "0.2.0",
+    "html-to-text": "10.0.1",
+    "nodemailer": "9.0.6",
+    "pug": "3.0.4"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18.17"
+  }
+}

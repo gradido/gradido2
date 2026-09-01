@@ -1,0 +1,34 @@
+{transactionAmount|&<>"'ä} GDD were passed on with your thank you card
+
+Hello {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+{transactionAmount|&<>"'ä} GDD have just been passed on with your thank you card.
+
+
+Transaction details
+
+Amount: {transactionAmount|&<>"'ä} GDD
+Recipient: {recipientName|&<>"'ä} ({recipientCommunity|&<>"'ä})
+Reference: {transactionMemo|&<>"'ä}
+Card: {cardLabel|&<>"'ä}
+To account [{communityURL|&<>"'ä}/transactions]
+
+That was not you? Block your card right here — it stops working, your Gradido address stays.
+
+Block card [{communityURL|&<>"'ä}/settings/thank-you-card?block={cardId|&<>"'ä}]
+Please do not reply to this email.
+
+Kind regards,
+your Gradido team
+
+If you have any further questions, please contact our support.
+support@gradido.net
+
+Impressum [https://gradido.net/de/impressum/]
+
+Privacy Policy [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

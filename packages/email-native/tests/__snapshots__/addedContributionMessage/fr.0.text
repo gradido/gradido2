@@ -1,0 +1,31 @@
+Message concernant ta contribution au bien commun
+
+Bonjour {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+tu as reçu un message de {senderAlias|&<>"'ä} concernant ta contribution au bien commun « {contributionMemo|&<>"'ä} ».
+
+
+Lire et répondre au message
+
+« {message|&<>"'ä} »
+
+Tu peux répondre directement sur ta contribution.
+
+Répondre [{contributionFrontendLink|&<>"'ä}]
+Vers le compte [{communityURL|&<>"'ä}/transactions]
+Merci de ne pas répondre à cet e-mail.
+
+Cordialement,
+ton équipe Gradido
+
+Pour toute autre question, contacte notre support.
+support@gradido.net
+
+Mentions légales [https://gradido.net/de/impressum/]
+
+Politique de confidentialité [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

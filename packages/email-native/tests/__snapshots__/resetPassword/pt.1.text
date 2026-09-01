@@ -1,0 +1,34 @@
+Repor a palavra-passe
+
+Olá {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+tu, ou outra pessoa, pediste a reposição da palavra-passe desta conta.
+
+
+Repor a palavra-passe
+
+Se foste tu, clica aqui.
+repor [{resetLink|&<>"'ä}]
+Ou copia o link para a janela do teu navegador.
+{resetLink|&<>"'ä}
+
+
+Pedir um novo link válido
+
+O link é válido durante {hours|&<>"'ä} horas. Se a validade do link já tiver expirado, podes pedir aqui o envio de um novo link.
+Novo link [{resendLink|&<>"'ä}]
+
+Com os melhores cumprimentos,
+a tua equipa Gradido
+
+Se tiveres mais questões, contacta o nosso suporte.
+support@gradido.net
+
+Aviso legal [https://gradido.net/de/impressum/]
+
+Política de privacidade [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

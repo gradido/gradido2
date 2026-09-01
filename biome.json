@@ -25,7 +25,9 @@
       "!**/coverage",
       "!**/.zig-cache",
       "!**/.zig-native",
-      "!**/compile_commands.json"
+      "!**/compile_commands.json",
+      "!packages/email-native/locales",
+      "!packages/email-native/templates"
     ]
   },
   "formatter": {

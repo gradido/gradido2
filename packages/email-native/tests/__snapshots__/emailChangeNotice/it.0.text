@@ -1,0 +1,32 @@
+Il tuo indirizzo e-mail sta per cambiare
+
+Ciao {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+Per il tuo account Gradido è stata richiesta la modifica dell'indirizzo e-mail in {newEmail|&<>"'ä}.
+
+Finché il nuovo indirizzo non viene confermato, resta valido questo. Se sei stato tu, non devi fare altro.
+
+
+Non sei stato tu?
+
+Non sei stato tu? Allora clicca qui: la modifica viene annullata e questo indirizzo resta valido.
+Annulla la modifica [{revokeLink|&<>"'ä}]
+Oppure copia il link nella finestra del tuo browser.
+{revokeLink|&<>"'ä}
+Se annulli la modifica, cambia poi anche la tua password.
+Il link è valido fino al {validUntil|&<>"'ä}; dopo, la modifica richiesta decade da sola.
+
+Cordiali saluti,
+il tuo team Gradido
+
+Per ulteriori domande, contatta il nostro supporto.
+support@gradido.net
+
+Note legali [https://gradido.net/de/impressum/]
+
+Informativa sulla privacy [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

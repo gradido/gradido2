@@ -1,0 +1,29 @@
+Ta contribution au bien commun a été modifiée
+
+Bonjour {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+ta contribution au bien commun « {contributionMemo|&<>"'ä} » vient d'être modifiée par {senderAlias|&<>"'ä} et est désormais « {contributionMemoUpdated|&<>"'ä} »
+
+
+Détails de la contribution
+
+Tu trouveras tes contributions au bien commun et les messages associés dans ton compte Gradido.
+Vers la contribution [{contributionFrontendLink|&<>"'ä}]
+Ou copie le lien dans la fenêtre de ton navigateur.
+{contributionFrontendLink|&<>"'ä}
+Merci de ne pas répondre à cet e-mail.
+
+Cordialement,
+ton équipe Gradido
+
+Pour toute autre question, contacte notre support.
+support@gradido.net
+
+Mentions légales [https://gradido.net/de/impressum/]
+
+Politique de confidentialité [https://gradido.net/de/datenschutz/]
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland
