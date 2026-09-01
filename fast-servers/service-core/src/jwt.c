@@ -9,6 +9,13 @@
  * type, no constant, no include path -- so this file names one library where it used to name
  * two, and the parser under arnm can change without this file hearing about it.
  *
+ * Reading is a table and not a cursor. arnm 0.7.5 took the cursor away: there is no entering an
+ * object, no asking it for a member by name and no getter per value. A shape is described once,
+ * as a list of fields -- what a key is called, what it should become, where to put it -- and one
+ * walk of the member chain answers all of them at once. Which members arrived comes back as a
+ * bit per field, and that mask is what every decision below is made on. See the audience check
+ * for the one thing this verifier lost with the cursor.
+ *
  * Both halves draw from an arena on this stack frame and nothing else. A document is released
  * where it has to be, but nothing is freed one allocation at a time: the arena goes when the
  * function returns, which is the whole of the memory management here.
@@ -155,7 +162,10 @@ int sc_jwt_sign_hs256(const sc_jwt_config *config, const char *claim, const char
         return -1;
     if (!arnm_ok(arnm_init_arena_borrow(&allocator, scratch, sizeof(scratch))))
         return -1;
-    if (!arnm_ok(arnm_json_writer_init(&writer, &allocator, ARNM_JSON_WRITE_DEFAULT)))
+    /* No size hint: the pools are told up front how big a document will be, and this one is six
+     * short members whose first chunk already holds it. A hint here would name a number that has
+     * to be kept in step with the fields below for nothing to gain. */
+    if (!arnm_ok(arnm_json_writer_init(&writer, &allocator, ARNM_JSON_WRITE_DEFAULT, NULL)))
         return -1;
 
     /* Member order follows what the reference implementation produces, so two tokens differ in
@@ -201,50 +211,31 @@ int sc_jwt_sign_hs256(const sc_jwt_config *config, const char *claim, const char
     return (int)written;
 }
 
-/** @return non-zero if the member is a string equal to @p expected */
-static int member_is(arnm_json_reader *reader, const char *key, const char *expected)
+/** @return non-zero if @p block holds exactly the characters of @p expected */
+static int block_is(const arnm_memory_block *block, const char *expected)
 {
-    const char *value = arnm_json_reader_get_string(reader, key);
-    return value != NULL && strcmp(value, expected) == 0;
+    const size_t len = strlen(expected);
+
+    /* For a STRING field arnm fills `size` with the string's length rather than with an
+     * allocation, and points `data` into the document. Comparing the length first is what keeps
+     * a prefix of the expected value from passing. */
+    return block->data != NULL && block->size == (uint32_t)len &&
+           memcmp(block->data, expected, len) == 0;
 }
 
-/**
- * The audience may be one string or a list of them -- the reference implementation writes the
- * first, RFC 7519 allows the second.
- *
- * @return non-zero if @p expected is among them
+/*
+ * The tables the two walks are driven by. A bit of the mask arnm hands back names the entry at
+ * the same index, so these two runs of constants have to move together with the initialisers
+ * below -- which is why they sit here rather than being counted at each call site.
  */
-static int audience_matches(arnm_json_reader *reader, const char *expected)
-{
-    if (arnm_json_reader_type_of(reader, "aud") == ARNM_JSON_TYPE_ARRAY) {
-        /* enter hands back the value it left, and leave puts it back; the walk costs those two
-         * lines and no bookkeeping of its own. */
-        arnm_json_value *array = arnm_json_reader_enter(reader, "aud");
-        const uint32_t count = arnm_json_reader_count(reader);
-        int found = 0;
-        uint32_t i;
+#define HEADER_FIELD_ALG 0u
+#define HEADER_FIELD_COUNT 1u
 
-        for (i = 0; i != count && !found; ++i) {
-            arnm_json_value *element = arnm_json_reader_enter_at(reader, i);
-            /* Look before reading. A NULL key asks about the current value itself, and
-             * type_of records nothing -- where a getter on an element that is not a string
-             * would record the reader's first error, and from there every later getter
-             * answers its empty value. That would end this walk at the element rather than
-             * at the match, and it would carry on into the claim read below, which would
-             * then come back missing. An audience list with a number in it is malformed
-             * either way; it is not this file's job to turn that into a wrong answer about
-             * a different field. */
-            if (arnm_json_reader_type_of(reader, NULL) == ARNM_JSON_TYPE_STRING) {
-                const char *value = arnm_json_reader_get_string(reader, NULL);
-                found = value != NULL && strcmp(value, expected) == 0;
-            }
-            arnm_json_reader_leave(reader, element);
-        }
-        arnm_json_reader_leave(reader, array);
-        return found;
-    }
-    return member_is(reader, "aud", expected);
-}
+#define PAYLOAD_FIELD_ISS 0u
+#define PAYLOAD_FIELD_EXP 1u
+#define PAYLOAD_FIELD_COUNT 2u
+
+#define FOUND(mask, field) (((mask) & (1ull << (field))) != 0)
 
 sc_jwt_result sc_jwt_verify_hs256(const sc_jwt_config *config, const char *token, size_t token_len,
                                   const char *claim, char *out, int64_t now)
@@ -260,13 +251,19 @@ sc_jwt_result sc_jwt_verify_hs256(const sc_jwt_config *config, const char *token
     _Alignas(8) uint8_t scratch[JSON_ARENA];
     arnm allocator = {0};
     arnm_json_reader reader;
+    arnm_json_value *root = NULL;
     /* The insitu parse reads four bytes past the document and writes zeroes there, which is
      * what lets its scanner run without a bounds test. The buffers carry that much slack. */
     char header[MAX_SEGMENT + ARNM_JSON_READER_INSITU_PADDING];
     char payload[MAX_SEGMENT + ARNM_JSON_READER_INSITU_PADDING];
     int header_len, payload_len;
-    uint32_t claim_len = 0;
-    const char *claim_str;
+    arnm_memory_block alg = {0};
+    arnm_memory_block issuer = {0};
+    arnm_memory_block audience = {0};
+    arnm_memory_block claim_value = {0};
+    int64_t expires_at = 0;
+    uint64_t found = 0;
+    int claim_present = 0;
 
     if (config == NULL || token == NULL || claim == NULL || out == NULL)
         return SC_JWT_MALFORMED;
@@ -294,25 +291,38 @@ sc_jwt_result sc_jwt_verify_hs256(const sc_jwt_config *config, const char *token
         return SC_JWT_BAD_SIGNATURE;
 
     header_len = base64url_decode(token, (size_t)(dot1 - token), (uint8_t *)header, MAX_SEGMENT);
-    if (header_len < 0)
+    if (header_len <= 0)
         return SC_JWT_MALFORMED;
     payload_len =
         base64url_decode(dot1 + 1, (size_t)(dot2 - dot1 - 1), (uint8_t *)payload, MAX_SEGMENT);
-    if (payload_len < 0)
+    if (payload_len <= 0)
         return SC_JWT_MALFORMED;
 
     if (!arnm_ok(arnm_init_arena_borrow(&allocator, scratch, sizeof(scratch))))
         return SC_JWT_MALFORMED;
-    if (!arnm_ok(arnm_json_reader_init(&reader, &allocator, ARNM_JSON_READ_DEFAULT)))
+    if (!arnm_ok(arnm_json_reader_init(&reader, &allocator)))
         return SC_JWT_MALFORMED;
 
-    /* A parse that fails is the reader's first error, which is why it needs no test of its own:
-     * the alg that follows answers NULL and the status carries the reason. */
-    arnm_json_reader_parse_insitu(&reader, header, (uint32_t)header_len, sizeof(header));
-    if (arnm_json_reader_status(&reader) != ARNM_SUCCESS)
-        return SC_JWT_MALFORMED;
-    if (!member_is(&reader, "alg", "HS256"))
-        return SC_JWT_BAD_ALGORITHM;
+    /* The header, and the one member of it this verifier has an opinion about. `typ` and
+     * anything else a signer put there is passed over: a table names what it wants and a
+     * document is allowed to carry more. */
+    {
+        arnm_json_field header_fields[HEADER_FIELD_COUNT] = {
+            ARNM_JSON_FIELD_STRING("alg", &alg)};
+
+        if (arnm_json_reader_parse_insitu(&reader, header, (uint32_t)header_len, sizeof(header),
+                                          false, &root) != ARNM_SUCCESS)
+            return SC_JWT_MALFORMED;
+
+        /* The walk's own result is not read, here or below. It says why the walk stopped, and
+         * that is a question about the document rather than about the token: what decides this
+         * function is whether the member arrived, which is what the mask answers. A header
+         * whose `alg` is a number, one that is no object at all, and one with no `alg` in it
+         * are the same answer -- not HS256 -- and each is refused on the same line. */
+        arnm_json_read_object(root, header_fields, HEADER_FIELD_COUNT, &found);
+        if (!FOUND(found, HEADER_FIELD_ALG) || !block_is(&alg, "HS256"))
+            return SC_JWT_BAD_ALGORITHM;
+    }
 
     /* The header is done with. Its document goes back before the arena is reset, in that order:
      * resetting under a document the reader still holds would leave it pointing into ground the
@@ -321,32 +331,103 @@ sc_jwt_result sc_jwt_verify_hs256(const sc_jwt_config *config, const char *token
     if (!arnm_ok(arnm_init_arena_borrow(&allocator, scratch, sizeof(scratch))))
         return SC_JWT_MALFORMED;
 
-    arnm_json_reader_parse_insitu(&reader, payload, (uint32_t)payload_len, sizeof(payload));
-    if (arnm_json_reader_status(&reader) != ARNM_SUCCESS)
+    if (arnm_json_reader_parse_insitu(&reader, payload, (uint32_t)payload_len, sizeof(payload),
+                                      false, &root) != ARNM_SUCCESS)
         return SC_JWT_MALFORMED;
+
+    /*
+     * The two members this verifier always wants, in one walk of the payload's member chain.
+     *
+     * The table is in the order sc_jwt_sign_hs256() writes them, which is the order a token from
+     * the reference implementation carries them in as well, so the walk meets each entry at the
+     * first key it compares against. `urn:gradido:claim` and `iat` are members this verifier has
+     * no opinion about; a table names what it wants and the rest is passed over.
+     */
+    {
+        arnm_json_field payload_fields[PAYLOAD_FIELD_COUNT] = {
+            ARNM_JSON_FIELD_STRING("iss", &issuer),
+            ARNM_JSON_FIELD_INT64("exp", &expires_at)};
+
+        arnm_json_read_object(root, payload_fields, PAYLOAD_FIELD_COUNT, &found);
+    }
+
+    /*
+     * The claim the caller asked for, in a walk of its own -- and it has to be its own, because
+     * its key is an argument rather than a literal.
+     *
+     * A table stops at the first entry that matches a key, starting from the lowest one it has
+     * not filled. Two entries spelled the same are therefore not two questions: the first takes
+     * every match and the second is never filled. `claim` may be *any* name, `"iss"` and
+     * `"exp"` included, so an entry for it beside those two would silently answer the wrong
+     * question -- ask for the claim `iss` and the issuer check would read nothing and refuse a
+     * token that is fine. It fails closed either way, which is why it is a correctness bug and
+     * not a hole; it is still a wrong answer, and a separate walk is what removes the whole
+     * class rather than the two spellings anyone thought of.
+     *
+     * The entry is built rather than written with ARNM_JSON_FIELD_STRING(): that macro takes the
+     * key's length from a literal with sizeof. The struct is the macro's whole output, so
+     * spelling it out costs the strlen and nothing else.
+     */
+    {
+        arnm_json_field claim_field = {claim, (uint32_t)strlen(claim),
+                                       ARNM_JSON_FIELD_TYPE_STRING, &claim_value};
+        uint64_t claim_found = 0;
+
+        arnm_json_read_object(root, &claim_field, 1, &claim_found);
+        claim_present = claim_found != 0;
+    }
 
     /* Require the claim, then check it. A claim that is absent is not a claim that passed:
      * the prototype this was carried over from checks exp only where it is present and numeric,
      * so a correctly signed token without exp -- or with "exp": null, or with it as a string --
      * never expires. All four cases were reproduced and accepted; Architecture.md, *Safety net*,
-     * records it. The hard session timeout is only as hard as this line. */
-    if (arnm_json_reader_type_of(&reader, "exp") != ARNM_JSON_TYPE_NUMBER)
+     * records it. The hard session timeout is only as hard as this line.
+     *
+     * Reading the mask rather than the walk's result is what keeps that true through arnm's
+     * table: a member of the wrong type stops the walk and leaves its bit clear, which is the
+     * same "not there" as a member nobody wrote -- and the members after it are unread and
+     * therefore unset as well. Everything below is a refusal unless a bit says otherwise. */
+    if (!FOUND(found, PAYLOAD_FIELD_EXP))
         return SC_JWT_MISSING_CLAIM;
-    if (arnm_json_reader_get_int64(&reader, "exp") <= now)
+    if (expires_at <= now)
         return SC_JWT_EXPIRED;
 
-    if (config->issuer != NULL && !member_is(&reader, "iss", config->issuer))
+    if (config->issuer != NULL &&
+        (!FOUND(found, PAYLOAD_FIELD_ISS) || !block_is(&issuer, config->issuer)))
         return SC_JWT_BAD_ISSUER;
-    if (config->audience != NULL && !audience_matches(&reader, config->audience))
-        return SC_JWT_BAD_AUDIENCE;
 
-    claim_str = arnm_json_reader_get_string_length(&reader, claim, &claim_len);
-    if (claim_str == NULL)
+    /*
+     * `aud` in a walk of its own, and only where there is something to check it against.
+     *
+     * It is not in the table above because a table converts a member where it stands and stops
+     * the whole walk at one it cannot: an `aud` this verifier will not read would take `exp` and
+     * the claim down with it, and the token would be refused for the wrong reason. On its own it
+     * costs one more pass over the member chain, stopping at the key it wants, and only for a
+     * configuration that asked for the check.
+     *
+     * **A list-valued audience is refused.** RFC 7519 allows `aud` to be an array of strings and
+     * this verifier used to walk one. arnm 0.7.5 hands a value out only as a handle, and the
+     * only two calls that take a handle are the object walk and arnm_json_read_array() -- so an
+     * array's elements can be counted but a string among them can never be read. What is left is
+     * the single-string form, which is what gradido's reference implementation writes and what
+     * sc_jwt_sign_hs256() writes beside it. A token whose `aud` is an array is answered with
+     * SC_JWT_BAD_AUDIENCE, which is the honest code for it: the audience was not confirmed.
+     */
+    if (config->audience != NULL) {
+        arnm_json_field audience_fields[1] = {ARNM_JSON_FIELD_STRING("aud", &audience)};
+        uint64_t audience_found = 0;
+
+        arnm_json_read_object(root, audience_fields, 1, &audience_found);
+        if (audience_found == 0 || !block_is(&audience, config->audience))
+            return SC_JWT_BAD_AUDIENCE;
+    }
+
+    if (!claim_present)
         return SC_JWT_MISSING_CLAIM;
-    if (claim_len == 0 || claim_len >= SC_JWT_MAX_CLAIM)
+    if (claim_value.size == 0 || claim_value.size >= SC_JWT_MAX_CLAIM)
         return SC_JWT_MISSING_CLAIM;
-    memcpy(out, claim_str, claim_len);
-    out[claim_len] = '\0';
+    memcpy(out, claim_value.data, claim_value.size);
+    out[claim_value.size] = '\0';
 
     return SC_JWT_OK;
 }

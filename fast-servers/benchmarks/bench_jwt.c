@@ -128,12 +128,21 @@ int main(void)
             _Alignas(8) uint8_t scratch[8192];
             arnm alloc = {0};
             arnm_json_reader reader;
+            arnm_json_value *root = NULL;
+            arnm_memory_block gradido_id = {0};
+            int64_t exp = 0;
+            /* The same two fields jwt.c reads, in one walk -- which is the only way arnm 0.7.5
+             * reads them, so the row measures what the verifier really pays. */
+            arnm_json_field fields[] = {ARNM_JSON_FIELD_STRING("gradidoID", &gradido_id),
+                                        ARNM_JSON_FIELD_INT64("exp", &exp)};
             memcpy(buf, payload, payload_len);
             arnm_init_arena_borrow(&alloc, scratch, sizeof(scratch));
-            arnm_json_reader_init(&reader, &alloc, ARNM_JSON_READ_DEFAULT);
-            arnm_json_reader_parse_insitu(&reader, buf, (uint32_t)payload_len, sizeof(buf));
-            sink += (uint64_t)arnm_json_reader_get_int64(&reader, "exp");
-            sink += (uintptr_t)arnm_json_reader_get_string(&reader, "gradidoID");
+            arnm_json_reader_init(&reader, &alloc);
+            arnm_json_reader_parse_insitu(&reader, buf, (uint32_t)payload_len, sizeof(buf), false,
+                                          &root);
+            arnm_json_read_object(root, fields, 2, NULL);
+            sink += (uint64_t)exp;
+            sink += (uintptr_t)gradido_id.data;
             arnm_json_reader_release(&reader);
         }
         report("arnm json: parse + 2 fields", now_ns() - t0, ROUNDS);
@@ -146,7 +155,7 @@ int main(void)
             arnm_memory_block text;
             uint32_t len = 0;
             arnm_init_arena_borrow(&alloc, scratch, sizeof(scratch));
-            arnm_json_writer_init(&writer, &alloc, ARNM_JSON_WRITE_DEFAULT);
+            arnm_json_writer_init(&writer, &alloc, ARNM_JSON_WRITE_DEFAULT, NULL);
             arnm_json_writer_add_string(&writer, "gradidoID", CLAIM_VALUE);
             arnm_json_writer_add_bool(&writer, "urn:gradido:claim", true);
             arnm_json_writer_add_int64(&writer, "iat", now);

@@ -988,6 +988,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "test_cache", .dir = "service-core/tests", .src = "test_cache.cpp", .lib = service_core },
             .{ .name = "test_mail", .dir = "service-core/tests", .src = "test_mail.cpp", .lib = service_core },
             .{ .name = "test_db", .dir = "service-core/tests", .src = "test_db.cpp", .lib = service_core },
+            .{ .name = "test_jwt", .dir = "service-core/tests", .src = "test_jwt.cpp", .lib = service_core },
         };
 
         for (unit_tests) |unit_test| {
@@ -1024,6 +1025,58 @@ pub fn build(b: *std.Build) void {
             const run_test = b.addRunArtifact(test_exe);
             run_test.skip_foreign_checks = true;
             test_step.dependOn(&run_test.step);
+        }
+
+        // The contract runners: `contracts/test-vectors/<subject>.json`, run against this
+        // implementation. The TypeScript half of the same files is `packages/contract-tests`,
+        // and neither half is the authority -- the file is. See tests/contract/vectors.hpp.
+        //
+        // Not one of the unit tests above, and the include path is why: a runner has to read the
+        // vector file, which means arnm's header, and a component test that sees a header its
+        // component does not carry stops proving what the loop above exists to prove. So these
+        // are built here instead, with arnm and the directory the vectors live in.
+        const contract_tests = [_][]const u8{"test_jwt_contract"};
+        for (contract_tests) |name| {
+            const contract_exe = b.addExecutable(.{
+                .name = name,
+                .root_module = b.createModule(.{
+                    .target = target,
+                    .optimize = optimize,
+                    .link_libc = true,
+                    .link_libcpp = true,
+                }),
+            });
+            applySanitize(contract_exe.root_module, sanitize);
+            if (libc_file) |file| contract_exe.setLibCFile(file);
+            contract_exe.addIncludePath(b.path("service-core/include"));
+            contract_exe.addIncludePath(b.path("tests/contract"));
+            contract_exe.addIncludePath(arnm_dep.path("include"));
+            // Where the vectors are, compiled in, so the binary finds them without a working
+            // directory. GRADIDO_CONTRACT_VECTORS_DIR overrides it for one that was moved.
+            contract_exe.root_module.addCMacro(
+                "FS_CONTRACT_VECTORS_DIR",
+                b.fmt("\"{s}\"", .{b.pathFromRoot("../contracts/test-vectors")}),
+            );
+            contract_exe.addCSourceFiles(.{
+                .files = &.{b.fmt("tests/contract/{s}.cpp", .{name})},
+                // As for the unit tests: googletest's macros do not compile clean under our
+                // flags and are not ours to fix.
+                .flags = &.{"-std=gnu++17"},
+            });
+            contract_exe.linkLibrary(service_core);
+            contract_exe.linkLibrary(gbc);
+            contract_exe.linkLibrary(sodium);
+            if (b.lazyDependency("googletest", .{ .target = target, .optimize = optimize })) |dep| {
+                const gtest = dep.artifact("gtest");
+                if (libc_file) |file| gtest.setLibCFile(file);
+                contract_exe.linkLibrary(gtest);
+            }
+            cdb_targets.append(b.allocator, contract_exe) catch @panic("OOM");
+            b.installArtifact(contract_exe);
+
+            const run_contract = b.addRunArtifact(contract_exe);
+            run_contract.skip_foreign_checks = true;
+            test_step.dependOn(&run_contract.step);
         }
 
         // The server the integration suite drives. It is a second consumer of

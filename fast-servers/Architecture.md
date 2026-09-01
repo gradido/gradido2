@@ -800,6 +800,16 @@ a base64 decode, a JSON parse and an HMAC over the whole token, against a subtra
 check, a load and two comparisons here. The store is therefore asked first, on claims nobody has
 vouched for yet, and the signature is verified only when it answers nothing.
 
+**What that verifier will not do is read a list-valued `aud`.** RFC 7519 allows the audience to
+be an array of strings and `sc_jwt_verify_hs256` used to walk one. arnm 0.7.5 hands a value out
+only as a handle, and the two calls that take a handle are the object walk and the array read —
+so an array's elements can be counted and none of them can be read. What is left is the single
+string form, which is what gradido's reference implementation writes and what
+`sc_jwt_sign_hs256` writes beside it; a token whose `aud` is a list answers `SC_JWT_BAD_AUDIENCE`,
+because the audience was not confirmed. If a token with a list-valued audience ever has to pass
+here, it is arnm that has to grow a way to read one — hand-parsing it in `jwt.c` would be a
+second JSON reader on the path that reads attacker-supplied bytes.
+
 `benchmarks/bench_jwt.c` is what measures the first half of that, and its number belongs in this
 file once someone has run it. The reference path's numbers are already in `../Architecture.md`,
 *Session cache*, and the ordering they establish carries over: the signature is the **smaller**
@@ -872,9 +882,10 @@ TypeScript declares those rules as a schema — `sessionClaimsSchema` in
 `packages/service-core/src/session/input.schema.ts` — and this path has to reject exactly what it
 rejects: an absent claim, a slot that is not a whole non-negative number, a `user_uuid` that is
 not a uuid. The arnm reader makes that easy to get wrong in one particular way, recorded in
-`AGENTS.md` section 6: it keeps its first error and every getter after it answers empty, so a
-claim of the wrong type silences the reads that follow, in another field entirely. Ask
-`arnm_json_reader_type_of()` or `_has()` where a claim may legitimately be absent. Two
+`AGENTS.md` section 6: a claim of the wrong type stops the walk of the object it is in, and every
+field the table names after it stays unset. Decide from the mask the walk hands back rather than
+from its result, and an absent claim and one of the wrong type are the same miss — read it the
+other way round and one bad claim becomes a wrong answer about a different one. Two
 implementations disagreeing about which payloads are nonsense is a bug neither of them reports,
 which makes this the natural first entry in `contracts/test-vectors`.
 

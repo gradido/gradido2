@@ -264,7 +264,57 @@ being left open.
 ### test-vectors/&lt;subject&gt;.json
 
 Input/expected pairs, referencing types and errors by name. Every vector has a stable `id`
-so a failure names something.
+so a failure names something. `jwt.json` is the worked example; read it beside this section.
+
+**A subject is one file and two runners.** The file is the authority and neither runner is:
+
+```text
+contracts/test-vectors/<subject>.json          the vectors
+packages/contract-tests/src/<subject>.test.ts  run against the TypeScript path
+fast-servers/tests/contract/test_<subject>_contract.cpp   run against the C path
+```
+
+Each runner reads the file and is measured against it, never against the other implementation.
+That is what makes a disagreement one named vector instead of two suites that are both green,
+and it is why a runner may not skip a vector it does not like — a vector nobody runs is a
+disagreement nobody reports. Both loaders (`src/vectors.ts` and `tests/contract/vectors.hpp`)
+therefore check the same three things before any vector runs: the declared `count` is the number
+actually read, every `id` is unique, and every `id` names its subject.
+
+**Field types are declared once, in `fields`, not on every value.** The rule at the top of this
+file still holds — a number is a decimal string and its type is written down — but a vector file
+carries hundreds of values of the same handful of fields, and a `{ "type": ..., "value": ... }`
+object around each would triple the file for no information a reader or a generator does not
+already have. `fields` maps a field name (dotted for a nested one) to its `type`, `unit` and
+`nullable`. Values that stand alone rather than in a vector — a shared secret, a bound in
+`rules` — keep the per-value form, because there is one of each.
+
+**Every vector is wrong in at most one way.** A token that is both expired and misaddressed only
+pins whichever check happens to run first, and the two implementations do not check in the same
+order. Where a vector needs two things wrong at once, it needs two vectors.
+
+**Contract only what is observable.** `jwt.json` contracts whether a token is accepted and the
+claim that comes out of it — not *which* refusal it was, because every refusal is one 401 with
+one body and a caller cannot tell them apart. The reason each implementation reports lives under
+its own key (`c.result`) and is asserted by that implementation's runner alone. Widen the
+contract to something neither side can observe and it becomes a test of an accident.
+
+**A divergence is declared, not omitted.** Where one implementation cannot meet `expect`, the
+vector carries a block named after it — `"typescript": { "accepted": ..., "why": ... }` — and
+that runner asserts the divergence *still happens*. A gap that closes upstream then fails the
+suite until the block is deleted, so the list of known disagreements cannot rot into a list of
+things somebody once believed. Both runners also assert the whole list, so adding one is a
+deliberate edit in three places rather than a quiet `skip`.
+
+A vector may not disagree with itself, and the runners check that too: an acceptance that names
+no value, or a refusal that names one, would be read one way by a runner that looks at
+`accepted` and another way by one that looks at the value.
+
+**Derived fields carry a regenerator and are still verified.** `jwt.json` stores each token's
+signed bytes, which nobody can recompute by hand;
+`bun run regen:vectors` (`scripts/regen-contract-vectors.ts`) writes them back. The suite does not trust it —
+it recomputes the same tokens and fails on a disagreement, so a payload edited without
+regenerating is caught rather than believed.
 
 ---
 
@@ -308,14 +358,16 @@ so a failure names something.
 | `rights.json` | **79 rights in 10 domains**, each with its bit, plus the 6 default roles and their sets, the dimensions each domain exposes and the one evaluation rule both implementations share. Read off the `rights` and `roles` arrays of the routes; one grant and the role-name spelling are `open` |
 | `logging.json` | envelope, levels, 11 categories, 13 seed events, redaction |
 | `server/` | **139 routes** — 134 collected from legacy (121 backend, 13 federation), plus `peer.bootstrap` and the four in `backend/role.json`, which legacy has no counterpart for. Three legacy routes are marked `deprecated`, superseded by those four. Names, paths, methods, rights and roles are decided; request fields are filled in from the legacy arg classes, response shapes are not, except on `peer.bootstrap` which is new and therefore fully contracted |
-| `test-vectors/` | empty — **the most valuable missing piece** |
+| `test-vectors/` | **`jwt.json`: 37 vectors** for HS256 verification, run against `jwt.c` and against jose, with one declared divergence (a list-valued `aud`). The shape and the two runners are the pattern the subjects below are written to; everything else is still missing |
 
 Next, in this order:
 
 1. **Test vectors for decay and GradidoUnit.** The determinism-critical path has the
    highest cost of divergence and the lowest cost of testing. `shared-native` already has
    the implementation and `../gradido/shared-native/tests/calculateDecay.test.js` has cases
-   to lift.
+   to lift. Both sides call the same C through different bindings, so unlike `jwt` there is no
+   second implementation to disagree with — what a vector pins there is the binding and the
+   arithmetic around it, not two parsers.
 2. **The routes behind the settings tables.** `settings.json` and the two tables are written;
    nothing reads or writes them yet. What is missing is the admin route that changes a value —
    which is also where the staleness bound in `db/settings.json` has to be answered, because

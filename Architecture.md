@@ -303,6 +303,11 @@ fast-servers/      C — fast implementation, mirrors the domain structure
 contracts/         language-independent JSON contracts, see below
 ```
 
+`packages/contract-tests` is not one of the deployable packages and holds no domain code: it is
+the TypeScript half of the vector runners described under *Testing*, and it exists as a package
+of its own so that a subject's vectors are run by something that belongs to neither
+implementation.
+
 Every folder of TypeScript modules carries an `index.ts` that re-exports it, so a file
 reaches its neighbours through barrels — `..` for one level up, `../logging` for a sibling —
 instead of naming another folder's files. `AGENTS.md` section 2 has the rule and the two
@@ -339,7 +344,11 @@ fast path is tested against.
 - TypeScript: `bun test`
 - C: google test
 - Rust: `cargo test`, for `fast-servers/dht-node` only
-- Contract tests read `contracts/` and run the same vectors against both implementations
+- Contract tests read `contracts/` and run the same vectors against both implementations —
+  `packages/contract-tests/` is the TypeScript runner, `fast-servers/tests/contract/` the C one,
+  and neither is the authority: the file is. `contracts/AGENTS.md`, *test-vectors*, holds the
+  shape; `contracts/test-vectors/jwt.json` is the worked example, and it is also where a
+  disagreement the two cannot resolve today is written down rather than left out
 - Database tests run against both PostgreSQL and SQLite
 - One interop test, outside `contracts/`: the js-libp2p node and the rust-libp2p node
   discover each other and a third peer. It is the only gate on the one mirrored component

@@ -1,0 +1,846 @@
+{
+  "contractVersion": 1,
+  "kind": "test-vectors",
+  "subject": "jwt",
+  "notes": [
+    "HS256 verification, run against fast-servers/service-core/src/jwt.c and against jose. See contracts/AGENTS.md, *test-vectors*, for the shape and for what the two runners are.",
+    "What is contracted is `expect`: whether the token is accepted, and the claim value that comes out of it. The reason a token was refused is not -- every refusal is one 401 with one body, so a caller cannot observe which one it was, and the two implementations check in a different order. `c.result` records the reason the C path reports because a log line carries it; it is asserted by the C runner alone.",
+    "Every vector is wrong in at most one way. A token that is both expired and misaddressed would only pin whichever check happens to run first, which is not shared behaviour.",
+    "`token` is derived: base64url(header) + \".\" + base64url(payload) + \".\" + base64url(HMAC-SHA256(secret, signed input)), with the last character of the signature flipped where `tamperSignature` is true. The TypeScript runner recomputes it from `header` and `payload` and fails if it disagrees, so an edited payload cannot silently keep a stale signature. `bun run regen:vectors` writes the tokens back.",
+    "A vector whose `header` and `payload` are null carries a `token` that is not of that shape at all -- a malformed one -- and nothing is derived for it."
+  ],
+  "secret": {
+    "type": "text",
+    "value": "contract-vector-secret-not-a-real-one",
+    "note": "A test secret and nothing else. It signs no real token anywhere."
+  },
+  "rules": {
+    "algorithm": {
+      "type": "text",
+      "value": "HS256",
+      "note": "The only algorithm either implementation accepts."
+    },
+    "claimMaxBytes": {
+      "type": "uint32",
+      "value": "127",
+      "note": "Longest accepted claim value, terminator excluded. SC_JWT_MAX_CLAIM - 1 in service_core/jwt.h."
+    },
+    "expiryIsClosed": {
+      "type": "bool",
+      "value": "true",
+      "note": "exp <= now is expired. Both implementations, see the two boundary vectors."
+    }
+  },
+  "fields": {
+    "id": {
+      "type": "text",
+      "note": "Stable forever. A failure names this."
+    },
+    "why": {
+      "type": "text",
+      "note": "What this vector is load bearing for."
+    },
+    "claimName": {
+      "type": "text",
+      "note": "The claim the verifier is asked to copy out."
+    },
+    "issuer": {
+      "type": "text",
+      "nullable": true,
+      "note": "Configured issuer, or null for a verifier configured without one."
+    },
+    "audience": {
+      "type": "text",
+      "nullable": true,
+      "note": "As issuer."
+    },
+    "now": {
+      "type": "int64",
+      "unit": "unix_seconds",
+      "note": "The instant the token is verified at, passed in rather than read off a clock."
+    },
+    "header": {
+      "type": "text",
+      "nullable": true,
+      "note": "The JOSE header as exact bytes, not as an object: a vector has to be able to spell one that is not valid JSON."
+    },
+    "payload": {
+      "type": "text",
+      "nullable": true,
+      "note": "As header."
+    },
+    "tamperSignature": {
+      "type": "bool",
+      "note": "Flip the last character of the signature."
+    },
+    "token": {
+      "type": "text",
+      "note": "The token as it arrives over the wire. Derived; see notes."
+    },
+    "expect.accepted": {
+      "type": "bool",
+      "note": "The contract. Both implementations assert it."
+    },
+    "expect.claim": {
+      "type": "text",
+      "nullable": true,
+      "note": "The claim value on acceptance, null on refusal. The contract."
+    },
+    "c.result": {
+      "type": "text",
+      "note": "The sc_jwt_result the C path reports. Diagnostic; the C runner asserts it, the TypeScript one does not."
+    },
+    "typescript": {
+      "type": "text",
+      "nullable": true,
+      "note": "Present only where the TypeScript path cannot meet `expect`. Carries the outcome it produces instead and a `why`. The TypeScript runner asserts the divergence really happens, so one that gets fixed fails the suite until the block is deleted."
+    }
+  },
+  "count": 37,
+  "vectors": [
+    {
+      "id": "jwt.verify.accepts-the-token-the-signer-writes",
+      "why": "The shape sc_jwt_sign_hs256 produces and the reference implementation issues, member for member and in the same order. If this one fails nothing else in the file means anything.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"urn:gradido:claim\":true,\"iat\":900,\"iss\":\"gradido\",\"aud\":\"gradido-backend\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJ1cm46Z3JhZGlkbzpjbGFpbSI6dHJ1ZSwiaWF0Ijo5MDAsImlzcyI6ImdyYWRpZG8iLCJhdWQiOiJncmFkaWRvLWJhY2tlbmQiLCJleHAiOjIwMDB9.bFnPpsHTV8vw5DAC5y7UoOUaTzNFdQEMI8DWt0qO0b0",
+      "expect": {
+        "accepted": true,
+        "claim": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+      },
+      "c": {
+        "result": "SC_JWT_OK"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.accepts-the-members-in-any-order",
+      "why": "A member chain is walked, not indexed. Order is a property of the document and never of the meaning, so the same claims written back to front have to read the same.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"exp\":2000,\"aud\":\"gradido-backend\",\"iss\":\"gradido\",\"iat\":900,\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\"}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjIwMDAsImF1ZCI6ImdyYWRpZG8tYmFja2VuZCIsImlzcyI6ImdyYWRpZG8iLCJpYXQiOjkwMCwiZ3JhZGlkb0lEIjoiM2ZhODVmNjQtNTcxNy00NTYyLWIzZmMtMmM5NjNmNjZhZmE2In0.nEgskwtmai0oH499VRlyqsMrao7R9Heqqaftl5Ffmhw",
+      "expect": {
+        "accepted": true,
+        "claim": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+      },
+      "c": {
+        "result": "SC_JWT_OK"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.ignores-the-members-it-does-not-want",
+      "why": "A token may carry more than this verifier reads -- another service's claims, a nested object, a null. None of it may change the answer or stop the walk.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"x\":1,\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"y\":{\"deep\":[1,2,{\"z\":null}]},\"iss\":\"gradido\",\"aud\":\"gradido-backend\",\"exp\":2000,\"z\":null}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJ4IjoxLCJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJ5Ijp7ImRlZXAiOlsxLDIseyJ6IjpudWxsfV19LCJpc3MiOiJncmFkaWRvIiwiYXVkIjoiZ3JhZGlkby1iYWNrZW5kIiwiZXhwIjoyMDAwLCJ6IjpudWxsfQ.0Huctj8PcYMN94i9LksytlOirKJPEeTJi8Zu-C8EofI",
+      "expect": {
+        "accepted": true,
+        "claim": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+      },
+      "c": {
+        "result": "SC_JWT_OK"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.accepts-typ-before-alg",
+      "why": "RFC 7519 puts `typ` in the header and most signers write it first. The header walk must pass over it rather than stop at it.",
+      "claimName": "gradidoID",
+      "issuer": null,
+      "audience": null,
+      "now": "1000",
+      "header": "{\"typ\":\"JWT\",\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJleHAiOjIwMDB9.kV4zwXgmDRlq2iiHOc2JFbOvWQzna-SzjDaf5QqMHkM",
+      "expect": {
+        "accepted": true,
+        "claim": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+      },
+      "c": {
+        "result": "SC_JWT_OK"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.accepts-when-no-issuer-or-audience-is-configured",
+      "why": "A NULL issuer or audience in the config skips that check. It does not mean \"accept an absent one\" for a verifier that was configured with one -- see the two refusals below.",
+      "claimName": "gradidoID",
+      "issuer": null,
+      "audience": null,
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJleHAiOjIwMDB9.X0PI4jIrk8zL_syXos_3rbfVIApsgwp-K6ynFpMsVmM",
+      "expect": {
+        "accepted": true,
+        "claim": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+      },
+      "c": {
+        "result": "SC_JWT_OK"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.unescapes-the-claim-in-place",
+      "why": "The payload is parsed in place and strings are unescaped into the caller's own buffer. A claim that arrives escaped must come out as the characters it names.",
+      "claimName": "gradidoID",
+      "issuer": null,
+      "audience": null,
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"a\\u002Db\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiJhXHUwMDJEYiIsImV4cCI6MjAwMH0.j_CryyiSEXBoCAJDNJi0chQin235RZZhw5K1uKxxh5c",
+      "expect": {
+        "accepted": true,
+        "claim": "a-b"
+      },
+      "c": {
+        "result": "SC_JWT_OK"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-tampered-signature",
+      "why": "One flipped character in the signature segment. Everything after the signature check reads bytes nobody has vouched for, so this is the gate the rest of the file stands behind.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"iss\":\"gradido\",\"aud\":\"gradido-backend\",\"exp\":2000}",
+      "tamperSignature": true,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJpc3MiOiJncmFkaWRvIiwiYXVkIjoiZ3JhZGlkby1iYWNrZW5kIiwiZXhwIjoyMDAwfQ.9v6ho86YiGXcxanbvGOUknS7tkVtS5ZqXFPIRSbFPsA",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_BAD_SIGNATURE"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-token-that-is-not-three-segments",
+      "why": "A token with no dots in it. Refused before anything is decoded.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": null,
+      "payload": null,
+      "tamperSignature": false,
+      "token": "not-a-token",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_MALFORMED"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-token-with-only-one-dot",
+      "why": "Two segments where three are wanted: there is a header and a payload and nothing has signed them.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": null,
+      "payload": null,
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjIwMDB9",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_MALFORMED"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-alg-rs256",
+      "why": "The verifier accepts exactly one algorithm. An asymmetric one in the header of a token signed with the symmetric secret is the classic confusion attack.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"RS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"iss\":\"gradido\",\"aud\":\"gradido-backend\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJSUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJpc3MiOiJncmFkaWRvIiwiYXVkIjoiZ3JhZGlkby1iYWNrZW5kIiwiZXhwIjoyMDAwfQ.Hj-rQPZnWfzG6xkjt0gFb1apypUAYMseS6hmhdi7Dr0",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_BAD_ALGORITHM"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-alg-none",
+      "why": "`none` is the other half of that attack and is never acceptable, whatever the signature segment holds.",
+      "claimName": "gradidoID",
+      "issuer": null,
+      "audience": null,
+      "now": "1000",
+      "header": "{\"alg\":\"none\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJub25lIn0.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJleHAiOjIwMDB9.9cOIghqoCjuaHTFaKMhQ-kKB22IVhcwqiZFgM3pVNnE",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_BAD_ALGORITHM"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-header-without-alg",
+      "why": "An absent algorithm is not a default algorithm.",
+      "claimName": "gradidoID",
+      "issuer": null,
+      "audience": null,
+      "now": "1000",
+      "header": "{\"typ\":\"JWT\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJ0eXAiOiJKV1QifQ.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJleHAiOjIwMDB9.Y3tmRr42UfHK7plDYMQCaUeVlcKyttm6wjlkZL6WFBs",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_BAD_ALGORITHM"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-numeric-alg",
+      "why": "A member of the wrong type is not the member. It must not read as an absent one that some later default rescues.",
+      "claimName": "gradidoID",
+      "issuer": null,
+      "audience": null,
+      "now": "1000",
+      "header": "{\"alg\":256}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOjI1Nn0.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJleHAiOjIwMDB9.vVNpDsSe8jtiq0Som8TrrAmDAM-FJi8GGhqbAprHrNk",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_BAD_ALGORITHM"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-an-alg-that-only-starts-like-hs256",
+      "why": "A comparison that measures the length first cannot be passed by a prefix. Written down because a memcmp without it would pass this.",
+      "claimName": "gradidoID",
+      "issuer": null,
+      "audience": null,
+      "now": "1000",
+      "header": "{\"alg\":\"HS25\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1In0.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJleHAiOjIwMDB9.fLU37xB6jigcGqwnwxwwI0kCDUVo-Pn6VRtLzuyDTCo",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_BAD_ALGORITHM"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-token-with-no-exp",
+      "why": "The hard session timeout is only as hard as this line: a correctly signed token without an expiry must not be a token that never expires. jose does not ask for `exp` on its own -- the reference implementation has to pass requiredClaims, which is what this vector pins.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"iss\":\"gradido\",\"aud\":\"gradido-backend\"}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJpc3MiOiJncmFkaWRvIiwiYXVkIjoiZ3JhZGlkby1iYWNrZW5kIn0.QmFvmzn_6FViR-84T_otXm0jeG_FRECUvH0Ptm7cvk8",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_MISSING_CLAIM"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-exp-written-as-null",
+      "why": "The literal `null` is the shape an absent member takes when a writer is thorough. It is still absent.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"iss\":\"gradido\",\"aud\":\"gradido-backend\",\"exp\":null}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJpc3MiOiJncmFkaWRvIiwiYXVkIjoiZ3JhZGlkby1iYWNrZW5kIiwiZXhwIjpudWxsfQ.easl3o-J_aI1rbWdGxXnHYCr0KG47MfOlF7t4ZPXXLg",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_MISSING_CLAIM"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-exp-written-as-a-string",
+      "why": "A numeric claim spelled as text is a claim of the wrong type, and a verifier that coerced it would accept an expiry it never read as a number.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"iss\":\"gradido\",\"aud\":\"gradido-backend\",\"exp\":\"9999999999\"}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJpc3MiOiJncmFkaWRvIiwiYXVkIjoiZ3JhZGlkby1iYWNrZW5kIiwiZXhwIjoiOTk5OTk5OTk5OSJ9.PUerKimCEtY9E48EGhQcheb-9rTuTyRBtPLDhA50jsQ",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_MISSING_CLAIM"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-an-expired-token",
+      "why": "The ordinary case, one second past.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"iss\":\"gradido\",\"aud\":\"gradido-backend\",\"exp\":999}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJpc3MiOiJncmFkaWRvIiwiYXVkIjoiZ3JhZGlkby1iYWNrZW5kIiwiZXhwIjo5OTl9.iKE_d1PFkdDdxYMc6AaYRvbruIfLx8wmjgVEYAbK3DI",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_EXPIRED"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-exp-exactly-at-now",
+      "why": "The boundary, and the two implementations agree on which side of it is closed: an expiry equal to the current second has passed.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"iss\":\"gradido\",\"aud\":\"gradido-backend\",\"exp\":1000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJpc3MiOiJncmFkaWRvIiwiYXVkIjoiZ3JhZGlkby1iYWNrZW5kIiwiZXhwIjoxMDAwfQ.JK-TT5VtLU_5A1PRZUe8L0Q8zcKAulpwTEpGVz5Parc",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_EXPIRED"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.accepts-exp-one-second-ahead",
+      "why": "The other side of that boundary, so the vector above pins a boundary rather than a direction.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"iss\":\"gradido\",\"aud\":\"gradido-backend\",\"exp\":1001}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJpc3MiOiJncmFkaWRvIiwiYXVkIjoiZ3JhZGlkby1iYWNrZW5kIiwiZXhwIjoxMDAxfQ.lUoKKw3ahWSbMdE50owCLX8m2LN5oMHJCmD8xmTY2oM",
+      "expect": {
+        "accepted": true,
+        "claim": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+      },
+      "c": {
+        "result": "SC_JWT_OK"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-different-issuer",
+      "why": "A token minted by someone else, correctly signed with a secret both share.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"iss\":\"elsewhere\",\"aud\":\"gradido-backend\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJpc3MiOiJlbHNld2hlcmUiLCJhdWQiOiJncmFkaWRvLWJhY2tlbmQiLCJleHAiOjIwMDB9.QLCUEwG5M4MbQE7Jj6kIsLtxa7VnfXXPbycWpQrvZvY",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_BAD_ISSUER"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-missing-issuer-when-one-is-configured",
+      "why": "A configured issuer is a requirement, not a filter that an absent claim slips through.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"aud\":\"gradido-backend\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJhdWQiOiJncmFkaWRvLWJhY2tlbmQiLCJleHAiOjIwMDB9.LC_YwdSV8XK69rrG2wREmMFbQp-5Fh_pVunRpaYzRfg",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_BAD_ISSUER"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-numeric-issuer",
+      "why": "The two implementations reject this for different reasons -- C stops the walk of the payload at it and reports the claim it never reached -- which is why only the refusal is contracted and `c.result` is diagnostic.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"iss\":7,\"aud\":\"gradido-backend\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJpc3MiOjcsImF1ZCI6ImdyYWRpZG8tYmFja2VuZCIsImV4cCI6MjAwMH0.zSmU7ahRWE4YQrzOHnJ57-CU_uhOjPMxQJ-Z2oN-fqY",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_MISSING_CLAIM"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-different-audience",
+      "why": "A token minted for another service by the same issuer.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"iss\":\"gradido\",\"aud\":\"other-service\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJpc3MiOiJncmFkaWRvIiwiYXVkIjoib3RoZXItc2VydmljZSIsImV4cCI6MjAwMH0.JpSxHvxJl553OrYveW9OpYswhgDISS0mST8mf2-QjQA",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_BAD_AUDIENCE"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-missing-audience-when-one-is-configured",
+      "why": "As with the issuer: configured means required.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"iss\":\"gradido\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJpc3MiOiJncmFkaWRvIiwiZXhwIjoyMDAwfQ.Z377Z__5Kp4KkgUZzFilOe0Iu3X0HGc2GWJN5sM472c",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_BAD_AUDIENCE"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-list-valued-audience",
+      "why": "RFC 7519 allows `aud` to be an array of strings and jose reads one. arnm 0.7.5 hands a value out only as a handle and has no call that reads a string from one, so an array's elements are out of reach and jwt.c refuses what it cannot confirm. This is the one place in this file where the two implementations do not agree, and it is an accepted gap rather than a decision: when arnm can read an element, the divergence below is deleted and both sides accept.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"iss\":\"gradido\",\"aud\":[\"gradido-backend\",\"other-service\"],\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJpc3MiOiJncmFkaWRvIiwiYXVkIjpbImdyYWRpZG8tYmFja2VuZCIsIm90aGVyLXNlcnZpY2UiXSwiZXhwIjoyMDAwfQ.lmsal-xuJqZQ5KgA2hecLdolWEjBg0RfJewXNVkNbmI",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_BAD_AUDIENCE"
+      },
+      "typescript": {
+        "accepted": true,
+        "claim": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "why": "jose walks a list-valued aud and finds the configured audience in it."
+      }
+    },
+    {
+      "id": "jwt.verify.ignores-a-list-valued-audience-when-none-is-configured",
+      "why": "The gap above is only in the check. A verifier that was not configured with an audience never reads the member, so its shape cannot matter -- and both implementations accept.",
+      "claimName": "gradidoID",
+      "issuer": null,
+      "audience": null,
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"aud\":[\"gradido-backend\",\"other-service\"],\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJhdWQiOlsiZ3JhZGlkby1iYWNrZW5kIiwib3RoZXItc2VydmljZSJdLCJleHAiOjIwMDB9.tukoJHmdDgyuz6hX2FdzwNWa0dmezL5n8RGS51n_CtY",
+      "expect": {
+        "accepted": true,
+        "claim": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+      },
+      "c": {
+        "result": "SC_JWT_OK"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-token-without-the-claim",
+      "why": "A claim that is absent is not a claim that passed. The C default for a missing value is zero and an empty string, and both are values something downstream would act on.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"iss\":\"gradido\",\"aud\":\"gradido-backend\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJncmFkaWRvIiwiYXVkIjoiZ3JhZGlkby1iYWNrZW5kIiwiZXhwIjoyMDAwfQ.gnYrHTnPs4Y3f7Ll4QM81osD3XLbSA5Mb8OSJbYrPvU",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_MISSING_CLAIM"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-an-empty-claim",
+      "why": "An empty gradido_id names no user. jose has no notion of a claim of interest, so this is a rule the reference implementation applies itself -- which is exactly what a contract vector is for.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"\",\"iss\":\"gradido\",\"aud\":\"gradido-backend\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIiLCJpc3MiOiJncmFkaWRvIiwiYXVkIjoiZ3JhZGlkby1iYWNrZW5kIiwiZXhwIjoyMDAwfQ.4Vmp9X0HZOWX6V4YLAUz1oS5Te_6ywA3H6yMItNOnKs",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_MISSING_CLAIM"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-numeric-claim",
+      "why": "The claim is copied out as text. A number is not a short string, it is the wrong type.",
+      "claimName": "gradidoID",
+      "issuer": "gradido",
+      "audience": "gradido-backend",
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":5,\"iss\":\"gradido\",\"aud\":\"gradido-backend\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOjUsImlzcyI6ImdyYWRpZG8iLCJhdWQiOiJncmFkaWRvLWJhY2tlbmQiLCJleHAiOjIwMDB9.iF1IHVKJ7ES-0ebzmDC1NB_RfT8R7xYWlPI1f1G-QvY",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_MISSING_CLAIM"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.accepts-a-claim-of-the-longest-permitted-length",
+      "why": "claimMaxBytes exactly. The bound is a buffer in the fast path, so a reference implementation that issued a longer identifier would mint tokens the fast path refuses.",
+      "claimName": "gradidoID",
+      "issuer": null,
+      "audience": null,
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiJ1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1IiwiZXhwIjoyMDAwfQ.gufctl4mjPa3I9m_-vviLGxvy5RaY9AUudDbwBNcfGY",
+      "expect": {
+        "accepted": true,
+        "claim": "uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu"
+      },
+      "c": {
+        "result": "SC_JWT_OK"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-claim-one-byte-too-long",
+      "why": "One past claimMaxBytes, which is what makes the vector above a boundary.",
+      "claimName": "gradidoID",
+      "issuer": null,
+      "audience": null,
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu\",\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiJ1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dSIsImV4cCI6MjAwMH0.stn409XRMlDqkEDd6m9IsEbgShTRp9NWPjS0v7ceick",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_MISSING_CLAIM"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-payload-that-is-not-an-object",
+      "why": "A JSON array is valid JSON and is no claims set. Refused by both, for different reasons.",
+      "claimName": "gradidoID",
+      "issuer": null,
+      "audience": null,
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "[1,2,3]",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.WzEsMiwzXQ.lq3FQOZ-ibaBONrWwhQW13ht18aBAb34aOCDPF9UHAI",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_MISSING_CLAIM"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-payload-that-is-not-json",
+      "why": "Correctly signed bytes that are not a document. The signature says who wrote it, never that what they wrote parses.",
+      "claimName": "gradidoID",
+      "issuer": null,
+      "audience": null,
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "not json at all",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.bm90IGpzb24gYXQgYWxs._GdGSOYv_hagN1iKdAv73WgPrhDl-rcPdttfOiYeoZc",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_MALFORMED"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-trailing-bytes-after-the-payload",
+      "why": "One document and then something else. Accepting the first and ignoring the rest is how a parser differential starts.",
+      "claimName": "gradidoID",
+      "issuer": null,
+      "audience": null,
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"exp\":2000} and then some",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJleHAiOjIwMDB9IGFuZCB0aGVuIHNvbWU.6V5kvaDsx40rQQd8j2-WKuY6iZAZq3ZZvPAuOFR370E",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_MALFORMED"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-payload-with-a-comment-in-it",
+      "why": "arnm compiles yyjson with the non-standard extensions taken out rather than defaulted off, and JSON.parse never had them. Strict RFC 8259 on both sides.",
+      "claimName": "gradidoID",
+      "issuer": null,
+      "audience": null,
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",/* hi */\"exp\":2000}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLC8qIGhpICovImV4cCI6MjAwMH0.q3zaO2ayKF0BNM73--TmOAYe_DJYMZlmXndW-G7VvqY",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_MALFORMED"
+      },
+      "typescript": null
+    },
+    {
+      "id": "jwt.verify.refuses-a-payload-with-a-trailing-comma",
+      "why": "The other non-standard extension a lenient parser would take.",
+      "claimName": "gradidoID",
+      "issuer": null,
+      "audience": null,
+      "now": "1000",
+      "header": "{\"alg\":\"HS256\"}",
+      "payload": "{\"gradidoID\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\",\"exp\":2000,}",
+      "tamperSignature": false,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJncmFkaWRvSUQiOiIzZmE4NWY2NC01NzE3LTQ1NjItYjNmYy0yYzk2M2Y2NmFmYTYiLCJleHAiOjIwMDAsfQ.0UH1XRnxxG68osolgR3HSDIlWINxItw_cvZIyitRJpA",
+      "expect": {
+        "accepted": false,
+        "claim": null
+      },
+      "c": {
+        "result": "SC_JWT_MALFORMED"
+      },
+      "typescript": null
+    }
+  ]
+}

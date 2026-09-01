@@ -27,3 +27,12 @@ target_link_libraries(test_db PRIVATE service_core GTest::gtest)
 # SC_DB_TEST_PG_HOST names a reachable PostgreSQL. Everything else it checks is configuration,
 # refusal, and SQLite, which is a file.
 add_test(NAME service_core.db COMMAND test_db)
+
+add_executable(test_jwt test_jwt.cpp)
+target_include_directories(test_jwt PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_link_libraries(test_jwt PRIVATE service_core GTest::gtest)
+
+# jwt.c from the outside, and only what a contract cannot express -- null arguments, the buffers
+# at their bounds, the sign-then-verify round trip. Which payloads are refused is shared
+# behaviour and lives in contracts/test-vectors/jwt.json, run by ../../tests/contract.
+add_test(NAME service_core.jwt COMMAND test_jwt)
