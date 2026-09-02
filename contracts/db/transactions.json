@@ -7,7 +7,7 @@
   "columns": [
     { "name": "id", "type": "uint64", "nullable": false, "identity": true },
     {
-      "name": "previous",
+      "name": "transactions_previous_key",
       "type": "uint64",
       "nullable": true,
       "default": null,
@@ -64,7 +64,7 @@
       "description": "For CREATION rows: the month the contribution was credited for, which is not when it was booked."
     },
     {
-      "name": "user_id",
+      "name": "transactions_user_id_idx",
       "type": "uint64",
       "nullable": false,
       "references": { "table": "users", "column": "id" }
@@ -117,12 +117,12 @@
     }
   ],
   "primaryKey": ["id"],
-  "unique": [{ "name": "previous", "columns": ["previous"] }],
+  "unique": [{ "name": "transactions_previous_key", "columns": ["previous"] }],
   "indexes": [
-    { "name": "user_id", "columns": ["user_id"] },
-    { "name": "idx_transactions_balance_date_id", "columns": ["balance_date", "id"] },
-    { "name": "idx_transaction_link_id", "columns": ["transaction_link_id"] },
-    { "name": "idx_linked_user_id", "columns": ["linked_user_id"] }
+    { "name": "transactions_user_id_idx", "columns": ["user_id"] },
+    { "name": "transactions_balance_date_id_idx", "columns": ["balance_date", "id"] },
+    { "name": "transactions_transaction_link_id_idx", "columns": ["transaction_link_id"] },
+    { "name": "transactions_linked_user_id_idx", "columns": ["linked_user_id"] }
   ],
   "appendOnly": true,
   "notes": [

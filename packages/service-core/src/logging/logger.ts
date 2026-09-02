@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import pino from 'pino'
-import type { ServiceEnv } from '..'
+import type { RuntimeConfig } from '..'
 
 /**
  * The closed category set of contracts/logging.json. A category names a place in the
@@ -65,7 +65,7 @@ export class Logger {
     this.pino = logger
   }
 
-  public static create(env: ServiceEnv): Logger {
+  public static create(env: RuntimeConfig): Logger {
     return new Logger(createPinoLogger(env))
   }
 
@@ -112,7 +112,7 @@ export class Logger {
   }
 }
 
-function createPinoLogger(env: ServiceEnv): pino.Logger {
+function createPinoLogger(env: RuntimeConfig): pino.Logger {
   /* base: null removes pid and hostname. They differ per process, so two identical runs
      would compare unequal -- see contracts/logging.json, envelope rules. pino's default
      timestamp is already unix milliseconds, which is what the contract asks for. */
@@ -130,7 +130,7 @@ function createPinoLogger(env: ServiceEnv): pino.Logger {
   }
 }
 
-function transportTargets(env: ServiceEnv): pino.TransportTargetOptions[] {
+function transportTargets(env: RuntimeConfig): pino.TransportTargetOptions[] {
   const targets: pino.TransportTargetOptions[] = []
 
   if (env.LOG_FILE) {

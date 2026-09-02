@@ -282,8 +282,10 @@ packages/          TypeScript — reference implementation
   admin            admin frontend
   frontend         user frontend
   frontend-core    UI code shared by admin and frontend
-  shared           code shared by frontend and backend, e.g. route definitions
-                   (so Eden Treaty can derive types) and shared valibot schemas
+  shared           code shared by frontend and backend: valibot schemas, error
+                   codes, units — everything a browser can load. No HTTP server:
+                   the routes are in backend and only their type is imported,
+                   see HTTP server below
   shared-native    determinism-critical C, called from TypeScript via N-API
                    and linked directly by the fast servers
   email-native     the e-mail templates and the codegen that renders them into C
@@ -311,6 +313,11 @@ fast-servers/      C — fast implementation, mirrors the domain structure
                    its own Architecture.md holds the boundary rules
 
 contracts/         language-independent JSON contracts, see below
+
+docker-compose.yml PostgreSQL, Adminer and a maildev mail sink for
+                   development. No gradido2 service runs in a container — see
+                   *Development containers* in README.md for why that is
+                   deliberate and what it costs to measure through one
 ```
 
 `packages/contract-tests` is not one of the deployable packages and holds no domain code: it is
@@ -639,7 +646,8 @@ Table and column names use snake_case, plural for table names, singular for colu
 - prepared statements for standard queries, and where possible also for more complex, rarely used queries
 - which database is used is decided at startup via config
 - use the full feature set of PostgreSQL; mirror features SQLite lacks with combinations of simpler queries, and if that is not enough, process the data in TypeScript or C directly
-- PostgreSQL is the reference and the default for server mode, SQLite is for easy deployment of small setups
+- PostgreSQL is the reference — the database behaviour is defined against, and what a community with an administrator should run
+- **SQLite is the default**, because an unconfigured start has to work: that is the download-and-start promise below, and defaulting to PostgreSQL meant waiting half a minute for a server nobody had installed. Setting `DB_TYPE=postgresql` is one line, and a deployment that wants PostgreSQL is already setting four others next to it
 - the server admin decides on first run which one to use; there is currently no migration between SQLite and PostgreSQL data sets
 - tests run against both database modes
 - **all timestamps are UTC**, stored as milliseconds since the Unix epoch. PostgreSQL uses
@@ -686,7 +694,8 @@ Not carried over: the restriction to JPEG. The accepted content types are an ope
 
 ## HTTP server
 
-- ElysiaJS + Eden Treaty on the TypeScript side. Route definitions belong in `packages/shared` so that frontend-core, frontend and admin can import the types.
+- ElysiaJS + Eden Treaty on the TypeScript side. Route definitions belong in `packages/backend/src/server`, one file per domain, each exporting its own Elysia type (`UserRoutes`, …) next to the whole application's (`BackendApp`).
+- Frontend, admin and frontend-core bind those types with `treaty<UserRoutes>(url)` and import them with `import type`, which is erased before bundling — no route definition, no Elysia and no database code reaches a browser. That is the only import a frontend ever makes from the backend; anything it needs at runtime lives in `packages/shared`.
 - h2o on the fast path, configured to not allocate/free memory during operation: it starts with enough memory and reuses it. See [fast-servers/Architecture.md](fast-servers/Architecture.md).
 - Routes are additionally described in `contracts/server` as JSON, so both implementations can be tested and compared.
 
@@ -705,6 +714,9 @@ Not carried over: the restriction to JPEG. The accepted content types are an ope
 - clang-format for linting C/C++ code
 - google test for testing C/C++ code
 - cargo for `fast-servers/dht-node`, and nowhere else
+- docker only for the development services next to the code — a database, a database UI and a
+  mail sink. Nothing this project ships is built or run in a container, and nothing in the
+  build depends on one being there
 
 Which language is used for what, and the sanitizer and fuzzing requirements that come with
 native code, are in [fast-servers/Architecture.md](fast-servers/Architecture.md).

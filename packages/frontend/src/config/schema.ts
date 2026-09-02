@@ -29,8 +29,12 @@ export const configSchema = v.object({
     NodeEnvironmentType.Development,
   ),
 
-  /** Where the backend lives. Same origin by default, which is how it is deployed. */
-  API_BASE_URL: v.optional(v.pipe(v.string(), v.url()), 'http://localhost:4000/api'),
+  /**
+   * Where the backend lives. The routes of `contracts/server/backend` are mounted at the
+   * root, so this is an origin and nothing more — no `/api` prefix; that one belongs to
+   * the federation server, which mounts at `/api/{apiVersion}`.
+   */
+  API_BASE_URL: v.optional(v.pipe(v.string(), v.url()), 'http://localhost:4000'),
 
   /** Sub-path the app is served under, e.g. `/wallet`. Empty means the domain root. */
   BASE_PATH: v.optional(v.string(), ''),

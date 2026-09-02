@@ -115,6 +115,12 @@ msgstr "Leider konnten wir keinen (aktivierten) Account mit diesen Daten finden.
 msgid "No user with these credentials."
 msgstr "Kein Benutzer mit diesen Anmeldedaten."
 
+msgid "This server does not offer registration yet."
+msgstr "Dieser Server bietet die Registrierung noch nicht an."
+
+msgid "Please check your entries."
+msgstr "Bitte überprüfe deine Eingaben."
+
 msgid "Unknown error: "
 msgstr "Unbekannter Fehler: "
 

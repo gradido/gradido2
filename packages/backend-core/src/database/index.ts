@@ -1,3 +1,5 @@
 export * from './connect'
+export * from './migrate'
 export * from './schema'
+export * from './tables'
 export * from './wait'

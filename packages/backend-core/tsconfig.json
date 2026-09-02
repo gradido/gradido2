@@ -5,19 +5,17 @@
     "moduleResolution": "bundler",
     "lib": ["esnext"],
     "skipLibCheck": true,
-
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
-
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-
-    "types": ["node", "bun"]
+    "types": ["node", "bun"],
+    "resolveJsonModule": true
   },
-  "include": ["src"]
+  "include": ["src", "../../contracts/migrations/index.json"]
 }

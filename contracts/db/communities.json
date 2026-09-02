@@ -7,12 +7,13 @@
   "columns": [
     { "name": "id", "type": "uint64", "nullable": false, "identity": true },
     {
-      "name": "foreign",
+      "name": "remote",
       "type": "bool",
       "nullable": false,
       "default": "true",
+      "legacyName": "foreign",
       "description": "false on exactly one row: this instance's own community. Everything else is known by reference.",
-      "note": "'foreign' is a reserved word in PostgreSQL and must be quoted. Renaming it is a migration decision, not a detail — see the open question below."
+      "note": "Legacy calls it `foreign`, which is a reserved word in PostgreSQL and not even parseable unquoted in SQLite, so every hand-written query in both implementations would have to remember the quotes. `remote` is a keyword in neither and says the same thing. The word in conversation stays 'foreign community' — that is a vocabulary the column no longer matches, which is the whole cost of the change."
     },
     {
       "name": "url",
@@ -37,10 +38,10 @@
     {
       "name": "community_uuid",
       "type": "uuid",
-      "nullable": true,
-      "default": null,
-      "description": "The identifier every other table joins on — users.community_uuid, transactions.user_community_uuid, user_aliases.community_uuid.",
-      "open": "Legacy also parks a uint32 one-time pass code in this char(36) column during community authentication, so a reader cannot assume a uuid. gradido2 must give the handshake its own column — community_handshake_states.one_time_code already exists for exactly this — before the column can become a real uuid."
+      "nullable": false,
+      "description": "The community's public identity: what federation names it by, and the only place a community uuid is stored.",
+      "note": "A real uuid, always — a reader may assume it. Legacy parks a uint32 one-time pass code in this char(36) column during community authentication, which is why an earlier version of this file could not commit to the type; that was replaced by the community handshake, and the code now lives in community_handshake_states.one_time_code where it belongs. Because the column is NOT NULL, communities_uuid_key is a constraint that actually holds: two NULLs are distinct in a unique index, so a nullable version of this column would have enforced nothing.",
+      "open": "Several tables still join a community by uuid — transactions.user_community_uuid, user_aliases.community_uuid, crea_records.community_uuid, pending_transactions. users was moved to a row id (users.community_id) and the rest are intended to follow, but each has to be checked before it is changed."
     },
     {
       "name": "authenticated_at",
@@ -93,26 +94,16 @@
   ],
   "primaryKey": ["id"],
   "unique": [
-    { "name": "url_key", "columns": ["url"] },
-    { "name": "uuid_key", "columns": ["community_uuid"] }
+    { "name": "communities_url_key", "columns": ["url"] },
+    { "name": "communities_uuid_key", "columns": ["community_uuid"] },
+    { "name": "communities_public_key_key", "columns": ["public_key"] }
   ],
   "indexes": [],
   "notes": [
     "Rows are joined by community_uuid and by public_key, almost never by id. An implementation that treats id as the community identity will not match legacy data.",
     "Timestamps are UTC milliseconds; see types/Timestamp.json. This table uses datetime(3) throughout, so sub-second ordering is real here — unlike contributions and transaction_links.",
-    "A private key lives in this table. It must never be selected by a query that also feeds a response, and never logged. See logging.json."
+    "A private key lives in this table. It must never be selected by a query that also feeds a response, and never logged. See logging.json.",
+    "public_key is unique. Legacy intended it — migration 0065 created UNIQUE KEY public_key_key — and migration 0068 lost the constraint while widening the column, so the live legacy schema does not enforce it. gradido2 repairs that rather than inheriting it: public_key is what the federation handshake identifies a community by, and two rows holding one key is not a duplicate, it is an authentication ambiguity. A community that wants a new key rotates the column; it does not get a second row."
   ],
-  "open": [
-    {
-      "question": "Should public_key be unique?",
-      "detail": "Migration 0065 created UNIQUE KEY public_key_key (public_key). Migration 0068 dropped the column to change its width and recreated it WITHOUT the constraint — for federated_communities the same migration explicitly re-added public_api_key, for communities it did not. So the uniqueness legacy intended is not enforced in the live schema, and two communities could share a key without the database objecting.",
-      "why_it_matters": "public_key is what the federation handshake identifies a community by. Two rows with one key is not a data quirk, it is an authentication ambiguity.",
-      "status": "unanswered — the constraint looks like an accident to repair, not a decision to carry over"
-    },
-    {
-      "question": "Does the column stay called `foreign`?",
-      "detail": "It is a reserved word in PostgreSQL and needs quoting at every use, in both implementations and in every hand-written query. `is_foreign` or `remote` costs one migration and removes the quoting forever.",
-      "status": "unanswered — decide before the first PostgreSQL schema is generated, it also affects users.foreign"
-    }
-  ]
+  "open": []
 }

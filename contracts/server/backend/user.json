@@ -170,11 +170,10 @@
         ]
       },
       "response": {
-        "nullable": false,
         "legacyType": "User",
-        "type": "object",
-        "model": "User",
-        "open": "shape of User not contracted yet"
+        "type": "none",
+        "httpStatus": 204,
+        "note": "No body. A new account is of no use to a caller until the address is confirmed, and legacy proves the point: its resolver returns a User, its own frontend selects only { id } from it, and that id is one of the faked ones. Answering with nothing also makes the silence rule structural instead of maintained — a registration for an address already in use gets the identical empty 204, so there is no shape for the two paths to differ in and no fabricated identifier for a client to keep."
       },
       "legacy": {
         "resolver": "UserResolver",

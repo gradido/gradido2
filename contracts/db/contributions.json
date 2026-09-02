@@ -107,10 +107,10 @@
   "primaryKey": ["id"],
   "unique": [],
   "indexes": [
-    { "name": "idx_contributions_user_created", "columns": ["user_id", "created_at"] },
-    { "name": "idx_contributions_transaction_id", "columns": ["transaction_id"] },
+    { "name": "contributions_user_id_created_at_idx", "columns": ["user_id", "created_at"] },
+    { "name": "contributions_transaction_id_idx", "columns": ["transaction_id"] },
     {
-      "name": "idx_contributions_feed",
+      "name": "contributions_feed_idx",
       "columns": ["contribution_status", "contribution_link_id", "confirmed_at", "transaction_id"]
     }
   ],

@@ -55,8 +55,8 @@
     { "name": "updated_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
   ],
   "primaryKey": ["id"],
-  "unique": [{ "name": "uniq_matching_entries_uuid", "columns": ["uuid"] }],
-  "indexes": [{ "name": "idx_matching_entries_user_id", "columns": ["user_id"] }],
+  "unique": [{ "name": "matching_entries_uuid_key", "columns": ["uuid"] }],
+  "indexes": [{ "name": "matching_entries_user_id_idx", "columns": ["user_id"] }],
   "notes": [
     "remote and active are forwarded to the GMS as JSON. A 1 where a true belongs is a changed payload, so the conversion has to happen once on the way out of the database rather than at every call site. Legacy makes this explicit by declaring them boolean() where the neighbouring tables use tinyint().",
     "The entry is addressed by uuid everywhere above the database — see server/backend/matching-entry.json. An implementation that exposes the id has widened the API.",

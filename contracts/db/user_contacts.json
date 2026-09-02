@@ -42,7 +42,9 @@
       "name": "email_verification_code",
       "type": "uint64",
       "nullable": false,
-      "description": "Secret. Never logged, never returned in a response."
+      "description": "Secret. Never logged, never returned in a response.",
+      "range": { "min": "1", "max": "9007199254740991" },
+      "note": "Legacy draws 64 random bits into a MariaDB `bigint unsigned`. Neither target database has that column: PostgreSQL `bigint` and SQLite `INTEGER` are both signed 64 bit, so the top bit is already gone. The bound is set lower still, at 2^53-1, because SQLite hands an INTEGER to JavaScript as a double — a wider value would come back changed on the reference path without anything failing. 53 bits is 9.0e15 codes against a window of a few hours; the entropy is not what is scarce here."
     },
     {
       "name": "email_opt_in_type_id",
@@ -105,11 +107,11 @@
   "primaryKey": ["id"],
   "unique": [
     {
-      "name": "email_key",
+      "name": "user_contacts_email_key",
       "columns": ["email"]
     },
     {
-      "name": "email_verification_code_key",
+      "name": "user_contacts_email_verification_code_key",
       "columns": ["email_verification_code"]
     }
   ],
