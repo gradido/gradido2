@@ -64,6 +64,14 @@ typedef struct sc_http_config {
     uint16_t threads;
 } sc_http_config;
 
+/**
+ * The reason phrase of @p status, for the status line.
+ *
+ * One table for both backends: a phrase is part of the status line a client reads, so two
+ * backends with two tables is a difference a client can see. Never NULL.
+ */
+const char *sc_http_reason(int status);
+
 /** Names the backend this build linked: "h2o" or "libuv+picohttpparser". Never NULL. */
 const char *sc_http_backend_name(void);
 
@@ -80,6 +88,39 @@ void sc_http_server_destroy(sc_http_server *server);
  */
 sc_status sc_http_route(sc_http_server *server, const char *path, sc_http_handler_fn fn,
                         void *user_data);
+
+/**
+ * Registers @p fn for every path no route matched. Startup only, like a route.
+ *
+ * There is one caller and one reason for it: `AGENTS.md` requires a route this implementation
+ * does not serve to answer ROUTE_NOT_IMPLEMENTED rather than 404, because a deployment runs one
+ * implementation and never forwards to the other -- so "not here" has to be distinguishable
+ * from "nowhere". A server that registers none keeps the plain 404, which is what the
+ * integration probe wants and what the roles had before the first contracted route existed.
+ *
+ * One per server: it is the answer to a question that has one, and a chain of fallbacks would
+ * only be a route table with no paths in it. A handler that returns -1 leaves the request
+ * unanswered and it becomes a 404, the same as anywhere else.
+ */
+sc_status sc_http_route_default(sc_http_server *server, sc_http_handler_fn fn, void *user_data);
+
+/**
+ * Registers @p fn to run before any route, for what applies to every request rather than to one.
+ *
+ * There is one caller and one reason for it, and it is the same reason Elysia mounts CORS as a
+ * plugin on the application rather than declaring it per route: which origins may call this
+ * server is a property of the deployment, and a rule that has to be remembered at every new
+ * route is a rule that will be forgotten at one.
+ *
+ * A handler returns 0 when it answered the request -- no route is then consulted, which is what
+ * a preflight is -- and -1 to let dispatch carry on. Headers it adds with sc_http_header_add stay
+ * on the response the route goes on to write.
+ *
+ * It runs before every request this surface dispatches, the default route included. A server
+ * that registers no default route still lets an unmatched path reach its backend's own 404
+ * without passing here; register both or neither.
+ */
+sc_status sc_http_before_route(sc_http_server *server, sc_http_handler_fn fn, void *user_data);
 
 /** Binds and listens. Separate from the run loop so a failure to take the port is reported
  *  before any thread starts serving. */
@@ -182,8 +223,31 @@ const char *sc_http_header(const sc_http_req *req, const char *name, size_t *len
 int sc_http_minor_version(const sc_http_req *req);
 
 /**
+ * Adds a header to the response, before it is sent.
+ *
+ * For what a handler decides and the status line cannot carry. `Content-Type` is not one of
+ * them -- sc_http_reply owns that one, so that the two backends cannot end up disagreeing about
+ * whether it was set.
+ *
+ * @p name must be lowercase and is borrowed; a string literal is the intended case. @p value is
+ * copied, because the answer is written after the handler has returned. Answers SC_ERR_TOO_LONG
+ * when this response already carries SC_HTTP_RESPONSE_HEADERS_MAX of them or the header would
+ * not fit -- refused rather than truncated, which is the house rule: half a header value is a
+ * different header value.
+ */
+sc_status sc_http_header_add(sc_http_req *req, const char *name, const char *value,
+                             size_t value_len);
+
+/** Headers one response may carry beyond the ones the backend writes itself. */
+#define SC_HTTP_RESPONSE_HEADERS_MAX 12
+
+/**
  * Sends @p body as the complete response. @p body must outlive the call only until it returns;
  * a string literal is the intended case.
+ *
+ * A status of 204 is answered with no body at all -- no Content-Type and no Content-Length,
+ * which is what RFC 7230 asks for and what both backends write. @p content_type and @p body are
+ * then ignored, and passing "" for both is the intended call.
  */
 sc_status sc_http_reply(sc_http_req *req, int status, const char *content_type, const char *body,
                         size_t body_len);

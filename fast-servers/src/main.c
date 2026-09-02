@@ -1,5 +1,5 @@
 /*
- * One binary, three roles.
+ * One binary, three roles, and one command that is not a role.
  *
  * `fast-servers` with no argument is the backend, which is the common case and therefore the
  * default. Each of --backend, --federation and --dht-node selects a role, and several of them
@@ -10,6 +10,12 @@
  *   fast-servers                          the backend
  *   fast-servers --federation             federation only
  *   fast-servers --backend --dht-node     both, in one process
+ *   fast-servers migrate-down             take the database down one migration, then stop
+ *
+ * `migrate-down` is a command rather than a role and serves nothing: a serving start migrates
+ * *up* to the version its code needs, so taking the database to N-1 and then serving a build
+ * that needs N would undo the step and re-apply it in the same breath. Going down means the next
+ * thing started is a different build, and that is a separate act. See backend/backend.h.
  *
  * Shutdown is one flag. SIGINT or SIGTERM raises it, every run loop notices within
  * SC_RUNTIME_TICK_MS and returns, and main joins the threads. Nothing is cancelled from the
@@ -88,6 +94,10 @@ static void print_usage(FILE *out)
     fprintf(out, "roles (several may be combined; none means --backend):\n");
     for (i = 0; i < FS_ROLE_COUNT; ++i)
         fprintf(out, "  %-14s %s\n", kRoles[i].flag, kRoles[i].summary);
+    fprintf(out, "\ncommands (instead of a role):\n");
+    fprintf(out, "  %-14s take the database down one migration and stop. On a release only\n",
+            "migrate-down");
+    fprintf(out, "  %-14s with DB_MIGRATE_DOWN naming the migration one lower\n", "");
     fprintf(out, "\noptions:\n");
     fprintf(out, "  %-14s this text\n", "-h, --help");
     fprintf(out, "  %-14s version and build features\n", "-v, --version");
@@ -113,6 +123,7 @@ int main(int argc, char **argv)
     sc_config cfg;
     sc_status status;
     int any_selected = 0;
+    int migrate_down = 0;
     int exit_code = 0;
     int i;
 
@@ -132,6 +143,10 @@ int main(int argc, char **argv)
             print_version();
             return 0;
         }
+        if (strcmp(arg, "migrate-down") == 0) {
+            migrate_down = 1;
+            continue;
+        }
         for (r = 0; r < FS_ROLE_COUNT; ++r) {
             if (strcmp(arg, kRoles[r].flag) == 0) {
                 selected[r] = 1;
@@ -145,6 +160,12 @@ int main(int argc, char **argv)
             print_usage(stderr);
             return 2;
         }
+    }
+    if (migrate_down && any_selected) {
+        fprintf(stderr, "fast-servers: migrate-down is a command, not a role; it serves nothing "
+                        "and cannot be combined with one\n\n");
+        print_usage(stderr);
+        return 2;
     }
     if (!any_selected)
         selected[0] = 1; /* --backend, the default */
@@ -168,6 +189,12 @@ int main(int argc, char **argv)
      * digest. Here is that thread and this is that moment: no role has started yet. */
     sc_jwt_init();
     sc_runtime_install_signal_handlers(&g_quit);
+
+    /* The command, and then the process is over: nothing listens, no role starts, and the flag
+     * is installed above only so that a Ctrl-C while the database is being waited for is noticed
+     * the way it is everywhere else. */
+    if (migrate_down)
+        return backend_migrate_down(&cfg, &g_quit) == SC_OK ? 0 : 1;
 
     for (i = 0; i < FS_ROLE_COUNT; ++i) {
         if (!selected[i])

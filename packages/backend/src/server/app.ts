@@ -26,7 +26,7 @@ export const createBackendApp = (context: AppContext) =>
       if (code === 'VALIDATION') {
         const { field, reason } = validationDetail(error)
         set.status = errorStatus(ErrorCode.ValidationFailed)
-        return errorBody(ErrorCode.ValidationFailed, `validation failed for ${field}: ${reason}`)
+        return errorBody(ErrorCode.ValidationFailed, field, reason)
       }
 
       /* Of the 139 routes in `contracts/server`, nearly all are still unwritten, so an
@@ -36,7 +36,7 @@ export const createBackendApp = (context: AppContext) =>
          answer, which is the price of not loading the contract at runtime. */
       if (code === 'NOT_FOUND') {
         set.status = errorStatus(ErrorCode.RouteNotImplemented)
-        return errorBody(ErrorCode.RouteNotImplemented, `route not implemented: ${path}`)
+        return errorBody(ErrorCode.RouteNotImplemented, path)
       }
 
       /* The shape is contracted: contracts/logging.json fixes http.request.failed at method,
@@ -55,7 +55,7 @@ export const createBackendApp = (context: AppContext) =>
       set.status = errorStatus(ErrorCode.Unknown)
       /* Deliberately says nothing: what went wrong is in the log, where it belongs, and not
          in an answer to whoever caused it. */
-      return errorBody(ErrorCode.Unknown, 'unknown error')
+      return errorBody(ErrorCode.Unknown)
     })
     .use(userRoutes(context))
 

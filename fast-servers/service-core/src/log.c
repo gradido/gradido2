@@ -123,31 +123,117 @@ static size_t json_escape(char *dst, size_t dst_size, const char *src)
     return out;
 }
 
-void sc_log(sc_log_level level, sc_log_cat cat, const char *event, const char *fmt, ...)
+/*
+ * The optional envelope fields, rendered into @p dst as `,"key":value` runs.
+ *
+ * Returns what it wrote. A member that would not fit is left out and the object it is in is
+ * closed all the same, so the line stays well-formed JSON: this is the same exception log.c
+ * already makes for the sentence -- losing part of a diagnostic beats losing the event -- and
+ * it never applies to the five required fields, which are written by the caller below.
+ */
+static size_t render_context(char *dst, size_t dst_size, const sc_log_context *context)
+{
+    char escaped[SC_LOG_LINE_MAX];
+    size_t out = 0;
+    size_t i;
+    int n;
+
+    if (context == NULL)
+        return 0;
+
+    if (context->usr != 0) {
+        n = snprintf(dst + out, dst_size - out, ",\"usr\":%llu",
+                     (unsigned long long)context->usr);
+        if (n > 0 && (size_t)n < dst_size - out)
+            out += (size_t)n;
+    }
+    if (context->err_name != NULL) {
+        (void)json_escape(escaped, sizeof(escaped), context->err_name);
+        n = snprintf(dst + out, dst_size - out, ",\"err\":{\"code\":%u,\"name\":\"%s\"}",
+                     (unsigned)context->err_code, escaped);
+        if (n > 0 && (size_t)n < dst_size - out)
+            out += (size_t)n;
+    }
+    if (context->data == NULL || context->data_count == 0)
+        return out;
+
+    n = snprintf(dst + out, dst_size - out, ",\"data\":{");
+    if (n <= 0 || (size_t)n >= dst_size - out)
+        return out;
+    out += (size_t)n;
+
+    for (i = 0; i != context->data_count; ++i) {
+        const sc_log_value *value = &context->data[i];
+        const char *separator = (i == 0) ? "" : ",";
+
+        (void)json_escape(escaped, sizeof(escaped), value->key);
+        switch (value->kind) {
+        case SC_LOG_VALUE_STRING: {
+            char text[SC_LOG_LINE_MAX];
+            (void)json_escape(text, sizeof(text), value->text != NULL ? value->text : "");
+            n = snprintf(dst + out, dst_size - out, "%s\"%s\":\"%s\"", separator, escaped, text);
+            break;
+        }
+        case SC_LOG_VALUE_INT:
+            n = snprintf(dst + out, dst_size - out, "%s\"%s\":%lld", separator, escaped,
+                         (long long)value->number);
+            break;
+        case SC_LOG_VALUE_UINT:
+            n = snprintf(dst + out, dst_size - out, "%s\"%s\":%llu", separator, escaped,
+                         (unsigned long long)value->unumber);
+            break;
+        case SC_LOG_VALUE_BOOL:
+            n = snprintf(dst + out, dst_size - out, "%s\"%s\":%s", separator, escaped,
+                         value->number != 0 ? "true" : "false");
+            break;
+        case SC_LOG_VALUE_NULL:
+        default:
+            n = snprintf(dst + out, dst_size - out, "%s\"%s\":null", separator, escaped);
+            break;
+        }
+        if (n <= 0 || (size_t)n >= dst_size - out)
+            break;
+        out += (size_t)n;
+    }
+
+    /* Room for the closing brace is kept by the loop's own bound: it stops as soon as a member
+     * would fill the buffer, and dst_size - out is then at least the terminator plus this. */
+    if (out + 1 < dst_size) {
+        dst[out++] = '}';
+        dst[out] = '\0';
+    }
+    return out;
+}
+
+static void log_line(sc_log_level level, sc_log_cat cat, const char *event,
+                     const sc_log_context *context, const char *fmt, va_list args)
 {
     char message[SC_LOG_LINE_MAX];
     char escaped[SC_LOG_LINE_MAX];
-    char line[SC_LOG_LINE_MAX * 2];
+    char extra[SC_LOG_LINE_MAX];
+    char line[SC_LOG_LINE_MAX * 3];
     const char *category;
-    va_list args;
     int written;
 
     if (level < g_minimum)
         return;
     category = (cat >= 0 && cat < SC_CAT__COUNT) ? kCategoryNames[cat] : "startup";
 
-    va_start(args, fmt);
     /* Truncation here is deliberate and is the one place this codebase permits it: losing the
      * tail of a sentence beats losing the event. The structure around it is never truncated. */
     (void)vsnprintf(message, sizeof(message), fmt, args);
-    va_end(args);
     message[sizeof(message) - 1] = '\0';
     (void)json_escape(escaped, sizeof(escaped), message);
 
-    written =
-        snprintf(line, sizeof(line),
-                 "{\"time\":%lld,\"level\":%d,\"cat\":\"%s\",\"event\":\"%s\",\"msg\":\"%s\"}\n",
-                 (long long)sc_now_ms(), (int)level, category, event, escaped);
+    extra[0] = '\0';
+    (void)render_context(extra, sizeof(extra), context);
+
+    /* msg last, so that a line read by a human ends with the sentence rather than with the
+     * fields -- the order is not contracted, and nothing parses this by position. */
+    written = snprintf(line, sizeof(line),
+                       "{\"time\":%lld,\"level\":%d,\"cat\":\"%s\",\"event\":\"%s\"%s"
+                       ",\"msg\":\"%s\"}\n",
+                       (long long)sc_now_ms(), (int)level, category, event, extra, escaped);
     if (written <= 0)
         return;
     if ((size_t)written >= sizeof(line))
@@ -161,4 +247,23 @@ void sc_log(sc_log_level level, sc_log_cat cat, const char *event, const char *f
     (void)fflush(stderr);
     if (g_write_lock_ready)
         uv_mutex_unlock(&g_write_lock);
+}
+
+void sc_log(sc_log_level level, sc_log_cat cat, const char *event, const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    log_line(level, cat, event, NULL, fmt, args);
+    va_end(args);
+}
+
+void sc_log_event(sc_log_level level, sc_log_cat cat, const char *event,
+                  const sc_log_context *context, const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    log_line(level, cat, event, context, fmt, args);
+    va_end(args);
 }

@@ -56,6 +56,36 @@ const ERROR_NAMES: Record<ErrorCode, string> = {
   [ErrorCode.RouteNotImplemented]: 'ROUTE_NOT_IMPLEMENTED',
 }
 
+/**
+ * What each code's message is made of — `parameters` in `contracts/errors/*.json`, in the order
+ * the template names them.
+ *
+ * A tuple per code rather than an object of named holes, because the order is the template's and
+ * a caller that gets it wrong should not compile.
+ */
+type ErrorParameters = {
+  [ErrorCode.ValidationFailed]: [field: string, reason: string]
+  [ErrorCode.Unknown]: []
+  [ErrorCode.RouteNotImplemented]: [route: string]
+}
+
+/**
+ * The `messageTemplate` of each code, kept beside the code it belongs to.
+ *
+ * Here rather than at the call site, and the drift that put it here is the whole argument: the
+ * contract fixes three things per code — the name, the status and the message — and the two that
+ * already lived in this file stayed right while the one that did not went its own way.
+ * ROUTE_NOT_IMPLEMENTED was sent as `route not implemented: {route}` by the only place that sends
+ * it, which is not the sentence the contract writes, and the fast path copied it from there
+ * rather than from the contract. One template, one place, and `errorBody` is the only way to
+ * reach it.
+ */
+const ERROR_MESSAGES: { [Code in ErrorCode]: (...parameters: ErrorParameters[Code]) => string } = {
+  [ErrorCode.ValidationFailed]: (field, reason) => `validation failed for ${field}: ${reason}`,
+  [ErrorCode.Unknown]: () => 'unknown error',
+  [ErrorCode.RouteNotImplemented]: (route) => `route not implemented on this server: ${route}`,
+}
+
 /** The HTTP status the contract gives each code, kept beside the code it belongs to. */
 const ERROR_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.ValidationFailed]: 400,
@@ -67,6 +97,21 @@ export function errorStatus(code: ErrorCode): number {
   return ERROR_STATUS[code]
 }
 
-export function errorBody(code: ErrorCode, message: string): ErrorBody {
+/**
+ * The contracted body for @p code, with the template's own parameters.
+ *
+ * Deliberately not a `message` parameter: a formatted sentence handed in is a sentence nothing
+ * holds to the contract, which is exactly how ROUTE_NOT_IMPLEMENTED came to say something else.
+ * The cast is what the compiler cannot work out for itself — that the entry at `code` takes the
+ * parameters `ErrorParameters[code]` names — and it is safe because that is how the record is
+ * declared one line above.
+ */
+export function errorBody<Code extends ErrorCode>(
+  code: Code,
+  ...parameters: ErrorParameters[Code]
+): ErrorBody {
+  const message = (ERROR_MESSAGES[code] as (...parameters: ErrorParameters[Code]) => string)(
+    ...parameters,
+  )
   return { error: { code, name: ERROR_NAMES[code], message } }
 }

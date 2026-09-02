@@ -68,6 +68,77 @@ void sc_log(sc_log_level level, sc_log_cat cat, const char *event, const char *f
 #endif
     ;
 
+/* --- the optional envelope fields ------------------------------------------------------- */
+
+/*
+ * contracts/logging.json, envelope: beyond time, level, cat, event and msg a line may carry
+ * `usr`, `err` and `data`, and most contracted events do. What follows is how they are handed
+ * over -- by value, in the caller's own frame, so that a line still costs no allocation.
+ *
+ * `data` is flat by contract ("no nesting beyond one level"), which is what lets one array of
+ * key/value pairs describe every event there is.
+ */
+
+typedef enum sc_log_value_kind {
+    SC_LOG_VALUE_STRING = 0,
+    SC_LOG_VALUE_INT,
+    SC_LOG_VALUE_UINT,
+    SC_LOG_VALUE_BOOL,
+    /* An explicitly null member. The contract has one: db.migration.denied's `expected`, which
+     * is null when the database is simply ahead of this build. */
+    SC_LOG_VALUE_NULL
+} sc_log_value_kind;
+
+/** One member of `data`. Written with the macros below, never field by field. */
+typedef struct sc_log_value {
+    const char *key;
+    sc_log_value_kind kind;
+    /* Borrowed for the duration of the call, like everything else on this path. NULL is
+     * written as an empty string rather than as JSON null -- SC_LOG_VALUE_NULL says null. */
+    const char *text;
+    int64_t number;
+    uint64_t unumber;
+} sc_log_value;
+
+#define SC_LOG_STR(key, value) {(key), SC_LOG_VALUE_STRING, (value), 0, 0}
+#define SC_LOG_INT(key, value) {(key), SC_LOG_VALUE_INT, NULL, (int64_t)(value), 0}
+#define SC_LOG_UINT(key, value) {(key), SC_LOG_VALUE_UINT, NULL, 0, (uint64_t)(value)}
+#define SC_LOG_BOOL(key, value) {(key), SC_LOG_VALUE_BOOL, NULL, (value) ? 1 : 0, 0}
+#define SC_LOG_NULL(key) {(key), SC_LOG_VALUE_NULL, NULL, 0, 0}
+
+/** Members one `data` object may carry. The widest contracted event has four. */
+#define SC_LOG_DATA_MAX 8
+
+/**
+ * What a line carries besides its sentence. Every field is optional and every field is absent
+ * rather than null when it is not set -- the contract's third rule.
+ */
+typedef struct sc_log_context {
+    /** `usr`, users.id. 0 is absent: no row has it, the identity columns start at 1. */
+    uint64_t usr;
+    /** `err.name` from contracts/errors. NULL leaves the whole `err` object out. */
+    const char *err_name;
+    /** `err.code`, read only when @ref err_name is set. */
+    uint32_t err_code;
+    /** `data`, borrowed. NULL or a count of 0 leaves the object out. */
+    const sc_log_value *data;
+    size_t data_count;
+} sc_log_context;
+
+/**
+ * sc_log with the optional envelope fields. @p context may be NULL, which is what sc_log is.
+ *
+ * Truncation is the same rule and applies to the sentence alone: the structure around it --
+ * the envelope, `data`, `err` -- is written whole or the line is not written, because a
+ * half-written object is not JSON and the tests parse this stream.
+ */
+void sc_log_event(sc_log_level level, sc_log_cat cat, const char *event,
+                  const sc_log_context *context, const char *fmt, ...)
+#if defined(__GNUC__)
+    __attribute__((format(printf, 5, 6)))
+#endif
+    ;
+
 #define SC_LOG_LINE_MAX 1024
 
 #define sc_log_debug(cat, event, ...) sc_log(SC_LOG_DEBUG, (cat), (event), __VA_ARGS__)

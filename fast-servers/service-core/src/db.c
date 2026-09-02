@@ -272,8 +272,13 @@ sc_status sc_db_open(const sc_db_config *cfg, sc_db **out)
          * starting up is expected. The line that says it never came at all is
          * startup.database.failed, and the caller writes it -- only the caller knows whether
          * this process may continue without a database. */
-        sc_log_warn(SC_CAT_DB, "db.connection.failed", "%s, attempt 1 of 1: %s",
-                    sc_db_kind_name(cfg->kind), reason);
+        sc_log_value data[2] = {SC_LOG_UINT("attempt", 1u), SC_LOG_UINT("attempts", 1u)};
+        sc_log_context context = {0};
+
+        context.data = data;
+        context.data_count = 2;
+        sc_log_event(SC_LOG_WARN, SC_CAT_DB, "db.connection.failed", &context, "%s: %s",
+                     sc_db_kind_name(cfg->kind), reason);
     }
     return status;
 }
@@ -330,8 +335,15 @@ sc_status sc_db_open_waiting(const sc_db_config *cfg, const sc_quit_flag *quit, 
         /* One line per failed attempt, the last one included -- contracts/logging.json,
          * db.connection.failed. Nothing is logged on success: the contract has no event for it,
          * and startup.server.started already reports which database this process opened. */
-        sc_log_warn(SC_CAT_DB, "db.connection.failed", "%s, attempt %u of %u: %s",
-                    sc_db_kind_name(cfg->kind), (unsigned)attempt, (unsigned)attempts, reason);
+        {
+            sc_log_value data[2] = {SC_LOG_UINT("attempt", attempt), SC_LOG_UINT("attempts", attempts)};
+            sc_log_context context = {0};
+
+            context.data = data;
+            context.data_count = 2;
+            sc_log_event(SC_LOG_WARN, SC_CAT_DB, "db.connection.failed", &context, "%s: %s",
+                         sc_db_kind_name(cfg->kind), reason);
+        }
         /* Only "the database did not answer" is worth another attempt. A wrong password, a
          * database that does not exist and a refusal by pg_hba.conf all answer something else,
          * and waiting does not turn any of them into a connection. */

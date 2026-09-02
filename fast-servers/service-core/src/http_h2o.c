@@ -43,6 +43,9 @@ typedef struct {
     h2o_handler_t super;
     sc_http_handler_fn fn;
     void *user_data;
+    /* So that on_request can reach the before-route hook, which is per server and not per
+     * route. h2o hands back the handler and nothing else. */
+    struct sc_http_server *server;
 } sc_route_handler;
 
 /*
@@ -77,6 +80,8 @@ struct sc_http_server {
     const sc_quit_flag *quit;
     sc_http_resume_fn on_resume;
     void *on_resume_data;
+    sc_http_handler_fn before_route;
+    void *before_route_data;
     char host[64];
     char role[32];
     uint16_t port;
@@ -106,6 +111,12 @@ const char *sc_http_backend_name(void)
 static int on_request(h2o_handler_t *self, h2o_req_t *req)
 {
     sc_route_handler *route = (sc_route_handler *)self;
+
+    /* What applies to every request, before the one that applies to this path. A hook that
+     * answers has answered; nothing else runs. */
+    if (route->server->before_route != NULL &&
+        route->server->before_route((sc_http_req *)req, route->server->before_route_data) == 0)
+        return 0;
     return route->fn((sc_http_req *)req, route->user_data);
 }
 
@@ -224,6 +235,37 @@ sc_status sc_http_route(sc_http_server *server, const char *path, sc_http_handle
     handler->super.on_req = on_request;
     handler->fn = fn;
     handler->user_data = user_data;
+    handler->server = server;
+    return SC_OK;
+}
+
+sc_status sc_http_route_default(sc_http_server *server, sc_http_handler_fn fn, void *user_data)
+{
+    sc_route_handler *handler;
+
+    if (server == NULL || fn == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+    /* h2o already has the concept: hostconf->fallback_path is the pathconf a request is bound
+     * to when no registered path matched, and it is where h2o's own 404 comes from. Registering
+     * here rather than at "/" is what keeps this a fallback instead of a prefix -- a handler at
+     * "/" would also be consulted for a path that a longer route matched. */
+    handler = (sc_route_handler *)h2o_create_handler(&server->hostconf->fallback_path,
+                                                     sizeof(*handler));
+    if (handler == NULL)
+        return SC_ERR_NO_MEMORY;
+    handler->super.on_req = on_request;
+    handler->fn = fn;
+    handler->user_data = user_data;
+    handler->server = server;
+    return SC_OK;
+}
+
+sc_status sc_http_before_route(sc_http_server *server, sc_http_handler_fn fn, void *user_data)
+{
+    if (server == NULL || fn == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+    server->before_route = fn;
+    server->before_route_data = user_data;
     return SC_OK;
 }
 
@@ -566,6 +608,23 @@ int sc_http_minor_version(const sc_http_req *req)
     return r->version >= 0x101 ? 1 : 0;
 }
 
+sc_status sc_http_header_add(sc_http_req *req, const char *name, const char *value,
+                             size_t value_len)
+{
+    h2o_req_t *r = (h2o_req_t *)req;
+
+    if (r == NULL || name == NULL || value == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+    if (r->res.headers.size >= SC_HTTP_RESPONSE_HEADERS_MAX)
+        return SC_ERR_TOO_LONG;
+    /* h2o copies neither the name nor the value, so the value goes into the request pool --
+     * which lives exactly as long as the request, and therefore longer than the handler that
+     * asked for the header. The name is borrowed and must be a literal, which the header says. */
+    h2o_add_header_by_str(&r->pool, &r->res.headers, name, strlen(name), 0, NULL,
+                          h2o_strdup(&r->pool, value, value_len).base, value_len);
+    return SC_OK;
+}
+
 sc_status sc_http_reply(sc_http_req *req, int status, const char *content_type, const char *body,
                         size_t body_len)
 {
@@ -575,7 +634,29 @@ sc_status sc_http_reply(sc_http_req *req, int status, const char *content_type, 
         return SC_ERR_INVALID_ARGUMENT;
 
     r->res.status = status;
-    r->res.reason = status == 200 ? "OK" : "Error";
+    /* The same table the other backend writes its status line from -- one status, one phrase,
+     * whichever backend answered. It used to be "Error" for everything but 200 here, which was
+     * invisible while the roles served nothing but 200s and 404s and became a difference a
+     * client can see the moment a route answered 400. */
+    r->res.reason = sc_http_reason(status);
+
+    /* A 204 carries no body, and RFC 7230 forbids describing one. SIZE_MAX is how h2o is told
+     * there is no content-length to send; it does not fall back to chunked for this status --
+     * should_use_chunked_encoding refuses 204 explicitly -- so the answer is a status line, the
+     * connection headers and nothing else. The other backend writes the same, which is what
+     * keeps the two indistinguishable to a client. */
+    if (status == 204) {
+        r->res.content_length = SIZE_MAX;
+        if (r->_generator != NULL) {
+            h2o_iovec_t empty = h2o_iovec_init(NULL, 0);
+            h2o_send(r, &empty, 0, H2O_SEND_STATE_FINAL);
+        } else {
+            /* "" rather than NULL: h2o_send_inline copies through h2o_strdup, and a memcpy
+             * from a null pointer is undefined even for zero bytes. */
+            h2o_send_inline(r, "", 0);
+        }
+        return SC_OK;
+    }
     /* Set before sending, and this is not optional. h2o_send_inline deliberately leaves
      * content_length alone -- its own comment says so, because it also serves 304 responses --
      * and without it the HTTP/1 layer falls back to chunked. The other backend always sends a

@@ -80,8 +80,8 @@ a copy in this repository that nothing would ever compare against the original a
 zig build -Dtests test      # the googletest binaries, built and run
 ```
 
-Unit tests live beside the component they test — `service-core/tests/` — rather than in one
-tree at the root, which is where arnm and gradido-blockchain-core keep theirs. Those are one
+Unit tests live beside the component they test — `service-core/tests/`, `backend-core/tests/`,
+`backend/tests/` — rather than in one tree at the root, which is where arnm and gradido-blockchain-core keep theirs. Those are one
 library each; this is five, and a test binary that links one component and sees only that
 component's include directory is what proves the header carries its own dependencies. A shared
 test tree with all five paths on it can never fail that way.
@@ -145,9 +145,30 @@ Configuration comes from the environment, with legacy's names and ports:
 | `FEDERATION_DHT_TOPIC` | unset — `--dht-node` refuses to start without it |
 | `FEDERATION_DHT_SEED` | unset |
 | `LOG_LEVEL` | `info` |
+| `NODE_ENV` | `development` | `production` refuses an empty `DB_PASSWORD` on PostgreSQL, answers cross-origin requests from loopback only, and makes `migrate-down` ask for a confirmation |
 
-Each role answers `GET /_health`. That is the whole of what is implemented: the routes in
-`contracts/server/` are not served yet, and peer discovery is a stub that finds nobody.
+Each role answers `GET /_health`. Beyond that the backend serves one contracted route,
+`POST /user/create` — registration, and the first of the 139 in `contracts/server/`. Every other
+path on the backend answers `ROUTE_NOT_IMPLEMENTED` (501) rather than 404, because a deployment
+runs one implementation and never forwards to the other. Federation serves nothing yet, and peer
+discovery is a stub that finds nobody.
+
+```sh
+fast-servers migrate-down          # take the database down one migration, then stop
+```
+
+`migrate-down` is a command rather than a role: a serving start migrates *up* to the version its
+code needs, so taking the database to N-1 and then serving a build that needs N would undo the
+step and re-apply it in the same breath. In development it runs; on a release
+(`NODE_ENV=production`) it runs only when `DB_MIGRATE_DOWN` names the migration one lower — the
+version the database is to end at, or `0` for an empty one.
+
+Who may call the backend from a browser is `backend/src/cors.c`, and it is the same policy the
+reference path configures: credentials allowed, `GET POST PUT DELETE`, any origin in development
+and loopback alone in production — a deployment serves the frontend from the backend's own
+origin, so in production a browser has no cross-origin question to ask. The three headers that
+file deliberately does not copy from `@elysiajs/cors`, and what a browser does with each of them,
+are written down at the top of it.
 
 ## The database
 
@@ -180,11 +201,16 @@ The variables are the ones the TypeScript path reads, with the same defaults:
 | `DB_DATABASE` | `gradido_community` | |
 | `DB_FILE` | `./gradido_community.sqlite` | SQLite only |
 
-**No role opens a connection yet.** `service_core/db.h` is the surface and its unit test is the
-only caller; a server that refused to start over a database it never queries would be worse
-than one that has not got there. What is still missing — the asynchronous PostgreSQL path and the
-generated row mapping — is in [Architecture.md](Architecture.md),
-*Databases*.
+**The backend opens one at startup and refuses to serve without it.** It waits for the database,
+migrates it to the version this build carries, and reads — or asks for — the community this
+instance is; `backend-core/src/context.c` is that sequence and each of its failures is one log
+line. The migrations are `contracts/migrations/`, embedded in the binary by the build, and the
+schema they build is the one the TypeScript path builds from the same files.
+
+What is still missing — the asynchronous PostgreSQL path and the generated row mapping — is in
+[Architecture.md](Architecture.md), *Databases*. Both statements a repository sends today are
+written by hand against the driver, which is what that section prescribes until the generator
+exists.
 
 `test_db` covers the configuration, the refusals and SQLite for real. Its two PostgreSQL tests
 need a server and skip without one, because a green test that connected to nothing says
@@ -244,7 +270,10 @@ service-core/email/
                   templates by packages/email-native and written into this
                   tree by that package's build. Change them there, not here
                   -- AGENTS.md section 3c
-backend-core/     the backend domain. Empty, and the emptiness is the point
+backend-core/     the backend domain: the migration runner, the repositories and
+                  the interactions, under the data/logic/interactions/repositories
+                  layout Architecture.md prescribes. Nothing originates here --
+                  every line of it is a translation of packages/backend-core
 backend/          the HTTP server the frontend talks to
 federation/       the HTTP server other communities talk to
 dht-node/         the peer discovery role, and the extern "C" boundary to the

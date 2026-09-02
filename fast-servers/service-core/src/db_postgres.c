@@ -107,6 +107,13 @@ static sc_status classify_failure(const char *const *keys, const char *const *va
     }
 }
 
+/** See the call site: a notice is not an error and stderr is not free-form here. */
+static void discard_notice(void *arg, const char *message)
+{
+    (void)arg;
+    (void)message;
+}
+
 sc_status sc_db_postgres_open(const sc_db_config *cfg, sc_db *db)
 {
     const char *keys[8];
@@ -128,6 +135,19 @@ sc_status sc_db_postgres_open(const sc_db_config *cfg, sc_db *db)
         PQfinish(conn);
         return classify_failure(keys, values);
     }
+    /*
+     * libpq's default notice processor writes to stderr, and this process writes one JSON object
+     * per line there -- a German sentence about `CREATE TABLE IF NOT EXISTS` skipping a relation
+     * lands in the middle of the log stream and stops it being parseable. So the notices are
+     * dropped, which is also what the TypeScript path's driver does with them.
+     *
+     * Dropped rather than logged, and that is a decision rather than laziness: the event
+     * vocabulary in contracts/logging.json is closed, there is no event for "the database
+     * remarked on something", and inventing one on this path would be a line the other
+     * implementation never writes. If a notice ever has to be seen, it gets a contracted event
+     * first.
+     */
+    PQsetNoticeProcessor(conn, discard_notice, NULL);
     db->native = conn;
     return SC_OK;
 }

@@ -15,9 +15,10 @@ sc_status backend_core_init(const sc_config *cfg)
         return SC_ERR_INVALID_ARGUMENT;
     if (sc_atomic_inc(&g_users) == 1)
         sc_log_info(SC_CAT_STARTUP, "domain.init", "backend-core is up");
-    /* The database pool, the session cache and the repositories are built here once they
-     * exist. Nothing does yet, and inventing them ahead of the TypeScript path is what
-     * AGENTS.md forbids. */
+    /* The domain's own state, and it has none yet: the database and the home community belong
+     * to whoever opened them -- see bc_context_open, which a role calls and holds the result of
+     * -- and the session cache does not exist. What lands here is what two roles in one process
+     * would have to share, and nothing does. */
     return SC_OK;
 }
 

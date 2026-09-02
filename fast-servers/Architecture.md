@@ -391,10 +391,19 @@ nobody is delivered with a null request rather than into freed memory.
 
 ### Where the model is still open
 
-- **Who owns the mailer and the database handles.** No role opens either yet — *What is built,
-  and what is not*. When one does, the question is process-wide or per-role, and the answer is
-  process-wide for both: two roles in one process talking to one relay and one database file
-  should hold one queue and one writer between them, not two of each competing.
+- **Who owns the mailer and the database handles.** No role opens a mailer yet — *What is built,
+  and what is not*. The backend opens a database, and it opens it per role: the connection and
+  the home community live on the `bc_context` that role holds. When a second role opens one, the
+  answer is process-wide for both: two roles in one process talking to one relay and one database
+  file should hold one queue and one writer between them, not two of each competing.
+- **The database is serialised by a lock on the request path, and that is an interim.** One
+  connection and one loop per core means a mutex around the whole of an interaction — a PGconn
+  used from two threads is a data race, and two `BEGIN … COMMIT` sequences on one SQLite handle
+  interleave into one transaction. It is correct and it blocks the loop it is taken on for the
+  length of one write. What replaces it is already specified above, in *The write must be
+  answered, not acknowledged*: the handler defers, a thread that owns the database does the work,
+  and the loop answers when it comes back. `sc_http_defer` and `sc_http_resume` exist for it and
+  nothing uses them yet. `bc_context.db_lock` says the same thing where the lock is.
 - **Nothing here is in CI yet.** The integration suite drives both backends over four loops and
   both come back clean under TSan and UBSan, which is the check being described — it is run by
   hand today and *Safety net* already says where it belongs.
@@ -455,9 +464,8 @@ TLS to the database is not on that list: libpq is built with `ssl = .LibreSSL`, 
 package h2o is built against, so a database on another machine is reached over an encrypted
 connection. The Unix socket this section prescribes needs none of it.
 
-Nothing opens a connection yet: no role reads a row, and a server that refuses to start over a
-database it never queries would be a regression dressed as progress. `--version` reports which
-drivers are in.
+The backend opens one at startup, migrates the schema out of `contracts/migrations` and reads the
+home community off it; federation still opens none. `--version` reports which drivers are in.
 
 ### Where a query's time goes
 

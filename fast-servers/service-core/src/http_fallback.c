@@ -37,6 +37,9 @@
 #define MAX_CHUNK_LINE 64      /* a size line, extensions included, is short or it is hostile */
 #define MAX_TRAILER 2048
 #define MAX_ROUTES 64
+/* Room for SC_HTTP_RESPONSE_HEADERS_MAX headers, already serialised. Generous for what a
+ * handler adds -- the CORS block is six of them and the longest carries a list of origins. */
+#define EXTRA_HEADERS_MAX 2048
 
 enum framing { FRAME_NONE, FRAME_LENGTH, FRAME_CHUNKED };
 enum ch_state { CH_SIZE, CH_DATA, CH_DATA_CRLF, CH_TRAILER, CH_DONE };
@@ -59,6 +62,13 @@ struct sc_http_server {
 
     sc_route routes[MAX_ROUTES];
     size_t route_count;
+    /* What answers a path no route matched. NULL leaves the plain 404 -- see
+     * sc_http_route_default. */
+    sc_http_handler_fn default_fn;
+    void *default_data;
+    /* What runs before any route -- see sc_http_before_route. */
+    sc_http_handler_fn before_route;
+    void *before_route_data;
 
     /* One loop, so one table, and its loop index is always zero. */
     sc_defer_table defer;
@@ -88,6 +98,11 @@ struct sc_http_req {
     size_t num_headers;
     const char *body;
     size_t body_len;
+
+    /* filled by sc_http_header_add, and written out by respond() ahead of the blank line */
+    size_t extra_header_count;
+    size_t extra_headers_len;
+    char extra_headers[EXTRA_HEADERS_MAX];
 
     /* filled by sc_http_reply */
     int replied;
@@ -291,47 +306,36 @@ static void on_written(uv_write_t *w, int status)
         uv_read_start((uv_stream_t *)&c->handle, on_alloc, on_read);
 }
 
-static const char *reason_for(int status)
-{
-    switch (status) {
-    case 200:
-        return "OK";
-    case 400:
-        return "Bad Request";
-    case 401:
-        return "Unauthorized";
-    case 403:
-        return "Forbidden";
-    case 404:
-        return "Not Found";
-    case 405:
-        return "Method Not Allowed";
-    case 413:
-        return "Payload Too Large";
-    case 431:
-        return "Request Header Fields Too Large";
-    case 500:
-        return "Internal Server Error";
-    case 501:
-        return "Not Implemented";
-    default:
-        return status < 400 ? "OK" : "Error";
-    }
-}
-
 /** Serialise a status line, the headers and @p body into c->out and put it on the wire. */
 static void respond(struct conn *c, int status, const char *content_type, const char *body,
-                    size_t body_len, int keep_alive)
+                    size_t body_len, int keep_alive, const char *extra_headers)
 {
     uv_buf_t buf;
-    int n = snprintf(c->out, OUT_BUF,
-                     "HTTP/1.1 %d %s\r\n"
-                     "Content-Type: %s\r\n"
-                     "Content-Length: %zu\r\n"
-                     "Connection: %s\r\n"
-                     "\r\n",
-                     status, reason_for(status), content_type, body_len,
-                     keep_alive ? "keep-alive" : "close");
+    const char *extra = extra_headers != NULL ? extra_headers : "";
+    /* A 204 carries no body, and RFC 7230 forbids describing one: no Content-Length, and no
+     * Content-Type for a representation that is not there. h2o omits both for the same status,
+     * which is what keeps the two backends indistinguishable to a client. */
+    int n = status == 204
+                ? snprintf(c->out, OUT_BUF,
+                           "HTTP/1.1 %d %s\r\n"
+                           "Connection: %s\r\n"
+                           "%s"
+                           "\r\n",
+                           status, sc_http_reason(status), keep_alive ? "keep-alive" : "close", extra)
+                : snprintf(c->out, OUT_BUF,
+                           "HTTP/1.1 %d %s\r\n"
+                           "Content-Type: %s\r\n"
+                           "Content-Length: %zu\r\n"
+                           "Connection: %s\r\n"
+                           "%s"
+                           "\r\n",
+                           status, sc_http_reason(status), content_type, body_len,
+                           keep_alive ? "keep-alive" : "close", extra);
+    /* A body a 204 must not carry is dropped here rather than refused: the status is the
+     * caller's decision and the framing is this function's, so the two cannot disagree on the
+     * wire whatever a handler passed in. */
+    if (status == 204)
+        body_len = 0;
     if (n < 0 || (size_t)n + body_len > OUT_BUF) {
         /* Cannot even say what went wrong within the buffer. */
         teardown(c);
@@ -354,7 +358,8 @@ static void respond(struct conn *c, int status, const char *content_type, const 
 static void fail(struct conn *c, int status, const char *body)
 {
     /* An error ends the connection: the framing is no longer trustworthy. */
-    respond(c, status, "text/plain", body, strlen(body), 0);
+    /* An error before or beside a request carries none of what a handler would have added. */
+    respond(c, status, "text/plain", body, strlen(body), 0, NULL);
 }
 
 /** @return -1 when the value is not a number we are willing to accept */
@@ -543,6 +548,12 @@ static void dispatch(struct conn *c, struct sc_http_req *req)
     size_t path_len = query != NULL ? (size_t)(query - req->path) : req->path_len;
     size_t i;
 
+    /* What applies to every request, before the one that applies to this path. A hook that
+     * answered has answered; nothing else runs. */
+    if (c->server->before_route != NULL &&
+        c->server->before_route(req, c->server->before_route_data) == 0)
+        return;
+
     for (i = 0; i != c->server->route_count; ++i) {
         const sc_route *route = &c->server->routes[i];
         if (route->path_len != path_len || memcmp(route->path, req->path, path_len) != 0)
@@ -550,6 +561,9 @@ static void dispatch(struct conn *c, struct sc_http_req *req)
         if (route->fn(req, route->user_data) == 0)
             return;
     }
+    if (c->server->default_fn != NULL &&
+        c->server->default_fn(req, c->server->default_data) == 0)
+        return;
     req->replied = 1;
     req->status = 404;
     req->content_type = "text/plain";
@@ -672,7 +686,8 @@ static void process(struct conn *c)
 
         keep = wants_keep_alive(req);
         /* Copies the answer out before the buffer moves. */
-        respond(c, req->status, req->content_type, req->reply, req->reply_len, keep);
+        respond(c, req->status, req->content_type, req->reply, req->reply_len, keep,
+                req->extra_headers);
         consume(c, wire_len);
     }
 }
@@ -760,7 +775,8 @@ static void deliver(sc_http_server *server, int32_t slot)
         c->req.reply_len = 0;
     }
     keep = wants_keep_alive(&c->req);
-    respond(c, c->req.status, c->req.content_type, c->req.reply, c->req.reply_len, keep);
+    respond(c, c->req.status, c->req.content_type, c->req.reply, c->req.reply_len, keep,
+            c->req.extra_headers);
     consume(c, c->deferred_wire_len);
 }
 
@@ -914,6 +930,24 @@ sc_status sc_http_route(sc_http_server *server, const char *path, sc_http_handle
     return SC_OK;
 }
 
+sc_status sc_http_route_default(sc_http_server *server, sc_http_handler_fn fn, void *user_data)
+{
+    if (server == NULL || fn == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+    server->default_fn = fn;
+    server->default_data = user_data;
+    return SC_OK;
+}
+
+sc_status sc_http_before_route(sc_http_server *server, sc_http_handler_fn fn, void *user_data)
+{
+    if (server == NULL || fn == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+    server->before_route = fn;
+    server->before_route_data = user_data;
+    return SC_OK;
+}
+
 sc_status sc_http_listen(sc_http_server *server)
 {
     struct sockaddr_in addr;
@@ -1011,6 +1045,31 @@ const char *sc_http_header(const sc_http_req *req, const char *name, size_t *len
 int sc_http_minor_version(const sc_http_req *req)
 {
     return req != NULL && req->minor_version >= 1 ? 1 : 0;
+}
+
+sc_status sc_http_header_add(sc_http_req *req, const char *name, const char *value,
+                             size_t value_len)
+{
+    int written;
+
+    if (req == NULL || name == NULL || value == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+    if (req->extra_header_count >= SC_HTTP_RESPONSE_HEADERS_MAX)
+        return SC_ERR_TOO_LONG;
+    /* Serialised as it is added rather than kept as a list: the answer is written from one
+     * buffer, and a header that does not fit has to be refused here where the caller can be
+     * told, not later where only the connection would notice. */
+    written = snprintf(req->extra_headers + req->extra_headers_len,
+                       sizeof(req->extra_headers) - req->extra_headers_len, "%s: %.*s\r\n", name,
+                       (int)value_len, value);
+    if (written <= 0 ||
+        (size_t)written >= sizeof(req->extra_headers) - req->extra_headers_len) {
+        req->extra_headers[req->extra_headers_len] = '\0';
+        return SC_ERR_TOO_LONG;
+    }
+    req->extra_headers_len += (size_t)written;
+    ++req->extra_header_count;
+    return SC_OK;
 }
 
 sc_status sc_http_reply(sc_http_req *req, int status, const char *content_type, const char *body,

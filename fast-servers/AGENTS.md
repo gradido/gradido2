@@ -549,6 +549,47 @@ sodium its SHA-256 is the portable C one — crypto_hash/sha256/ has only
        0.43 GB/s where OpenSSL does 2.2. At JWT sizes that gap mostly
        disappears into per-call overhead, so swapping the library buys
        almost nothing; measure before believing otherwise.
+h2o    the status line's reason phrase is res.reason, and it used to be
+       "Error" for everything but 200 here while the other backend had a
+       table. Invisible while the roles answered 200 and 404, a difference
+       a client can see the moment a route answers 400. One table now, in
+       http_common.c, and both backends read it.
+h2o    a header added with sc_http_header_add is not copied by h2o: the
+       value goes into the request pool, which outlives the handler, and
+       the name has to be a literal. A stack buffer handed straight to
+       h2o_add_header_by_str is a header value read after the frame is
+       gone.
+cors   what @elysiajs/cors puts on the wire is not all policy. Three of
+       its headers are inert -- Allow-Headers on a response that is not a
+       preflight, Expose-Headers filled with request header names, and the
+       literal "undefined" when a preflight asked about no headers -- and
+       backend/src/cors.c says so rather than reproducing them. AGENTS.md
+       section 0: do not force artificial parity. What a browser acts on
+       was compared request by request against the reference, not reasoned
+       about.
+h2o    a 204 must not describe a body it does not have. res.content_length
+       is SIZE_MAX for "there is none" -- 0 makes h2o send Content-Length: 0
+       -- and should_use_chunked_encoding refuses 204 anyway, so nothing
+       falls back to chunked. The fallback backend writes the same status
+       line and the same absent headers; sc_http_reply owns both.
+pg     libpq's default notice processor writes to stderr, and this process
+       writes one JSON object per line there. A `CREATE TABLE IF NOT EXISTS`
+       that skipped an existing relation lands in the middle of the log
+       stream and stops it parsing. PQsetNoticeProcessor at connect, and the
+       notices are dropped: the event vocabulary is closed and there is no
+       contracted event for "the database remarked on something".
+js     valibot's maxLength and minLength count UTF-16 code units and its
+       trim() removes U+00A0 and U+FEFF among others. A byte count refuses
+       names the reference path accepts -- every second German surname is
+       one unit and two bytes -- and sizes buffers against the wrong number.
+       backend/src/field_rules.c is where that arithmetic lives, and its
+       test compares against valibot's own answers rather than its source.
+arnm   a scalar member handed out as ARNM_JSON_FIELD_TYPE_VALUE cannot be
+       read, so "what type is this member" is answered by asking: a walk
+       typed BOOL answers only for a bool, DOUBLE only for a number, and
+       the two structural reads answer for an object and an array. What is
+       left is null. user_routes.c needs it because valibot names the value
+       in its refusal and a client is told the same sentence either way.
 core   grdu_binary_to_base64 / grdu_binary_from_base64 are pinned to
        sodium_base64_VARIANT_ORIGINAL. A JWT is base64url without padding,
        so jwt.c calls sodium directly with the url-safe variant. The two
