@@ -63,6 +63,21 @@ route missing on the fast path is never forwarded to TypeScript: the server answ
 fast-path deployment offers fewer routes — it never means a mixed deployment. The reason is
 the session cache; see `Architecture.md`, *One implementation per deployment*.
 
+**Never start both against one database, not even briefly.** The session cache is the reason
+the rule exists; the database is the reason breaking it is expensive. Two processes that open
+the same database both migrate it, and two migrators racing on one schema is not a state
+either of them can report or recover from. There is no mode in which running the two at once
+is useful: the same routes, the same schema, the same rows — one of them is simply the one
+that is deployed.
+
+Switching *between* them is a different thing and is supported: the same database, migrated
+by whichever path was running and served by the other afterwards. That is why
+`contracts/migrations` holds the SQL rather than either implementation — a schema built by
+one has to be the schema the other expects. Stop one, then start the other.
+
+Several instances of the *same* implementation behind a load balancer are normal and are not
+this rule — see `Architecture.md`, *Multiple instances*.
+
 When changing TypeScript: identify whether business behavior changed, locate the
 corresponding domain path in `fast-servers/`, assess whether it is affected, update it only
 when required. Do **not** force artificial parity.
@@ -85,7 +100,8 @@ packages/          TypeScript, reference implementation
   admin            admin frontend
   frontend         user frontend
   frontend-core    UI code shared by admin and frontend
-  shared           code shared by frontend and backend: route definitions, schemas
+  shared           code shared by frontend and backend: valibot schemas, error
+                   codes, units — everything a browser can load
   shared-native    determinism-critical C, called via N-API and linked by fast-servers
   email-native     the e-mail templates as C: the pug sources plus the codegen that
                    turns them into a byte pool and an op list at build time. Behind
@@ -121,8 +137,39 @@ It must stay free of both the HTTP server and the database: the dht-node imports
 `Architecture.md` is explicit that the dht-node touches no database. The database connection
 therefore lives in `backend-core`, next to the repositories that use it.
 
-Route definitions belong in `packages/shared` so frontend, admin and frontend-core can
-import their types via Eden Treaty.
+### Routes live in the backend, and only their type leaves it
+
+**Route definitions belong in `packages/backend/src/server`, one file per domain**
+(`userRoutes.ts`, `transactionRoutes.ts`, …), each holding the whole route: path, valibot
+schemas, status codes, and the call into the Interaction that does the work. There is no
+handler interface between a route and its Interaction — a route that only names the
+Interaction and hands it the context needs nothing in between, and an interface there is a
+second place to look for every route.
+
+Each domain file also exports its own type, `export type UserRoutes = ReturnType<typeof
+userRoutes>`, and `server/app.ts` exports `BackendApp` for the whole application. **That
+type is the only thing a frontend ever imports from the backend**, always as `import type`:
+
+```ts
+import type { UserRoutes } from '@gradido/backend/server'
+export const userApi = treaty<UserRoutes>(CONFIG.API_BASE_URL, options).user
+```
+
+`import type` is erased before the bundler sees the module, so nothing of Elysia, drizzle or
+the database reaches the browser — verified by building the frontend and grepping the chunk.
+This is Eden Treaty as ElysiaJS intends it, and it is *do not import what you cannot load*
+again: `@gradido/backend` is only reachable by subpath because its root starts a process.
+
+The rule that keeps it true has one line: **never import a value from `@gradido/backend` in
+frontend code.** Anything the page needs at runtime — error codes, field schemas — belongs
+in `@gradido/shared`, which is written to be loadable in a browser and no longer depends on
+Elysia at all.
+
+An earlier layout put the routes in `packages/shared` behind a `BackendHandlers` interface,
+so the frontend could name their type without reaching into the backend. It bought nothing
+that `import type` does not buy for free, it dragged Elysia into a package the browser
+loads — one value import from there cost 213 kB of TypeBox in the bundle — and it split
+every route across two packages. Do not reintroduce it.
 
 ### One index.ts per folder
 
@@ -501,7 +548,18 @@ build artifact is there either way. If you suspect the cache rather than the cod
 re-executes instead of guessing.
 
 Record Elysia idioms that keep being reinvented here as well; h2o belongs in
-`fast-servers/AGENTS.md`.
+`fast-servers/AGENTS.md`. Three that have already cost something:
+
+- **Never break the method chain.** Elysia derives the application's type from it, and that
+  type is what Eden Treaty binds in the frontend. Written as statements
+  (`const app = new Elysia(); app.use(...)`), the routes stop appearing in that type and
+  every check the frontend has disappears silently.
+- **The app must be the root instance.** Mount plugins onto it (`.use(cors())`), never mount
+  it inside another Elysia: a parent answers `NOT_FOUND` itself, before the app's `onError`
+  runs, and the contracted `ROUTE_NOT_IMPLEMENTED` stops happening.
+- **Give every plugin a `name`.** Elysia deduplicates by it. A named plugin that takes
+  arguments needs a `seed` as well if the same name is ever mounted twice with different
+  arguments — otherwise the second one is silently ignored.
 
 ---
 

@@ -37,8 +37,8 @@
   "primaryKey": ["id"],
   "unique": [],
   "indexes": [
-    { "name": "idx_creachat_threads_user_id", "columns": ["user_id"] },
-    { "name": "idx_creachat_threads_updated_at", "columns": ["updated_at"] }
+    { "name": "creachat_threads_user_id_idx", "columns": ["user_id"] },
+    { "name": "creachat_threads_updated_at_idx", "columns": ["updated_at"] }
   ],
   "notes": [
     "The messages column is a document, not a relation, and that is the design: the Anthropic Messages API is stateless, so every call sends the whole thread anyway. Splitting it into rows would buy nothing and cost a join on every turn.",

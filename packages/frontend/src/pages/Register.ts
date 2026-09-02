@@ -8,6 +8,7 @@ import {
   ValidatedCheckbox,
   ValidatedInput,
 } from '@gradido/frontend-core'
+import { ErrorCode } from '@gradido/shared/errors'
 import {
   emailPrevalidateSchema,
   emailSchema,
@@ -18,7 +19,7 @@ import {
   privacyConsentSchema,
 } from '@gradido/shared/schemas'
 import m from 'mithril'
-import { register } from '../client'
+import { RegisterError, register } from '../client'
 import { Message, RouterLink } from '../components'
 import { CONFIG } from '../config'
 import { ROUTES } from '../routes'
@@ -73,10 +74,33 @@ export class Register implements m.ClassComponent {
       await register({ firstName, lastName, email, language: currentLocale() })
       this.registered = true
     } catch (error) {
-      toaster.error(`${t.__('Unknown error: ')}${(error as Error).message}`)
+      this.handleError(error)
     } finally {
       this.submitting = false
       m.redraw()
+    }
+  }
+
+  /**
+   * A registration that came back with an address already in use looks exactly like one
+   * that did not — the server does not say, on purpose — so there is no such case here.
+   * What is left is a server that cannot answer at all.
+   */
+  private handleError(error: unknown) {
+    const code = error instanceof RegisterError ? error.code : ErrorCode.Unknown
+    switch (code) {
+      case ErrorCode.RouteNotImplemented:
+        // The deployment runs an implementation that does not serve this route, and
+        // nothing forwards it elsewhere — see Architecture.md, One implementation per
+        // deployment. Retrying is pointless, so say so rather than offering hope.
+        toaster.error(t.__('This server does not offer registration yet.'))
+        break
+      case ErrorCode.ValidationFailed:
+        // The form validated first, so reaching this means the two rule sets disagree.
+        toaster.error(t.__('Please check your entries.'))
+        break
+      default:
+        toaster.error(`${t.__('Unknown error: ')}${(error as Error).message}`)
     }
   }
 

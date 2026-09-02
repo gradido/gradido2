@@ -119,12 +119,12 @@
     { "name": "updated_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
   ],
   "primaryKey": ["id"],
-  "unique": [{ "name": "uniq_crea_records_record_uuid", "columns": ["record_uuid"] }],
+  "unique": [{ "name": "crea_records_record_uuid_key", "columns": ["record_uuid"] }],
   "indexes": [
-    { "name": "idx_crea_records_contribution_ref", "columns": ["contribution_ref"] },
-    { "name": "idx_crea_records_community_uuid", "columns": ["community_uuid"] },
-    { "name": "idx_crea_records_person_pseudonym", "columns": ["person_pseudonym"] },
-    { "name": "idx_crea_records_category_key", "columns": ["category_key"] }
+    { "name": "crea_records_contribution_ref_idx", "columns": ["contribution_ref"] },
+    { "name": "crea_records_community_uuid_idx", "columns": ["community_uuid"] },
+    { "name": "crea_records_person_pseudonym_idx", "columns": ["person_pseudonym"] },
+    { "name": "crea_records_category_key_idx", "columns": ["category_key"] }
   ],
   "notes": [
     "The three version columns are what makes an old row readable: category_key, applied_rule and the verdicts only mean something together with the taxonomy, ruleset and behavior they were produced under. Re-interpreting an old row under today's taxonomy is wrong, and both implementations must carry the version through rather than dropping it.",

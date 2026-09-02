@@ -41,7 +41,7 @@
     { "name": "updated_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
   ],
   "primaryKey": ["id"],
-  "unique": [{ "name": "uniq_creation_groups_tag", "columns": ["tag"] }],
+  "unique": [{ "name": "creation_groups_tag_key", "columns": ["tag"] }],
   "indexes": [],
   "notes": [
     "The table was called group_tags until migration 0110 renamed it, along with contribution_group_tags -> contribution_creation_groups, user_group_tags -> user_creation_groups, contributions.group_tags_set_at -> creation_groups_set_at and user_roles.visible_group_tags -> visible_creation_groups. A migration reading a database older than 0110 finds the old names.",

@@ -62,15 +62,15 @@
   "primaryKey": ["id"],
   "unique": [
     {
-      "name": "dlt_transactions_hiero_transacion_id_unique",
+      "name": "dlt_transactions_hiero_transaction_id_key",
       "columns": ["hiero_transaction_id"],
       "note": "The name is misspelled in legacy ('transacion'). Names are stable forever — see contracts/AGENTS.md — so it is written here as it is, not as it should have been."
     }
   ],
   "indexes": [
-    { "name": "idx_dlt_transaction_id", "columns": ["transaction_id"] },
-    { "name": "idx_dlt_user_id", "columns": ["user_id"] },
-    { "name": "idx_dlt_transaction_link_id", "columns": ["transaction_link_id"] }
+    { "name": "dlt_transactions_transaction_id_idx", "columns": ["transaction_id"] },
+    { "name": "dlt_transactions_user_id_idx", "columns": ["user_id"] },
+    { "name": "dlt_transactions_transaction_link_id_idx", "columns": ["transaction_link_id"] }
   ],
   "notes": [
     "verified and verified_at say the same thing twice, and nothing in the schema keeps them in step. Both implementations must write both or gradido2 must drop the boolean; a row with verified = true and verified_at NULL is an inconsistency, not a state.",

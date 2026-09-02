@@ -1,0 +1,23 @@
+{
+  "contractVersion": 1,
+  "kind": "enum",
+  "name": "Language",
+  "representation": "string",
+  "source": "backend/src/graphql/resolver/UserResolver.ts — const LANGUAGES",
+  "storedIn": "users.language",
+  "unknownValuePolicy": "ignore_and_warn",
+  "default": "de",
+  "values": [
+    { "name": "LANGUAGE_DE", "value": "de" },
+    { "name": "LANGUAGE_EN", "value": "en" },
+    { "name": "LANGUAGE_ES", "value": "es" },
+    { "name": "LANGUAGE_FR", "value": "fr" },
+    { "name": "LANGUAGE_NL", "value": "nl" },
+    { "name": "LANGUAGE_IT", "value": "it" },
+    { "name": "LANGUAGE_TR", "value": "tr" },
+    { "name": "LANGUAGE_RU", "value": "ru" },
+    { "name": "LANGUAGE_PT", "value": "pt" },
+    { "name": "LANGUAGE_EL", "value": "el" }
+  ],
+  "note": "The language a member is written to in. It is not the set of locales the frontend has catalogs for — that set is smaller and is a frontend concern, so it does not belong here (contracts/AGENTS.md, working rule 3). The policy is 'ignore_and_warn' because that is what legacy does: an unknown or absent language falls back to the default instead of refusing the request, and a registration must not fail over the browser's locale."
+}

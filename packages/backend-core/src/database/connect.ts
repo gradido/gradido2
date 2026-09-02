@@ -2,7 +2,7 @@ import { Database as SqliteDatabase } from 'bun:sqlite'
 import { sql } from 'drizzle-orm'
 import { type BunSQLDatabase, drizzle as drizzlePostgres } from 'drizzle-orm/bun-sql'
 import { type BunSQLiteDatabase, drizzle as drizzleSqlite } from 'drizzle-orm/bun-sqlite'
-import type { DatabaseEnv } from './schema'
+import type { DatabaseConfig } from './schema'
 
 /**
  * The database, plus which one it is.
@@ -36,7 +36,7 @@ export type DatabaseConnection =
  * be "not yet" and that is worth waiting for. The choice of database is a startup
  * decision and cannot change while running.
  */
-export function connectDatabase(env: DatabaseEnv): DatabaseConnection {
+export function connectDatabase(env: DatabaseConfig): DatabaseConnection {
   if (env.DB_TYPE === 'sqlite') {
     const sqlite = new SqliteDatabase(env.DB_FILE, { create: true, strict: true })
     /* WAL lets readers and one writer work at the same time, which is the whole point of

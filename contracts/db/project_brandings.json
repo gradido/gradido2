@@ -32,7 +32,7 @@
     { "name": "logo_url", "type": "varchar(255)", "nullable": true, "default": null }
   ],
   "primaryKey": ["id"],
-  "unique": [{ "name": "project_brandings_alias_unique", "columns": ["alias"] }],
+  "unique": [{ "name": "project_brandings_alias_key", "columns": ["alias"] }],
   "indexes": [],
   "notes": [
     "No created_at, no updated_at. Legacy never added them and nothing reads them; gradido2 adding them is a schema decision, not a repair.",

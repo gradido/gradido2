@@ -1,0 +1,48 @@
+{
+  "contractVersion": 1,
+  "kind": "migrations",
+  "description": "Every step that builds the database, in the order they are applied. Whichever implementation is deployed runs these same files, so a schema is decided here once instead of twice — and a database migrated by one path is the database the other expects. The two are never run against it at the same time; see ../../AGENTS.md.",
+  "layout": "One directory per migration, named as the migration is. The files inside are always called the same thing, so they are declared once in `files` rather than repeated per entry — what has to be listed explicitly is the set of migrations, not the fixed structure within one.",
+  "files": {
+    "up": {
+      "postgresql": "up.postgresql.sql",
+      "sqlite": "up.sqlite.sql"
+    },
+    "down": {
+      "postgresql": "down.postgresql.sql",
+      "sqlite": "down.sqlite.sql"
+    },
+    "pseudocode": "pseudocode.md"
+  },
+  "notes": [
+    "Listed explicitly rather than discovered from the directory. A glob is a different set on a bundled build than in a checkout, and the one thing a schema version must not depend on is how the process was packaged.",
+    "A migration is never edited once it has run anywhere. It is followed by another one. Until the first release there is nowhere for one to have run, which is why 1 and 2 are still being changed.",
+    "The version is what goes into migrations.version, and the name into migrations.file_name — see db/migrations.json. Which process is allowed to migrate is still open there; nothing in this directory answers it.",
+    "A process refuses to run against a database whose applied migrations are not a prefix of the ones it carries: more of them, or a different name at the same version, means the schema was built by other code and applying anything on top of it produces one that neither branch describes. The refusal names the migration to go back past.",
+    "A down step is not the inverse of an up step. DROP TABLE undoes CREATE TABLE; nothing undoes the rows that were in it. Every down file that destroys data says so at the top, because the person reading it is about to decide something they cannot take back.",
+    "A down run undoes exactly one migration, the one at the head, and undoing three is running it three times. A loop would make the difference between meaning one and meaning all of them an argument nobody checks twice, and the worst case here is a table with every account in it. Development may run one without ceremony. A release must confirm it by naming the migration the database is to end at — one lower than where it is — so the confirmation describes a state rather than a permission and stops being true the moment it is reached. How it reaches the process is each implementation's own business; that it is required is not.",
+    "An entry carries \"down\": false when the migration has no writable inverse — a dropped column cannot be restored — and says why in downNote. It carries \"sql\": false with a pseudocode.md when the step cannot be SQL at all. Both are answers; a file that is simply absent is not."
+  ],
+  "open": [
+    {
+      "question": "May a down run touch a database a server is serving from, and may it cross a release boundary?",
+      "detail": "The reference path has a migrate-down command now: one step, and on a release only when the migration to undo is named explicitly. What it does not check is whether anybody is serving from that database at the time — the schema would change under a running process — or whether the step being undone belongs to an older release than the one that is deployed. Both are answerable with the migrations table and neither is answered.",
+      "status": "unanswered — the command exists and is deliberately narrow; these two are what would widen it safely"
+    }
+  ],
+  "migrations": [
+    {
+      "version": "1",
+      "name": "0001_communities",
+      "kind": "schema",
+      "description": "The communities table. First, because users.community_id is NOT NULL and references it."
+    },
+    {
+      "version": "2",
+      "name": "0002_users",
+      "kind": "schema",
+      "description": "users and user_contacts, the two tables an account is made of.",
+      "downNote": "Destroys every account. See the file."
+    }
+  ]
+}

@@ -7,12 +7,12 @@
   "columns": [
     { "name": "id", "type": "uint64", "nullable": false, "identity": true },
     {
-      "name": "user_id",
+      "name": "user_aliases_user_id_idx",
       "type": "uint64",
       "nullable": false,
       "references": { "table": "users", "column": "id" }
     },
-    { "name": "alias", "type": "varchar(20)", "nullable": false },
+    { "name": "user_aliases_alias_community_uuid_key", "type": "varchar(20)", "nullable": false },
     {
       "name": "community_uuid",
       "type": "uuid",
@@ -37,8 +37,10 @@
     }
   ],
   "primaryKey": ["id"],
-  "unique": [{ "name": "alias", "columns": ["alias", "community_uuid"] }],
-  "indexes": [{ "name": "user_id", "columns": ["user_id"] }],
+  "unique": [
+    { "name": "user_aliases_alias_community_uuid_key", "columns": ["alias", "community_uuid"] }
+  ],
+  "indexes": [{ "name": "user_aliases_user_id_idx", "columns": ["user_id"] }],
   "notes": [
     "Only origin = 'chosen' counts against ALIAS_QUOTA_PER_WINDOW. Keeping the name the system built is an answer, not a pick, and costs nothing. An implementation that counts rows instead of counting chosen rows charges a member a quarter of their yearly quota for a name nobody chose.",
     "'chosen' and 'adopted' mean the member has answered the question the window at first login asks; 'assigned' and 'migrated' mean they have not. That is the only thing the first-login window may test.",

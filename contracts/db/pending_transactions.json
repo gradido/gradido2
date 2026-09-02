@@ -14,7 +14,7 @@
       "description": "NEW, PENDING, SETTLED or REVERTED — the four steps of server/federation/send-coins.json."
     },
     {
-      "name": "previous",
+      "name": "pending_transactions_previous_key",
       "type": "uint64",
       "nullable": true,
       "default": null,
@@ -94,7 +94,7 @@
     { "name": "linked_transaction_id", "type": "uint64", "nullable": true, "default": null }
   ],
   "primaryKey": ["id"],
-  "unique": [{ "name": "previous", "columns": ["previous"] }],
+  "unique": [{ "name": "pending_transactions_previous_key", "columns": ["previous"] }],
   "indexes": [],
   "notes": [
     "This table mirrors transactions column for column, minus the append-only rule. That is deliberate: settling means moving the row's content into transactions unchanged, so any column that exists on one and not the other is a settle-time conversion waiting to go wrong.",

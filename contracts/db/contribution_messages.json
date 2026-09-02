@@ -61,7 +61,7 @@
   "unique": [],
   "indexes": [
     {
-      "name": "idx_contribution_messages_contribution_id",
+      "name": "contribution_messages_contribution_id_idx",
       "columns": ["contribution_id"],
       "note": "Legacy declares it with a bare @Index() on the column, so TypeORM names it. Migration 0075 added it; the generated name in a legacy database is not this one."
     }

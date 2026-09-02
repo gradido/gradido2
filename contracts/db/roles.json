@@ -14,7 +14,7 @@
       "description": "Referenced by role_rights.role_id. Not by user_roles, which links by name — see there."
     },
     {
-      "name": "name",
+      "name": "roles_name_key",
       "type": "varchar(40)",
       "nullable": false,
       "description": "Unique, and what user_roles.role holds. Must not equal a RoleNames value: a created role that shadows a default one would be unreachable, because the default is resolved first. The database cannot check that — the code enum is not visible to it — so the application rejects it on write and a contract test asserts the check exists."
@@ -64,7 +64,7 @@
   ],
   "unique": [
     {
-      "name": "name",
+      "name": "roles_name_key",
       "columns": [
         "name"
       ]

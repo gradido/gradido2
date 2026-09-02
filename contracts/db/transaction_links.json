@@ -61,9 +61,12 @@
   "primaryKey": ["id"],
   "unique": [],
   "indexes": [
-    { "name": "idx_user_id_valid_until", "columns": ["user_id", "valid_until", "id"] },
     {
-      "name": "idx_userId",
+      "name": "transaction_links_user_id_valid_until_id_idx",
+      "columns": ["user_id", "valid_until", "id"]
+    },
+    {
+      "name": "transaction_links_user_id_idx",
       "columns": ["user_id"],
       "note": "Redundant with the leading column of idx_user_id_valid_until. Do not recreate it in gradido2."
     }

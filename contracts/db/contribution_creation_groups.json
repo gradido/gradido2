@@ -42,7 +42,7 @@
   ],
   "unique": [
     {
-      "name": "uniq_contribution_creation_group",
+      "name": "contribution_creation_groups_pair_key",
       "columns": [
         "contribution_id",
         "creation_group_id"
@@ -51,14 +51,14 @@
   ],
   "indexes": [
     {
-      "name": "idx_ccg_contribution_id",
+      "name": "contribution_creation_groups_contribution_id_idx",
       "columns": [
         "contribution_id"
       ],
       "note": "Redundant with the leading column of uniq_contribution_creation_group. Do not recreate it in gradido2."
     },
     {
-      "name": "idx_ccg_creation_group_id",
+      "name": "contribution_creation_groups_creation_group_id_idx",
       "columns": [
         "creation_group_id"
       ]

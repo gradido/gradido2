@@ -1,5 +1,7 @@
-import type { LoginInput, RegisterInput } from '@gradido/shared/schemas'
+import { ErrorCode } from '@gradido/shared/errors'
+import type { LoginInput, UserCreateRequest } from '@gradido/shared/schemas'
 import { CONFIG } from '../config'
+import { userApi } from './backendClient'
 
 /**
  * Reasons a login can fail that the page reacts to differently. Anything else is
@@ -29,12 +31,11 @@ export interface LoginResult {
   language: string
 }
 
-// TODO: the backend has no auth route yet. Once it does, its definition belongs in
-// `contracts/server` and in `packages/shared`, and this call becomes an Eden Treaty
-// call whose request and response types come from there instead of being declared
-// here. See Architecture.md, *HTTP server*.
-const LOGIN_PATH = '/auth/login'
-const REGISTER_PATH = '/auth/register'
+// TODO: `user.login` has no backend route yet. When it gets one, its definition goes into
+// `packages/backend/src/server/userRoutes.ts` beside `user.create` and this call becomes
+// `userApi.login.post(...)` like the registration below — at which point this hand-written
+// fetch and the shape it guesses at can go.
+const LOGIN_PATH = '/user/login'
 
 const isLoginErrorCode = (value: unknown): value is LoginErrorCode =>
   Object.values(LoginErrorCode).includes(value as LoginErrorCode)
@@ -63,12 +64,36 @@ async function post(path: string, input: unknown): Promise<unknown> {
   return body
 }
 
+export class RegisterError extends Error {
+  constructor(
+    readonly code: ErrorCode,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'RegisterError'
+  }
+}
+
 /**
- * Register. Nothing comes back but success: the account is not usable until the address
- * is confirmed, so the page's job afterwards is to send the visitor to their inbox.
+ * `user.create`. An empty 204 comes back, and that is the design: the account cannot be used
+ * until the address is confirmed, and the answer is byte-identical whether or not a row was
+ * written — the server must not tell a caller that an address is already registered. So the
+ * page's job afterwards is to send the visitor to their inbox, in every case.
  */
-export async function register(input: RegisterInput & { language: string }): Promise<void> {
-  await post(REGISTER_PATH, input)
+export async function register(input: UserCreateRequest): Promise<void> {
+  const { error } = await userApi.create.post(input)
+  if (error === null) {
+    return
+  }
+
+  /* A network failure has no status and no contracted body; everything else answers with
+     `{ error: { code, name, message } }` from contracts/errors/api.json. */
+  const body = error.value as { error?: { code?: unknown; message?: unknown } } | undefined
+  const code = body?.error?.code
+  throw new RegisterError(
+    typeof code === 'number' && code in ErrorCode ? (code as ErrorCode) : ErrorCode.Unknown,
+    typeof body?.error?.message === 'string' ? body.error.message : String(error.value),
+  )
 }
 
 export async function login(input: LoginInput): Promise<LoginResult> {
