@@ -13,7 +13,7 @@
       "identity": true
     },
     {
-      "name": "role_id",
+      "name": "role_rights_role_id_idx",
       "type": "uint64",
       "nullable": false,
       "references": {
@@ -57,7 +57,7 @@
   ],
   "unique": [
     {
-      "name": "role_domain_right",
+      "name": "role_rights_role_id_domain_right_name_key",
       "columns": [
         "role_id",
         "domain",
@@ -67,7 +67,7 @@
   ],
   "indexes": [
     {
-      "name": "role_id",
+      "name": "role_rights_role_id_idx",
       "columns": [
         "role_id"
       ]

@@ -51,7 +51,7 @@
   ],
   "primaryKey": ["id"],
   "unique": [],
-  "indexes": [{ "name": "idx_public_key", "columns": ["public_key"] }],
+  "indexes": [{ "name": "community_handshake_states_public_key_idx", "columns": ["public_key"] }],
   "notes": [
     "The status column has no name in legacy's @Column decorator, so TypeORM's default applies and the column is literally `status`. Confirmed against migration 0095.",
     "EXPIRED is derived, not written by a timer: an implementation that only reads the status and never compares updated_at against FEDERATION_AUTHENTICATION_TIMEOUT_MS will keep answering a handshake that timed out ten minutes ago. Both implementations must apply the timeout on read.",

@@ -12,11 +12,12 @@
       "identity": true
     },
     {
-      "name": "foreign",
+      "name": "remote",
       "type": "bool",
       "nullable": false,
       "default": "false",
-      "description": "A user of another community, known here only by reference."
+      "legacyName": "foreign",
+      "description": "A member of another community, known here only by reference."
     },
     {
       "name": "gradido_id",
@@ -28,7 +29,12 @@
       "name": "community_id",
       "type": "uint64",
       "nullable": false,
-      "description": "community from user"
+      "references": {
+        "table": "communities",
+        "column": "id"
+      },
+      "description": "The community this member belongs to, by row id.",
+      "note": "DO NOT CHANGE THIS BACK TO A UUID. Legacy carries users.community_uuid, a char(36) with a foreign key on communities.community_uuid, and gradido2 deliberately does not: a uuid is 16 bytes of key in every row, every index entry and every join, to identify a set that has a handful of members. The uuid stays the community's public, federation-facing identity and lives in communities.community_uuid alone; inside this database a community is its row id. The same change is intended for the other tables that still name community_uuid here — each one still has to be checked, so a disagreement between this file and transactions.json is work not yet done, not a mistake to reconcile in this direction."
     },
     {
       "name": "alias",
@@ -190,22 +196,23 @@
   "primaryKey": ["id"],
   "unique": [
     {
-      "name": "uuid_key",
+      "name": "users_uuid_key",
       "columns": ["gradido_id", "community_id"]
     },
     {
-      "name": "alias_key",
+      "name": "users_alias_key",
       "columns": ["alias", "community_id"]
     }
   ],
   "indexes": [
     {
-      "name": "idx_users_created_id_uuid",
+      "name": "users_created_at_id_community_id_idx",
       "columns": ["created_at", "id", "community_id"]
     }
   ],
   "notes": [
     "The uniqueness of gradido_id is per community, not global — migration 0073 replaced the single-column unique when foreign users were introduced. An implementation that assumes a global unique gradido_id is wrong.",
+    "The community is referenced by row id, not by uuid — see the note on community_id, and do not \"correct\" it towards legacy. gradido_id is still a uuid: that one is this member's public identity and leaves the database, which is exactly the distinction the two columns make.",
     "created_at, deleted_at and gms_registered_at are UTC milliseconds; see types/Timestamp.json. deleted_at null means not deleted — never 0.",
     "Identifiers are uint64 throughout. Legacy is inconsistent here — users.id is int unsigned while referrer_id, contribution_link_id and publisher_id, which point at it, are bigint unsigned. A foreign key narrower than its target truncates silently in C, so gradido2 uses one width everywhere.",
     "A user has at most one password representation: password (legacy) or password_hash (current), selected by password_encryption_type."

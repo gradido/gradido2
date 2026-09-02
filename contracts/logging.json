@@ -163,7 +163,7 @@
     "pattern": "<category>.<subject>.<outcome>",
     "rules": [
       "Lowercase, dot separated, no verbs in the past tense beyond the outcome.",
-      "The outcome is the last segment: created, failed, denied, expired, evicted, refreshed, started, stopped.",
+      "The outcome is the last segment: created, failed, denied, refused, expired, evicted, refreshed, reverted, started, stopped, applied.",
       "An event id never changes once it exists — see AGENTS.md, names are stable forever. To retire one, stop emitting it; do not rename it.",
       "One event id means one shape: the same keys in data every time it is emitted, on both paths."
     ],
@@ -237,6 +237,19 @@
           }
         ],
         "note": "The database did not answer, or answered that it will not: wrong credentials, no such database, no permission. The process exits with 1 after this line."
+      },
+      {
+        "event": "startup.setup.failed",
+        "cat": "startup",
+        "level": "fatal",
+        "data": [
+          {
+            "name": "reason",
+            "type": "string",
+            "description": "closed vocabulary: no-terminal"
+          }
+        ],
+        "note": "The process exits with 1 after this line. Distinct from startup.database.failed on purpose: the database answered, what is missing is a setup step nobody has taken — this instance has no community yet and there was no way to ask for one. See db/communities.json."
       },
       {
         "event": "auth.login.succeeded",
@@ -353,6 +366,163 @@
           }
         ],
         "note": "Carries err. Never the statement text and never the parameters."
+      },
+      {
+        "event": "db.migration.applied",
+        "cat": "db",
+        "level": "info",
+        "data": [
+          {
+            "name": "version",
+            "type": "uint32",
+            "description": "The migration number, which becomes the schema version."
+          },
+          {
+            "name": "file",
+            "type": "string",
+            "description": "The migration name, so a line points at something findable."
+          },
+          {
+            "name": "db",
+            "type": "string",
+            "description": "postgresql | sqlite"
+          },
+          {
+            "name": "ms",
+            "type": "uint64",
+            "description": "How long the migration took."
+          }
+        ],
+        "note": "One line per migration actually applied, at startup. Nothing is logged when the schema is already current: a line per boot saying that nothing changed teaches people to stop reading the log."
+      },
+      {
+        "event": "db.migration.failed",
+        "cat": "db",
+        "level": "error",
+        "data": [
+          {
+            "name": "version",
+            "type": "uint32"
+          },
+          {
+            "name": "file",
+            "type": "string"
+          },
+          {
+            "name": "db",
+            "type": "string",
+            "description": "postgresql | sqlite"
+          }
+        ],
+        "note": "The migration was rolled back in full before this line — both target databases roll DDL back. The process then ends through startup.database.failed, so this line says which step failed and that one says the run is over."
+      },
+      {
+        "event": "community.home.created",
+        "cat": "community",
+        "level": "info",
+        "data": [
+          {
+            "name": "uuid",
+            "type": "uuid",
+            "description": "communities.community_uuid — the community's public identity."
+          },
+          {
+            "name": "url",
+            "type": "string",
+            "description": "Base URL other communities reach it at."
+          }
+        ],
+        "note": "Written once, at the first start against a database that has no community. The key pair generated with it is never logged, in whole or in part — see redaction. This is the line an admin looks for when they want to know when the instance was set up."
+      },
+      {
+        "event": "db.migration.reverted",
+        "cat": "db",
+        "level": "warn",
+        "data": [
+          {
+            "name": "version",
+            "type": "uint32",
+            "description": "The migration that was undone. The database is now at version - 1."
+          },
+          {
+            "name": "file",
+            "type": "string"
+          },
+          {
+            "name": "db",
+            "type": "string",
+            "description": "postgresql | sqlite"
+          }
+        ],
+        "note": "One down step, and only ever one per run. warn rather than info because a down step is not the inverse of an up step — what it dropped, it dropped with its rows. On a release the run had to be confirmed by naming this migration; how that confirmation is given is each implementation's own business, that it is required is not."
+      },
+      {
+        "event": "db.migration.refused",
+        "cat": "db",
+        "level": "fatal",
+        "data": [
+          {
+            "name": "db",
+            "type": "string",
+            "description": "postgresql | sqlite"
+          }
+        ],
+        "note": "A down run that did not happen: unconfirmed on a release, confirmed with the wrong name, nothing applied, or a migration with no down step. Which of those is in msg rather than in a field, the way db.connection.failed carries the driver's own message — the process exits with 1 and a person reads the line. Distinct from db.migration.denied, which is about a schema this build cannot run against at all and names where it diverges."
+      },
+      {
+        "event": "db.migration.denied",
+        "cat": "db",
+        "level": "fatal",
+        "data": [
+          {
+            "name": "version",
+            "type": "uint32",
+            "description": "The applied migration this build cannot account for."
+          },
+          {
+            "name": "file",
+            "type": "string",
+            "description": "Its name, as the database recorded it."
+          },
+          {
+            "name": "expected",
+            "type": "string",
+            "nullable": true,
+            "description": "What this build has at that version, or null when the database is simply ahead."
+          },
+          {
+            "name": "db",
+            "type": "string",
+            "description": "postgresql | sqlite"
+          }
+        ],
+        "note": "The database was built by code this build is not, so nothing is applied and the process exits. msg names the migration to go back past and says the branch that applied it is where the down step lives — this one has no down step for a migration it does not have. Distinct from db.migration.failed, where a migration this build does carry was rolled back."
+      },
+      {
+        "event": "user.registration.created",
+        "cat": "user",
+        "level": "info",
+        "data": [
+          {
+            "name": "language",
+            "type": "string",
+            "description": "The Language enum value the account was created with."
+          }
+        ],
+        "note": "Carries usr with the new users.id. Never the email address — the account is identifiable without carrying personal data into log storage, see redaction."
+      },
+      {
+        "event": "user.registration.denied",
+        "cat": "user",
+        "level": "info",
+        "data": [
+          {
+            "name": "reason",
+            "type": "string",
+            "description": "closed vocabulary: address-in-use"
+          }
+        ],
+        "note": "A registration that was answered as if it had succeeded. Carries usr with the id of the member who already holds the address — not of anybody new, because none was created. The answer to the caller says nothing about this; the log is the only place it is visible, which is the point."
       }
     ]
   },

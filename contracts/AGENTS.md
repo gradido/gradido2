@@ -117,7 +117,7 @@ Every file carries an envelope so a loader can check what it is reading:
 ```
 
 `kind` is one of `const`, `enum`, `convention`, `errors`, `logging`, `settings`, `rights`,
-`table`, `route`, `test-vectors`.
+`table`, `route`, `migrations`, `test-vectors`.
 
 `convention` is for cross-cutting behavior that is neither a value nor a shape — how time is
 represented, how strings are compared. It lives in `types/` beside the enums.
@@ -204,6 +204,30 @@ declare the index on `users.gradido_id` — a migration did — and a benchmark 
 entities alone read 1.9× too slow without noticing. If an index matters for correctness of
 performance, it is written here.
 
+**Every index and constraint name begins with its table's name.**
+
+```text
+<table>_<what>_key    unique
+<table>_<what>_idx    everything else
+```
+
+`<what>` is the columns it covers, joined by `_`, unless the columns say less than a word
+would (`contributions_feed_idx`) or the joined form outgrows the 63-byte limit PostgreSQL
+imposes on an identifier (`contribution_creation_groups_pair_key`).
+
+The reason is that PostgreSQL keeps these names in one namespace with the tables themselves,
+while MariaDB scopes them per table: legacy's `uuid_key` on `users` and `uuid_key` on
+`communities` coexist there and cannot both be created here. Prefixing only the names that
+collide *today* would work today — and the collision arrives later, when somebody adds a
+plausible index to an unrelated table and the migration fails on a name they never saw. The
+prefix removes the whole question instead of answering it once per collision.
+
+Legacy's own spelling is not preserved here: it uses `idx_`, `uniq_`, `_unique`, `_key`,
+`_idx` and bare column names (`role_id`, `name`, `alias`) across different tables, and no
+subset of that survives the rule. These names have never existed in a gradido2 database, so
+renaming them costs nothing; once one has, *Names are stable forever* applies to them like
+everything else here.
+
 ### logging.json
 
 The envelope every log line carries, the numeric levels, the closed set of categories, the
@@ -243,6 +267,11 @@ the files, not inferred.
 holding the route's `rights`; `public` means the unauthorized role holds them, i.e. legacy's
 `INALIENABLE_RIGHTS`. Rights are recorded without the `RIGHTS.` prefix.
 
+A response of `"type": "none"` carries no body at all, and says so with `httpStatus`. That is
+different from an unanswered shape — `"type": null` with an `open` — and different again from
+a response that is contracted as a scalar. It is a decision that both implementations have to
+make the same way, because a client that expects bytes and gets none hangs on the parse.
+
 Request and response fields carry both the contract `type` and the `legacyType` they came
 from. Where legacy used a type the vocabulary above has no answer for, `type` is `null` and
 `open` says so — an unanswered question stays visible instead of being guessed into a shape.
@@ -260,6 +289,66 @@ authority. A route gradido2 invents rather than inherits carries `"legacy": null
 carries `"origin": "gradido2"` — `peer.bootstrap` is the first. Such a route has no legacy
 behavior to be faithful to, so its request and response are contracted in full instead of
 being left open.
+
+### migrations/
+
+The steps that build the database, and the only place they exist. `db/<table>.json` says what
+a table should end up looking like; this says how a database gets there, in a form both
+implementations run rather than each transcribing.
+
+```text
+index.json                     the ordered list, and the rules for reading the rest
+0001_communities/              one directory per migration, named as the migration is
+  up.postgresql.sql
+  up.sqlite.sql
+  down.postgresql.sql
+  down.sqlite.sql
+```
+
+The SQL is `.sql` and not a string inside the JSON, because a schema is read far more often
+than it is written and multi-line DDL escaped into JSON is read by nobody. `index.json` names
+every file explicitly — never a glob, which is a different set in a bundle than in a checkout.
+
+A directory rather than four files side by side: two directions times two dialects is four
+per step, and a flat directory stops being readable at the third migration.
+
+**The four names are declared once, in `files`, not repeated per entry.** They are the same in
+every directory, so listing them again for each migration would be a structure with as many
+definitions as there are steps. What has to be explicit is the *set* of migrations — that is
+the part a glob would get wrong between a checkout and a bundle. The fixed shape inside one is
+not a set.
+
+**A down step is not the inverse of an up step.** `DROP TABLE` undoes `CREATE TABLE`; nothing
+undoes the rows that were in it. Every down file that destroys data says so at its top,
+because the person reading it is deciding something they cannot take back. A migration with no
+writable down step — one that dropped a column, say — carries `"down": null` and a `downNote`
+saying why; that is an answer, not a missing file.
+
+Each entry carries a `version` (the number that goes into `migrations.version`), a `name`
+(which is also its directory, and what goes into `migrations.file_name`), a `kind`, and a flag
+only when something is absent — `"down": false` with a `downNote`, or `"sql": false` for a step
+that has to be pseudocode:
+
+```text
+kind: "schema"   DDL. up and down each name one file per dialect
+kind: "data"     existing rows have to change. up/down when the change is expressible as
+                 SQL, and both dialects are still given separately
+                 pseudocode, and up: null, when it is not — when the new value comes out
+                 of shared-native, or out of a decision no SELECT can make. Then each
+                 implementation writes the code and the contract says what it must do
+```
+
+A `pseudocode` migration is the one case where the two implementations write their own code,
+so its file has to be precise about what it reads, what it writes, and what it does with a row
+it cannot convert. An implementation that meets one it has not implemented refuses to start —
+half a data migration is the state nothing recovers from.
+
+**Splitting a `.sql` file into statements is contracted too**, in `index.json`'s
+`statementSeparator`, because two implementations that disagree about where a statement ends
+build different databases. A semicolon ends a statement when it ends a line; one inside a
+single-quoted string or a `$$` body does not.
+
+**A migration is never edited once it has run anywhere.** It is followed by another one.
 
 ### test-vectors/&lt;subject&gt;.json
 

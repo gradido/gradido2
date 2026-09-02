@@ -37,8 +37,8 @@
   ],
   "open": [
     {
-      "question": "Does gradido2 keep this table, and does the fast path write to it?",
-      "detail": "Migrations are numbered files in legacy and the table is their bookkeeping. gradido2 may pick a different mechanism entirely. What must be decided either way is which process is allowed to migrate — if both implementations may, two of them starting at once race on the same schema — and what a process does when it finds a version it does not know: refuse, or run read-only.",
+      "question": "Which process is allowed to migrate, and what does one do with a version it does not know?",
+      "detail": "The table stays and both implementations write it: the migrations are in ../migrations, shared, so a schema is built the same way whichever path is deployed. Two implementations racing is not among the open cases — a deployment runs one or the other and they are never started against one database at the same time, see ../../AGENTS.md. What is undecided is two instances of the SAME implementation starting together, which Architecture.md treats as normal behind a load balancer and which would have both of them migrating; and what a process does when it finds a version newer than the migrations it carries: refuse, or run read-only. The reference path migrates on startup today, which is correct for the single backend it is currently run as and for nothing else.",
       "why_it_matters": "It is the first thing both implementations touch on startup and the one place where they can destroy each other's assumptions.",
       "status": "unanswered — decide before the second implementation opens the database"
     }

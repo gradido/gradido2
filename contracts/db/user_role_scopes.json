@@ -48,7 +48,7 @@
   ],
   "unique": [
     {
-      "name": "user_role_dimension_target",
+      "name": "user_role_scopes_user_role_id_dimension_target_id_key",
       "columns": [
         "user_role_id",
         "dimension",

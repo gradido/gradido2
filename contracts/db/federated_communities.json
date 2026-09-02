@@ -7,11 +7,12 @@
   "columns": [
     { "name": "id", "type": "uint64", "nullable": false, "identity": true },
     {
-      "name": "foreign",
+      "name": "remote",
       "type": "bool",
       "nullable": false,
       "default": "true",
-      "note": "Reserved word in PostgreSQL, same as communities.foreign."
+      "legacyName": "foreign",
+      "note": "Renamed for the same reason as communities.remote: legacy's `foreign` is a reserved word in PostgreSQL and unparseable unquoted in SQLite."
     },
     {
       "name": "public_key",
@@ -52,7 +53,12 @@
     { "name": "updated_at", "type": "timestamp_ms", "nullable": true, "default": null }
   ],
   "primaryKey": ["id"],
-  "unique": [{ "name": "public_api_key", "columns": ["public_key", "api_version"] }],
+  "unique": [
+    {
+      "name": "federated_communities_public_key_api_version_key",
+      "columns": ["public_key", "api_version"]
+    }
+  ],
   "indexes": [],
   "notes": [
     "This table was the original `communities`; migration 0065 renamed it and created a new communities table beside it. The two are still joined on public_key, which is why that column is the join key rather than a community id.",

@@ -45,7 +45,7 @@
     { "name": "created_at", "type": "timestamp_ms", "nullable": false, "default": "now" }
   ],
   "primaryKey": ["id"],
-  "unique": [{ "name": "thank_you_cards_code_unique", "columns": ["code"] }],
+  "unique": [{ "name": "thank_you_cards_code_key", "columns": ["code"] }],
   "indexes": [{ "name": "thank_you_cards_user_id_idx", "columns": ["user_id"] }],
   "notes": [
     "Never delete a row here. A kept row is what lets a scan of an old card answer 'this card is blocked' instead of running into nothing, and what lets an old receipt still name the card a payment was made with. transactions.thank_you_card_id points at it.",
