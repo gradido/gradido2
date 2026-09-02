@@ -1,0 +1,149 @@
+<!--
+  accountActivation as MJML -- a spike, not a source.
+
+  accountActivation/html.pug stays the source of truth; this file is here to be
+  opened in a split-screen preview (VS Code: "MJML Official", Cmd/Ctrl+Shift+P ->
+  "MJML: Preview") so the table-based, Outlook-safe output can be looked at next to
+  the div-based one the pug templates produce today. Nothing reads it:
+  tools/extract.mjs takes html.pug and subject.pug from each template DIRECTORY, so
+  a file sitting here beside those directories is inert to the build.
+
+  ─────────────────────────────────────────────────────────────────────────────
+  SETTINGS -- one, and only because MJML 5 sandboxes mj-include:
+
+      "mjml.allowIncludes": true
+
+  Without it the preview silently drops header and footer: a denied include leaves
+  a "mj-include denied" comment in the output and no error at all.
+
+  There is deliberately no "mjml.includePath" to go with it. What MJML allows by
+  default is the directory of the file being compiled and its subdirectories --
+  which is exactly why this file lives HERE, beside includes/, rather than one
+  level down in accountActivation/. From there every include would cross out of
+  its own directory and each one would need the templates root declared as an
+  extra allowed root, in the editor and again in every script.
+
+  From a script or the CLI the setting is `ignoreIncludes: false`, and nothing
+  else. Should a template ever need a partial from outside this tree, that is when
+  `includePath` comes in -- absolute, because at library level a relative entry is
+  resolved against the compiled FILE's directory, and one that does not resolve is
+  dropped in silence.
+  ─────────────────────────────────────────────────────────────────────────────
+
+  Everything shared lives in includes/ and is edited once:
+
+      head.mjml      the theme -- fonts, sizes, colours, mj-class, mj-style,
+                     and the mj-body defaults. A design change is THIS file.
+      top.mjml       everything above the content   -> header.mjml
+      bottom.mjml    everything below the content   -> greeting.mjml, footer.mjml
+                                                       footer.mjml -> social.mjml
+
+  What stays per template is the six-line skeleton below plus the content that
+  makes this mail this mail.
+
+  Nothing here is written out in any one language. Two kinds of placeholder carry
+  it, and .mjmlconfig.js turns both into something readable for the preview:
+
+    {{t:key}}    a string from locales/<lang>.json      html.pug: t('key')
+    {{v:name}}   a value the caller supplies            html.pug: #{name}
+
+  In the build the first becomes the same catalogue string and the second becomes
+  a SENTINEL, which is what makes the slot a slot -- so what you see here is what
+  ships, with the sample values swapped for the real ones at runtime.
+
+    preview                     build                    ships as
+    ------------------------    ---------------------    ----------------------
+    {{t:...}} -> "Hallo {0}"    same catalogue string    bytes in the pool
+    {{v:...}} -> "Max"          U+0001 firstName U+0002  a slot op, filled in C
+
+  Your language for the preview is templates/.preview-locale (gitignored), or
+  MJML_LOCALE for one run. The sample values are templates/.preview-values.json,
+  and putting a 40-character surname in there is the point of the file.
+
+  Slots used below: firstName, lastName (through emails.general.helloName),
+  activationLink, resendLink, hours (through emails.general.linkValidity), and
+  logoUrl in the branch that is commented out.
+-->
+<mjml>
+  <mj-head>
+    <mj-include path="includes/head.mjml" />
+    <mj-title>{{t:emails.accountActivation.subject}}</mj-title>
+    <mj-preview>{{t:emails.accountActivation.emailRegistered}}</mj-preview>
+  </mj-head>
+
+  <mj-body>
+    <mj-include path="includes/top.mjml" />
+
+    <mj-section padding="15px 25px 0 25px">
+      <mj-column>
+        <mj-text mj-class="h2">{{t:emails.accountActivation.title}}</mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- .text-block + includes/salutation.pug -->
+    <mj-section padding="20px 25px 0 25px">
+      <mj-column>
+        <mj-text mj-class="muted">{{t:emails.general.helloName}}</mj-text>
+        <mj-text mj-class="muted">{{t:emails.accountActivation.emailRegistered}}</mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- .content: the grey card. mj-wrapper is what carries a border and a
+         radius around several sections; mj-section cannot nest in mj-section. -->
+    <mj-wrapper
+      background-color="#f5f5f5"
+      border="1px solid #808080"
+      border-radius="24px"
+      padding="20px 8% 40px 8%"
+      css-class="card"
+    >
+      <mj-section background-color="#f5f5f5">
+        <mj-column>
+          <mj-text mj-class="h2" padding="20px 0 0 0">{{t:emails.general.completeRegistration}}</mj-text>
+          <mj-text mj-class="p-content" padding="15px 0 15px 0">
+            {{t:emails.accountActivation.pleaseClickLink}}
+          </mj-text>
+
+          <!-- .button-3, the gold one: "the way on to wherever the thing lives" -->
+          <mj-button
+            mj-class="btn"
+            css-class="btn-gold"
+            background-color="#c58d38"
+            href="{{v:activationLink}}"
+          >{{t:emails.accountActivation.activateAccount}}</mj-button>
+
+          <mj-text mj-class="p-content" padding="15px 0 15px 0">
+            {{t:emails.general.orCopyLink}}
+          </mj-text>
+
+          <!-- .clink -->
+          <mj-text mj-class="p-content" css-class="clink" padding="0 0 40px 0">
+            <a href="{{v:activationLink}}" style="color:#696c72;">{{v:activationLink}}</a>
+          </mj-text>
+
+          <!-- includes/requestNewLink.pug -->
+          <mj-text mj-class="h2">{{t:emails.general.requestNewLink}}</mj-text>
+
+          <!-- The `timeDurationObject.minutes == 0` branch, and this is the
+               minutes == 0 case. The other one is the same line with
+               emails.general.linkValidityWithMinutes, which spends a {minutes}
+               more. Both catalogue strings carry a \n, and .mjmlconfig.js turns
+               that into a <br>, the way pug's t() does. -->
+          <mj-text mj-class="p-content" padding="15px 0 15px 0">
+            {{t:emails.general.linkValidity}}
+          </mj-text>
+
+          <!-- .button-4, the grey one: the fallback -->
+          <mj-button
+            mj-class="btn"
+            css-class="btn-grey"
+            background-color="#8f8f8f"
+            href="{{v:resendLink}}"
+          >{{t:emails.general.newLink}}</mj-button>
+        </mj-column>
+      </mj-section>
+    </mj-wrapper>
+
+    <mj-include path="includes/bottom.mjml" />
+  </mj-body>
+</mjml>

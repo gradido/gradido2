@@ -1,0 +1,9 @@
+<!-- includes/greeting.pug -->
+<mj-section padding="20px 25px 0 25px">
+  <mj-column>
+    <mj-text mj-class="muted">
+      {{t:emails.general.sincerelyYours}}<br />
+      {{t:emails.general.yourGradidoTeam}}
+    </mj-text>
+  </mj-column>
+</mj-section>

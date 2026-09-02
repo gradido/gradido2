@@ -1,0 +1,34 @@
+<!--
+  includes/footer.pug, without the social row -- that one is its own file so this
+  stays readable. Paths in mj-include are relative to THIS file.
+-->
+<mj-include path="social.mjml" />
+
+<!-- .line: the gold rule. border-color is the fallback under the gradient. -->
+<mj-section padding="40px 25px 0 25px">
+  <mj-column>
+    <mj-divider border-width="13px" border-color="#dbb056" border-style="solid" padding="0" css-class="rule" />
+  </mj-column>
+</mj-section>
+
+<mj-section padding="0 25px 20px 25px">
+  <mj-column>
+    <mj-text mj-class="muted" padding="30px 0 30px 0">
+      {{t:emails.footer.contactOurSupport}}
+    </mj-text>
+    <mj-text padding="0" font-weight="bold">
+      <a href="mailto:{{t:emails.footer.supportEmail}}" style="color:#383838;text-decoration:none;">{{t:emails.footer.supportEmail}}</a>
+    </mj-text>
+
+    <mj-image src="https://gdd.gradido.net/img/brand/green.png" alt="{{t:emails.footer.imprintImageAlt}}" width="200px" padding="30px 0 30px 0" />
+
+    <mj-text mj-class="muted" padding="0">
+      <a href="https://gradido.net/de/impressum/" target="_blank" style="color:#9ca0a8;">{{t:emails.footer.imprint}}</a><br />
+      <a href="https://gradido.net/de/datenschutz/" target="_blank" style="color:#9ca0a8;">{{t:emails.footer.privacyPolicy}}</a>
+    </mj-text>
+
+    <mj-text mj-class="muted" padding="30px 0 30px 0">
+      {{t:emails.footer.imprintAddress}}
+    </mj-text>
+  </mj-column>
+</mj-section>

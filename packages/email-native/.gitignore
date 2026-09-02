@@ -7,3 +7,6 @@ compile_commands.json
 # `zig build exe` and the codegen when it is run by hand rather than by build.zig
 zig-out/
 gen/
+
+# The preview language is per developer, not per repository (.mjmlconfig.js)
+.preview-locale

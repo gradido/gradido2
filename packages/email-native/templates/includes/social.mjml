@@ -1,0 +1,15 @@
+<!--
+  The four social icons of includes/footer.pug. In production the src= are
+  cid:facebookicon, cid:telegramicon, cid:twittericon and cid:youtubeicon.
+  Paths as in header.mjml: written from the template's directory.
+-->
+<mj-section padding="40px 25px 0 25px">
+  <mj-column>
+    <mj-social mode="horizontal" icon-size="40px" align="center" padding="0">
+      <mj-social-element name="facebook-noshare" href="https://www.facebook.com/groups/Gradido/" src="includes/facebook-icon.png" alt="facebook" background-color="transparent" />
+      <mj-social-element name="telegram" href="https://t.me/GradidoGruppe" src="includes/telegram-icon.png" alt="Telegram" background-color="transparent" />
+      <mj-social-element name="twitter-noshare" href="https://twitter.com/gradido" src="includes/twitter-icon.png" alt="Twitter" background-color="transparent" />
+      <mj-social-element name="youtube" href="https://www.youtube.com/c/GradidoNet" src="includes/youtube-icon.png" alt="youtube" background-color="transparent" />
+    </mj-social>
+  </mj-column>
+</mj-section>

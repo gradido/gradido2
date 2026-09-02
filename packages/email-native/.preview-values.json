@@ -1,0 +1,12 @@
+{
+  "_comment": "Sample values for the editor preview only. The build puts sentinels here instead and C fills them at runtime; nothing in this file reaches a real mail. Change a value to see whether the design survives it -- a 40-character surname is the useful experiment, not a realistic one.",
+
+  "firstName": "Max",
+  "lastName": "Mustermann",
+  "hours": "24",
+  "minutes": "30",
+
+  "activationLink": "https://gdd.gradido.net/checkEmail/9b8c1e2a-4f3d-4a71-9b0e-77d2c5a13e64",
+  "resendLink": "https://gdd.gradido.net/requestNewLink/9b8c1e2a-4f3d-4a71-9b0e-77d2c5a13e64",
+  "logoUrl": "https://gdd.gradido.net/img/brand/green.png"
+}

@@ -1,0 +1,35 @@
+<!--
+  The theme. Every .mjml template pulls this in and nothing below it repeats a
+  font, a size or a colour -- this is the one file a "make the body text bigger"
+  or "the gold is too dark" change touches.
+
+  mj-attributes also carries the mj-body defaults, so the template skeleton needs
+  no width and no background of its own.
+-->
+<mj-font name="Work Sans" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;600;700&display=swap" />
+
+<mj-attributes>
+  <!-- .container: max-width 680px, centered -->
+  <mj-body width="680px" background-color="#ffffff" />
+  <mj-all font-family="Work Sans, Helvetica, Arial, sans-serif" />
+  <mj-text font-size="17px" color="#383838" line-height="26px" align="center" />
+  <mj-section background-color="#ffffff" padding="0" />
+
+  <mj-class name="muted" color="#9ca0a8" />
+  <mj-class name="p-content" color="#696c72" />
+  <mj-class name="h2" font-size="22px" font-weight="600" color="#383838" />
+
+  <!-- The three buttons of webflow.css. background-color is what Outlook gets;
+       the gradient below rides on top wherever it is supported. -->
+  <mj-class name="btn" color="#ffffff" border-radius="20px" inner-padding="9px 15px"
+            font-size="17px" width="50%" padding="25px 0 25px 0" />
+</mj-attributes>
+
+<mj-style>
+  /* The gradients from webflow.css (.button-3 / .button-4 / .line). Each one
+     degrades to the background-color set on the tag itself. */
+  .btn-gold a { background-image: radial-gradient(circle farthest-corner at 0% 0%, #f9cd69, #c58d38) !important; }
+  .btn-grey a { background-image: radial-gradient(circle farthest-corner at 0% 0%, #616161, #c2c2c2) !important; }
+  .rule p     { background-image: linear-gradient(90deg, #c58d38, #f3cd7c 40%, #dbb056 55%, #eec05f 71%, #cc9d3d); }
+  .clink div  { line-break: anywhere; word-break: break-all; }
+</mj-style>
