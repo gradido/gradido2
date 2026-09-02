@@ -41,50 +41,64 @@
   What stays per template is the six-line skeleton below plus the content that
   makes this mail this mail.
 
-  Nothing here is written out in any one language. Two kinds of placeholder carry
-  it, and .mjmlconfig.js turns both into something readable for the preview:
+  The text below IS English, not a key standing in for it -- gettext, the way
+  packages/frontend writes `t.__('Sign in')`. Catalogues are ../po/<lang>/messages.po.
+  Two markers, and .mjmlconfig.js resolves both for the preview:
 
-    {{t:key}}    a string from locales/<lang>.json      html.pug: t('key')
-    {{v:name}}   a value the caller supplies            html.pug: #{name}
+    {{t:Activate account}}           the message. Untranslated, it stays English
+    {{t:Hello %1 %2,|first,last}}    %1/%2 filled from the slots named after the |
+    {{v:activationLink}}             a slot on its own
 
-  In the build the first becomes the same catalogue string and the second becomes
-  a SENTINEL, which is what makes the slot a slot -- so what you see here is what
-  ships, with the sample values swapped for the real ones at runtime.
+  In the build the first becomes the catalogue string for the locale and the
+  second becomes a SENTINEL, which is what makes the slot a slot:
 
-    preview                     build                    ships as
-    ------------------------    ---------------------    ----------------------
-    {{t:...}} -> "Hallo {0}"    same catalogue string    bytes in the pool
-    {{v:...}} -> "Max"          U+0001 firstName U+0002  a slot op, filled in C
+    marker                     preview            build              ships as
+    -----------------------    ---------------    ----------------   ------------
+    {{t:Hello %1 %2,|...}}     "Hallo Max M.,"    "Hallo " + slots   pool bytes
+    {{v:activationLink}}       the sample URL     U+0001..U+0002     a slot op
 
-  Your language for the preview is templates/.preview-locale (gitignored), or
-  MJML_LOCALE for one run. The sample values are templates/.preview-values.json,
-  and putting a 40-character surname in there is the point of the file.
+  Reading the source is therefore reading the mail, with no tooling in the way --
+  that is the whole point of the English-as-msgid form. A missing translation
+  degrades to this text rather than to a key or a blank.
 
-  Slots used below: firstName, lastName (through emails.general.helloName),
-  activationLink, resendLink, hours (through emails.general.linkValidity), and
+  Your language for the preview is ../.preview-locale (gitignored), or MJML_LOCALE
+  for one run. The sample values are ../.preview-values.json, and putting a
+  40-character surname in there is the point of that file.
+
+  Slots used below: firstName, lastName, activationLink, resendLink, hours, and
   logoUrl in the branch that is commented out.
 -->
-<mjml>
+<!-- lang= is layout.pug's html(lang=locale): a slot the RENDERER fills from the
+     locale it was called with, not one a caller supplies -- which is why it does
+     not show up in the struct. -->
+<mjml lang="{{v:locale}}">
   <mj-head>
     <mj-include path="includes/head.mjml" />
-    <mj-title>{{t:emails.accountActivation.subject}}</mj-title>
-    <mj-preview>{{t:emails.accountActivation.emailRegistered}}</mj-preview>
+    <mj-title>{{t:Email Verification}}</mj-title>
   </mj-head>
 
   <mj-body>
     <mj-include path="includes/top.mjml" />
 
+    <!--@if logoUrl-->
+    <mj-section padding="20px 25px 0 25px">
+      <mj-column>
+        <mj-image src="{{v:logoUrl}}" alt="Banner" border-radius="20px" padding="0" />
+      </mj-column>
+    </mj-section>
+    <!--@endif-->
+
     <mj-section padding="15px 25px 0 25px">
       <mj-column>
-        <mj-text mj-class="h2">{{t:emails.accountActivation.title}}</mj-text>
+        <mj-text mj-class="h2">{{t:Email Verification}}</mj-text>
       </mj-column>
     </mj-section>
 
     <!-- .text-block + includes/salutation.pug -->
     <mj-section padding="20px 25px 0 25px">
       <mj-column>
-        <mj-text mj-class="muted">{{t:emails.general.helloName}}</mj-text>
-        <mj-text mj-class="muted">{{t:emails.accountActivation.emailRegistered}}</mj-text>
+        <mj-text mj-class="muted">{{t:Hello %1 %2,|firstName,lastName}}</mj-text>
+        <mj-text mj-class="muted">{{t:Your email address has just been registered with Gradido.}}</mj-text>
       </mj-column>
     </mj-section>
 
@@ -99,9 +113,9 @@
     >
       <mj-section background-color="#f5f5f5">
         <mj-column>
-          <mj-text mj-class="h2" padding="20px 0 0 0">{{t:emails.general.completeRegistration}}</mj-text>
+          <mj-text mj-class="h2" padding="20px 0 0 0">{{t:Complete registration}}</mj-text>
           <mj-text mj-class="p-content" padding="15px 0 15px 0">
-            {{t:emails.accountActivation.pleaseClickLink}}
+            {{t:Please click here to complete the registration and activate your Gradido account.}}
           </mj-text>
 
           <!-- .button-3, the gold one: "the way on to wherever the thing lives" -->
@@ -110,10 +124,10 @@
             css-class="btn-gold"
             background-color="#c58d38"
             href="{{v:activationLink}}"
-          >{{t:emails.accountActivation.activateAccount}}</mj-button>
+          >{{t:Activate account}}</mj-button>
 
           <mj-text mj-class="p-content" padding="15px 0 15px 0">
-            {{t:emails.general.orCopyLink}}
+            {{t:Or copy the link into your browser window.}}
           </mj-text>
 
           <!-- .clink -->
@@ -121,25 +135,7 @@
             <a href="{{v:activationLink}}" style="color:#696c72;">{{v:activationLink}}</a>
           </mj-text>
 
-          <!-- includes/requestNewLink.pug -->
-          <mj-text mj-class="h2">{{t:emails.general.requestNewLink}}</mj-text>
-
-          <!-- The `timeDurationObject.minutes == 0` branch, and this is the
-               minutes == 0 case. The other one is the same line with
-               emails.general.linkValidityWithMinutes, which spends a {minutes}
-               more. Both catalogue strings carry a \n, and .mjmlconfig.js turns
-               that into a <br>, the way pug's t() does. -->
-          <mj-text mj-class="p-content" padding="15px 0 15px 0">
-            {{t:emails.general.linkValidity}}
-          </mj-text>
-
-          <!-- .button-4, the grey one: the fallback -->
-          <mj-button
-            mj-class="btn"
-            css-class="btn-grey"
-            background-color="#8f8f8f"
-            href="{{v:resendLink}}"
-          >{{t:emails.general.newLink}}</mj-button>
+          <mj-include path="includes/request-new-link.mjml" />
         </mj-column>
       </mj-section>
     </mj-wrapper>

@@ -1,0 +1,36 @@
+Ton adresse e-mail va changer
+
+Bonjour {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+Un changement de l'adresse e-mail de ton compte Gradido vers {newEmail|&<>"'ä} a été demandé.
+
+Tant que la nouvelle adresse n'est pas confirmée, celle-ci reste valable. Si c'était toi, tu n'as rien d'autre à faire.
+
+Ce n'était pas toi ?
+
+Ce n'était pas toi ? Alors clique ici : le changement est annulé et cette adresse reste en place.
+
+Annuler le changement [{revokeLink|&<>"'ä}]
+
+Ou copie le lien dans la fenêtre de ton navigateur.
+
+{revokeLink|&<>"'ä}
+
+Si tu annules le changement, pense aussi à modifier ton mot de passe ensuite.
+
+Le lien est valable jusqu'au {validUntil|&<>"'ä} ; ensuite, le changement demandé expire de lui-même.
+
+Cordialement,
+ton équipe Gradido
+
+Pour toute autre question, contacte notre support.
+support@gradido.net
+
+Mentions légales [https://gradido.net/de/impressum/]
+Politique de confidentialité [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

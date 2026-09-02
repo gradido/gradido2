@@ -1,12 +1,45 @@
 {
-  "_comment": "Sample values for the editor preview only. The build puts sentinels here instead and C fills them at runtime; nothing in this file reaches a real mail. Change a value to see whether the design survives it -- a 40-character surname is the useful experiment, not a realistic one.",
+  "_comment": "Sample values for the editor preview only. The build puts sentinels here instead and C fills them at runtime; nothing in this file reaches a real mail. Change a value to see whether the design survives it -- a 40-character surname is the useful experiment, not a realistic one. Every slot any template uses has an entry, so a missing one is a typo in a marker rather than a gap here.",
 
   "firstName": "Max",
   "lastName": "Mustermann",
+  "alias": "maxm",
+  "senderAlias": "Erika Musterfrau",
+  "senderCommunity": "Gradido Community",
+  "recipientName": "Erika Musterfrau",
+  "recipientCommunity": "Gradido Community",
+
   "hours": "24",
   "minutes": "30",
+  "validUntil": "5. September 2026, 14:30",
 
   "activationLink": "https://gdd.gradido.net/checkEmail/9b8c1e2a-4f3d-4a71-9b0e-77d2c5a13e64",
   "resendLink": "https://gdd.gradido.net/requestNewLink/9b8c1e2a-4f3d-4a71-9b0e-77d2c5a13e64",
-  "logoUrl": "https://gdd.gradido.net/img/brand/green.png"
+  "resetLink": "https://gdd.gradido.net/reset-password/9b8c1e2a-4f3d-4a71-9b0e-77d2c5a13e64",
+  "confirmLink": "https://gdd.gradido.net/confirm/9b8c1e2a-4f3d-4a71-9b0e-77d2c5a13e64",
+  "revokeLink": "https://gdd.gradido.net/revoke/9b8c1e2a-4f3d-4a71-9b0e-77d2c5a13e64",
+  "helperLink": "https://gdd.gradido.net/assisted/9b8c1e2a-4f3d-4a71-9b0e-77d2c5a13e64",
+  "communityURL": "https://gdd.gradido.net",
+  "contributionFrontendLink": "https://gdd.gradido.net/contributions/4711",
+  "logoUrl": "https://gdd.gradido.net/img/brand/green.png",
+
+  "supportEmail": "support@gradido.net",
+  "gdtEmail": "gdt@gradido.net",
+  "newEmail": "max.mustermann@example.org",
+  "oldEmail": "m.mustermann@example.com",
+
+  "senderCommunityUuid": "b1d4e2f0-3c5a-4e7b-9f18-2a6c8d0e4b71",
+  "senderUuid": "7f3a9c21-5e84-4d60-b2af-1c93e50a8d46",
+
+  "transactionAmount": "42,55",
+  "contributionAmount": "120,00",
+  "transactionMemo": "Danke für den schönen Nachmittag im Garten!",
+  "contributionMemo": "Zwei Stunden Nachbarschaftshilfe beim Umzug",
+  "contributionMemoUpdated": "Drei Stunden Nachbarschaftshilfe beim Umzug",
+  "memo": "Hallo Max,\nvielen Dank für Deine Unterstützung letzte Woche.\n\nViele Grüße\nErika",
+  "message": "Kannst Du den Zeitraum noch einmal genauer angeben?",
+  "subject": "Rückfrage zu Deinem Beitrag",
+
+  "cardId": "3c81f5a9-27d4-4b60-8e13-9a05c7b2f6de",
+  "cardLabel": "Dankeskarte Sommerfest"
 }

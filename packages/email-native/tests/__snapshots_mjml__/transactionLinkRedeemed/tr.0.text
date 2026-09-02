@@ -1,0 +1,30 @@
+{senderAlias|&<>"'ä} Gradido bağlantını kullandı
+
+Merhaba {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+{senderAlias|&<>"'ä} ({senderCommunity|&<>"'ä}) az önce bağlantını kullandı.
+
+İşlem ayrıntıları
+
+Tutar: {transactionAmount|&<>"'ä} GDD
+Mesaj: {transactionMemo|&<>"'ä}
+İşlem ayrıntılarını Gradido hesabında bulabilirsin.
+
+Hesaba git [{communityURL|&<>"'ä}/transactions]
+
+Lütfen bu e-postayı yanıtlama.
+
+Sevgiler,
+Gradido ekibin
+
+Başka sorun olursa lütfen desteğimize başvur.
+support@gradido.net
+
+Künye [https://gradido.net/de/impressum/]
+Gizlilik politikası [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

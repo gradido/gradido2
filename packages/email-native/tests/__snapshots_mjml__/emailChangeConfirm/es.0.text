@@ -1,0 +1,34 @@
+Confirmar la nueva dirección de correo
+
+Hola {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+Quieres cambiar la dirección de correo de tu cuenta Gradido a esta dirección.
+
+Confirmar la nueva dirección de correo
+
+Confirma con un clic que esta dirección es tuya.
+
+Confirmar la nueva dirección [{confirmLink|&<>"'ä}]
+
+O copia el enlace en la ventana de tu navegador.
+
+{confirmLink|&<>"'ä}
+
+El enlace es válido hasta el {validUntil|&<>"'ä}. Después podrás solicitar un nuevo correo desde tus ajustes.
+
+Si no has solicitado este cambio, puedes ignorar este correo: sin tu confirmación no cambia nada.
+
+Un cordial saludo,
+tu equipo de Gradido
+
+Si tienes más preguntas, ponte en contacto con nuestro soporte.
+support@gradido.net
+
+Aviso legal [https://gradido.net/de/impressum/]
+Política de privacidad [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

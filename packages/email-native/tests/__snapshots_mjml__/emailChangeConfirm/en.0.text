@@ -1,0 +1,34 @@
+Confirm new e-mail address
+
+Hello {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+You want to change the e-mail address of your Gradido account to this address.
+
+Confirm new e-mail address
+
+Please confirm with one click that this address is yours.
+
+Confirm new address [{confirmLink|&<>"'ä}]
+
+Or copy the link into your browser window.
+
+{confirmLink|&<>"'ä}
+
+The link is valid until {validUntil|&<>"'ä}. After that you can have a new e-mail sent from your settings.
+
+If you did not ask for this change, you can simply ignore this e-mail – nothing changes without your confirmation.
+
+Kind regards,
+your Gradido team
+
+If you have any further questions, please contact our support.
+support@gradido.net
+
+Impressum [https://gradido.net/de/impressum/]
+Privacy Policy [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

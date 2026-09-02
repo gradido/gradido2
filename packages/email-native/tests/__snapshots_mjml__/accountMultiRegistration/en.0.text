@@ -1,0 +1,48 @@
+Try To Register Again With Your Email
+
+Hello {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+Your email address has just been used again to register an account with Gradido.
+
+However, an account already exists for your email address.
+
+Reset password
+
+If you have forgotten your password, please click here.
+
+reset [{resendLink|&<>"'ä}]
+
+Or copy the link into your browser window.
+
+{resendLink|&<>"'ä}
+
+Helping someone at a Gradido café right now?
+
+If someone is sitting next to you who just used your e-mail address to start a Gradido account: continue the setup here. Together you enter their own e-mail address, and they choose their password themselves.
+
+I am helping someone set up an account [{helperLink|&<>"'ä}]
+
+Or copy the link into your browser window.
+
+{helperLink|&<>"'ä}
+
+Contact support
+
+If you did not try to register again, please contact our support:
+
+{supportEmail|&<>"'ä}
+
+Kind regards,
+your Gradido team
+
+If you have any further questions, please contact our support.
+support@gradido.net
+
+Impressum [https://gradido.net/de/impressum/]
+Privacy Policy [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

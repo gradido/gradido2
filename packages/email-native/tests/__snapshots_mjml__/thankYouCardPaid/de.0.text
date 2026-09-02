@@ -1,0 +1,35 @@
+Mit Deiner Dank-Karte wurden {transactionAmount|&<>"'ä} GDD weitergegeben
+
+Hallo {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+Soeben wurden mit Deiner Dank-Karte {transactionAmount|&<>"'ä} GDD weitergegeben.
+
+Transaktionsdetails
+
+Betrag: {transactionAmount|&<>"'ä} GDD
+Empfänger: {recipientName|&<>"'ä} ({recipientCommunity|&<>"'ä})
+Verwendungszweck: {transactionMemo|&<>"'ä}
+Karte: {cardLabel|&<>"'ä}
+
+Zum Konto [{communityURL|&<>"'ä}/transactions]
+
+Das warst Du nicht? Dann sperre Deine Karte gleich hier — sie funktioniert danach nicht mehr, Deine Gradido-Adresse bleibt bestehen.
+
+Karte sperren [{communityURL|&<>"'ä}/settings/thank-you-card?block={cardId|&<>"'ä}]
+
+Bitte antworte nicht auf diese E-Mail.
+
+Liebe Grüße
+Dein Gradido-Team
+
+Bei weiteren Fragen kontaktiere bitte unseren Support.
+support@gradido.net
+
+Impressum [https://gradido.net/de/impressum/]
+Datenschutzerklärung [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

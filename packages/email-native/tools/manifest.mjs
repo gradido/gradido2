@@ -153,3 +153,21 @@ export const ASSETS = [
   ['youtubeicon', 'youtube-icon.png', 'image/png'],
   ['chatboxicon', 'chatbox-icon.png', 'image/png'],
 ]
+
+/*
+ * The same, for the MJML path. `div` is the difference and it is not a taste:
+ * pug marked a paragraph up as <p>, MJML marks it as <div>, and html-to-text gives
+ * a <p> a blank line on each side and a <div> only a newline. Without this rule an
+ * MJML mail arrives as one dense block.
+ *
+ * It lives HERE and not in TEXT_OPTIONS because that one is pug's, and pug's text
+ * output is the reference tests/__snapshots__ is held to -- changing it there would
+ * move 270 snapshots for a reason that has nothing to do with pug.
+ */
+export const TEXT_OPTIONS_MJML = {
+  ...TEXT_OPTIONS,
+  selectors: [
+    ...TEXT_OPTIONS.selectors,
+    { selector: 'div', options: { leadingLineBreaks: 2, trailingLineBreaks: 2 } },
+  ],
+}

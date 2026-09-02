@@ -1,0 +1,26 @@
+A member has changed their e-mail address
+
+Member: {firstName|&<>"'ä} {lastName|&<>"'ä} ({alias|&<>"'ä})
+
+Previous address: {oldEmail|&<>"'ä}
+
+New address: {newEmail|&<>"'ä}
+
+For the GDT server the first address of this account still counts: {gdtEmail|&<>"'ä}.
+
+The previous address was never confirmed (a typo during setup) – nothing to merge on the GDT server. Please only enter the new address into Klick-Tipp.
+
+Kind regards,
+your Gradido team
+
+If you have any further questions, please contact our support.
+support@gradido.net
+
+Impressum [https://gradido.net/de/impressum/]
+Privacy Policy [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

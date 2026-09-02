@@ -1,0 +1,36 @@
+Reimposta la password
+
+Ciao {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+tu, o qualcun altro, hai richiesto la reimpostazione della password per questo account.
+
+Reimposta la password
+
+Se sei stato tu, clicca qui.
+
+reimposta [{resetLink|&<>"'ä}]
+
+Oppure copia il link nella finestra del tuo browser.
+
+{resetLink|&<>"'ä}
+
+Richiedi un nuovo link valido
+
+Il link è valido per {hours|&<>"'ä} ore. Se la validità del link è già scaduta, qui puoi farti inviare un nuovo link.
+
+Nuovo link [{resendLink|&<>"'ä}]
+
+Cordiali saluti,
+il tuo team Gradido
+
+Per ulteriori domande, contatta il nostro supporto.
+support@gradido.net
+
+Note legali [https://gradido.net/de/impressum/]
+Informativa sulla privacy [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

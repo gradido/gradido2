@@ -1,0 +1,32 @@
+Ваш вклад в общее благо подтверждён
+
+Здравствуйте, {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+ваш вклад в общее благо «{contributionMemo|&<>"'ä}» только что был подтверждён пользователем {senderAlias|&<>"'ä}. На ваш аккаунт Gradido зачислено {contributionAmount|&<>"'ä} GDD.
+
+Сведения о вкладе
+
+Ваши вклады в общее благо и сообщения к ним вы найдёте в вашем аккаунте Gradido.
+
+К вкладу [{contributionFrontendLink|&<>"'ä}]
+
+Или скопируйте ссылку в окно вашего браузера.
+
+{contributionFrontendLink|&<>"'ä}
+
+Пожалуйста, не отвечайте на это письмо.
+
+С наилучшими пожеланиями,
+ваша команда Gradido
+
+Если у вас есть другие вопросы, пожалуйста, обратитесь в нашу поддержку.
+support@gradido.net
+
+Правовая информация [https://gradido.net/de/impressum/]
+Политика конфиденциальности [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

@@ -1,0 +1,479 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: gradido2-email\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: el\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. emails.accountActivation.activateAccount
+msgid "Activate account"
+msgstr "Ενεργοποίηση λογαριασμού"
+
+#. emails.accountActivation.emailRegistered
+msgid "Your email address has just been registered with Gradido."
+msgstr "η διεύθυνση email σου μόλις καταχωρίστηκε στο Gradido."
+
+#. emails.accountActivation.pleaseClickLink
+msgid "Please click here to complete the registration and activate your Gradido account."
+msgstr "Κάνε κλικ εδώ για να ολοκληρώσεις την εγγραφή και να ενεργοποιήσεις τον λογαριασμό σου στο Gradido."
+
+#. emails.accountActivation.subject
+#. emails.accountActivation.title
+msgid "Email Verification"
+msgstr "Επαλήθευση email"
+
+#. emails.accountMultiRegistration.contactSupport
+msgid "Contact support"
+msgstr "Επικοινωνία με την υποστήριξη"
+
+#. emails.accountMultiRegistration.emailExists
+msgid "However, an account already exists for your email address."
+msgstr "Ωστόσο, υπάρχει ήδη λογαριασμός για τη διεύθυνση email σου."
+
+#. emails.accountMultiRegistration.emailReused
+msgid "Your email address has just been used again to register an account with Gradido."
+msgstr "η διεύθυνση email σου μόλις χρησιμοποιήθηκε ξανά για την εγγραφή λογαριασμού στο Gradido."
+
+#. emails.accountMultiRegistration.helperButton
+msgid "I am helping someone set up an account"
+msgstr "Βοηθώ κάποιον να δημιουργήσει λογαριασμό"
+
+#. emails.accountMultiRegistration.helperIntro
+msgid "If someone is sitting next to you who just used your e-mail address to start a Gradido account: continue the setup here. Together you enter their own e-mail address, and they choose their password themselves."
+msgstr "Αν δίπλα σου κάθεται ένας άνθρωπος που μόλις χρησιμοποίησε τη διεύθυνση email σου για να ξεκινήσει έναν λογαριασμό Gradido: συνέχισε εδώ τη ρύθμιση. Μαζί καταχωρείτε τη δική του διεύθυνση email, και τον κωδικό τον επιλέγει ο ίδιος."
+
+#. emails.accountMultiRegistration.helperTitle
+msgid "Helping someone at a Gradido café right now?"
+msgstr "Βοηθάς αυτή τη στιγμή κάποιον σε ένα καφέ Gradido;"
+
+#. emails.accountMultiRegistration.ifYouAreNotTheOne
+msgid "If you did not try to register again, please contact our support:"
+msgstr "Αν δεν προσπάθησες να εγγραφείς ξανά, επικοινώνησε με την υποστήριξή μας:"
+
+#. emails.accountMultiRegistration.onForgottenPasswordClickLink
+msgid "If you have forgotten your password, please click here."
+msgstr "Αν ξέχασες τον κωδικό πρόσβασής σου, κάνε κλικ εδώ."
+
+#. emails.accountMultiRegistration.subject
+#. emails.accountMultiRegistration.title
+msgid "Try To Register Again With Your Email"
+msgstr "Νέα προσπάθεια εγγραφής με το email σου"
+
+#. emails.addedContributionMessage.commonGoodContributionMessage
+msgid "You have received a message from %1 regarding your common good contribution “%2”."
+msgstr "έλαβες ένα μήνυμα από %1 σχετικά με τη συνεισφορά σου στο κοινό καλό «%2»."
+
+#. emails.addedContributionMessage.message
+msgid "„%1“"
+msgstr "«%1»"
+
+#. emails.addedContributionMessage.readMessage
+msgid "Read and reply to message"
+msgstr "Διάβασε και απάντησε στο μήνυμα"
+
+#. emails.addedContributionMessage.subject
+#. emails.addedContributionMessage.title
+msgid "Message about your common good contribution"
+msgstr "Μήνυμα σχετικά με τη συνεισφορά σου στο κοινό καλό"
+
+#. emails.addedContributionMessage.toSeeAndAnswerMessage
+msgid "You can reply directly at your contribution."
+msgstr "Μπορείς να απαντήσεις απευθείας στη συνεισφορά σου."
+
+#. emails.assistedRegistrationConfirm.accountCreated
+msgid "Together with a Gradido member, an account has just been set up for you — with this e-mail address."
+msgstr "Μαζί με ένα μέλος Gradido μόλις δημιουργήθηκε ένας λογαριασμός για σένα — με αυτή τη διεύθυνση email."
+
+#. emails.assistedRegistrationConfirm.clickToConfirm
+msgid "Please click here to confirm your e-mail address."
+msgstr "Κάνε κλικ εδώ για να επιβεβαιώσεις τη διεύθυνση email σου."
+
+#. emails.assistedRegistrationConfirm.confirmButton
+msgid "Confirm address"
+msgstr "Επιβεβαίωση διεύθυνσης"
+
+#. emails.assistedRegistrationConfirm.confirmHeading
+msgid "Confirm e-mail address"
+msgstr "Επιβεβαίωση διεύθυνσης email"
+
+#. emails.assistedRegistrationConfirm.notYou
+msgid "You know nothing about this account? Then ignore this e-mail — without confirmation the account stays locked."
+msgstr "Δεν γνωρίζεις τίποτα για αυτόν τον λογαριασμό; Τότε αγνόησε αυτό το email — χωρίς επιβεβαίωση ο λογαριασμός παραμένει κλειστός."
+
+#. emails.assistedRegistrationConfirm.pleaseConfirm
+msgid "Please confirm that this address is yours — only then will your account stay open for good."
+msgstr "Επιβεβαίωσε ότι αυτή η διεύθυνση είναι δική σου — μόνο τότε ο λογαριασμός σου θα παραμείνει μόνιμα ανοιχτός."
+
+#. emails.assistedRegistrationConfirm.subject
+msgid "Confirm your e-mail address"
+msgstr "Επιβεβαίωσε τη διεύθυνση email σου"
+
+#. emails.assistedRegistrationConfirm.title
+msgid "Your Gradido account is ready"
+msgstr "Ο λογαριασμός σου Gradido είναι έτοιμος"
+
+#. emails.contribution.toSeeContributionsAndMessages
+msgid "You will find your common good contributions and the messages about them in your Gradido account."
+msgstr "Τις συνεισφορές σου στο κοινό καλό και τα σχετικά μηνύματα θα τις βρεις στον λογαριασμό σου στο Gradido."
+
+#. emails.contributionChangedByModerator.subject
+#. emails.contributionChangedByModerator.title
+msgid "Your common good contribution has been changed"
+msgstr "Η συνεισφορά σου στο κοινό καλό άλλαξε"
+
+#. emails.contributionChangedByModerator.text
+msgid "your common good contribution '%1' has just been changed by %2 and now reads as '%3'"
+msgstr "η συνεισφορά σου στο κοινό καλό «%1» μόλις άλλαξε από %2 και τώρα είναι «%3»"
+
+#. emails.contributionConfirmed.commonGoodContributionConfirmed
+msgid "Your common good contribution “%1” has just been approved by %2. Your Gradido account has been credited with %3 GDD."
+msgstr "η συνεισφορά σου στο κοινό καλό «%1» μόλις επιβεβαιώθηκε από %2. Στον λογαριασμό σου στο Gradido πιστώθηκαν %3 GDD."
+
+#. emails.contributionConfirmed.subject
+#. emails.contributionConfirmed.title
+msgid "Your contribution to the common good was confirmed"
+msgstr "Η συνεισφορά σου στο κοινό καλό επιβεβαιώθηκε"
+
+#. emails.contributionDeleted.commonGoodContributionDeleted
+msgid "Your common good contribution “%1” was deleted by %2."
+msgstr "η συνεισφορά σου στο κοινό καλό «%1» διαγράφηκε από %2."
+
+#. emails.contributionDeleted.subject
+#. emails.contributionDeleted.title
+msgid "Your common good contribution was deleted"
+msgstr "Η συνεισφορά σου στο κοινό καλό διαγράφηκε"
+
+#. emails.contributionDenied.commonGoodContributionDenied
+msgid "Your common good contribution “%1” was rejected by %2."
+msgstr "η συνεισφορά σου στο κοινό καλό «%1» απορρίφθηκε από %2."
+
+#. emails.contributionDenied.subject
+#. emails.contributionDenied.title
+msgid "Your common good contribution was rejected"
+msgstr "Η συνεισφορά σου στο κοινό καλό απορρίφθηκε"
+
+#. emails.customEmail.haveReceivedMessageFrom
+msgid "you have just received a message from %1"
+msgstr "μόλις έλαβες ένα μήνυμα από %1"
+
+#. emails.customEmail.title
+msgid "%1 has sent you a message"
+msgstr "%1 σου έστειλε ένα μήνυμα"
+
+#. emails.emailChangeConfirm.confirm
+msgid "Confirm new address"
+msgstr "Επιβεβαίωση νέας διεύθυνσης"
+
+#. emails.emailChangeConfirm.notYou
+msgid "If you did not ask for this change, you can simply ignore this e-mail – nothing changes without your confirmation."
+msgstr "Αν δεν ζήτησες εσύ αυτή την αλλαγή, μπορείς απλώς να αγνοήσεις αυτό το e-mail – χωρίς την επιβεβαίωσή σου δεν αλλάζει τίποτα."
+
+#. emails.emailChangeConfirm.pleaseConfirm
+msgid "Please confirm with one click that this address is yours."
+msgstr "Επιβεβαίωσε με ένα κλικ ότι αυτή η διεύθυνση είναι δική σου."
+
+#. emails.emailChangeConfirm.subject
+msgid "Please confirm your new e-mail address"
+msgstr "Επιβεβαίωσε τη νέα σου διεύθυνση e-mail"
+
+#. emails.emailChangeConfirm.title
+msgid "Confirm new e-mail address"
+msgstr "Επιβεβαίωση νέας διεύθυνσης e-mail"
+
+#. emails.emailChangeConfirm.validUntil
+msgid "The link is valid until %1. After that you can have a new e-mail sent from your settings."
+msgstr "Ο σύνδεσμος ισχύει έως τις %1. Μετά μπορείς να ζητήσεις νέο e-mail από τις ρυθμίσεις σου."
+
+#. emails.emailChangeConfirm.youAskedFor
+msgid "You want to change the e-mail address of your Gradido account to this address."
+msgstr "Θέλεις να αλλάξεις τη διεύθυνση e-mail του λογαριασμού σου Gradido σε αυτή τη διεύθυνση."
+
+#. emails.emailChangeDone.changedTo
+msgid "From now on the e-mail address of your Gradido account is %1."
+msgstr "Από τώρα η διεύθυνση e-mail του λογαριασμού σου Gradido είναι %1."
+
+#. emails.emailChangeDone.notYou
+msgid "That was not you? Then please contact %1 right away."
+msgstr "Δεν ήσουν εσύ; Τότε επικοινώνησε αμέσως με %1."
+
+#. emails.emailChangeDone.subject
+msgid "Your e-mail address has been changed"
+msgstr "Η διεύθυνση e-mail σου άλλαξε"
+
+#. emails.emailChangeDone.title
+msgid "E-mail address changed"
+msgstr "Η διεύθυνση e-mail άλλαξε"
+
+#. emails.emailChangeDone.wasBefore
+msgid "Until now it was %1."
+msgstr "Μέχρι τώρα ήταν %1."
+
+#. emails.emailChangeNotice.changePassword
+msgid "If you revoke the change, please change your password afterwards as well."
+msgstr "Αν απορρίψεις την αλλαγή, άλλαξε στη συνέχεια και τον κωδικό σου."
+
+#. emails.emailChangeNotice.notYou
+msgid "That was not you? Then click here – the change is revoked and this address stays."
+msgstr "Δεν ήσουν εσύ; Τότε κάνε κλικ εδώ – η αλλαγή απορρίπτεται και αυτή η διεύθυνση παραμένει."
+
+#. emails.emailChangeNotice.notYouTitle
+msgid "That was not you?"
+msgstr "Δεν ήσουν εσύ;"
+
+#. emails.emailChangeNotice.requested
+msgid "A change of the e-mail address of your Gradido account to %1 has been requested."
+msgstr "Για τον λογαριασμό σου Gradido ζητήθηκε αλλαγή της διεύθυνσης e-mail σε %1."
+
+#. emails.emailChangeNotice.revoke
+msgid "Revoke change"
+msgstr "Απόρριψη αλλαγής"
+
+#. emails.emailChangeNotice.subject
+msgid "Change of your e-mail address requested"
+msgstr "Ζητήθηκε αλλαγή της διεύθυνσης e-mail σου"
+
+#. emails.emailChangeNotice.title
+msgid "Your e-mail address is about to change"
+msgstr "Η διεύθυνση e-mail σου πρόκειται να αλλάξει"
+
+#. emails.emailChangeNotice.untilConfirmed
+msgid "Until the new address is confirmed, this one stays in force. If that was you, there is nothing more to do."
+msgstr "Μέχρι να επιβεβαιωθεί η νέα διεύθυνση, ισχύει αυτή εδώ. Αν ήσουν εσύ, δεν χρειάζεται να κάνεις τίποτα άλλο."
+
+#. emails.emailChangeNotice.validUntil
+msgid "The link is valid until %1 – after that the requested change expires by itself."
+msgstr "Ο σύνδεσμος ισχύει έως τις %1 – μετά η ζητούμενη αλλαγή λήγει από μόνη της."
+
+#. emails.emailChangeSupport.gdtHint
+msgid "For the GDT server the first address of this account still counts: %1."
+msgstr "Για τον διακομιστή GDT εξακολουθεί να μετράει η πρώτη διεύθυνση αυτού του λογαριασμού: %1."
+
+#. emails.emailChangeSupport.member
+msgid "Member: %1 %2 (%3)"
+msgstr "Μέλος: %1 %2 (%3)"
+
+#. emails.emailChangeSupport.newEmail
+msgid "New address: %1"
+msgstr "Νέα διεύθυνση: %1"
+
+#. emails.emailChangeSupport.oldEmail
+msgid "Previous address: %1"
+msgstr "Προηγούμενη διεύθυνση: %1"
+
+#. emails.emailChangeSupport.subject
+msgid "E-mail address changed: %1 %2"
+msgstr "Η διεύθυνση e-mail άλλαξε: %1 %2"
+
+#. emails.emailChangeSupport.title
+msgid "A member has changed their e-mail address"
+msgstr "Ένα μέλος άλλαξε τη διεύθυνση e-mail του"
+
+#. emails.emailChangeSupport.todo
+msgid "Please merge the new address into this account on the GDT server and update Klick-Tipp."
+msgstr "Παρακαλώ σύνδεσε τη νέα διεύθυνση με αυτόν τον λογαριασμό στον διακομιστή GDT και ενημέρωσε το Klick-Tipp."
+
+#. emails.emailChangeSupport.todoTakeBack
+msgid "A change back to an earlier address of this account – nothing to merge on the GDT server. Please only update Klick-Tipp."
+msgstr "Επιστροφή σε προηγούμενη διεύθυνση αυτού του λογαριασμού – δεν υπάρχει τίποτα προς συγχώνευση στον διακομιστή GDT. Ενημερώστε μόνο το Klick-Tipp."
+
+#. emails.emailChangeSupport.todoTypoCorrection
+msgid "The previous address was never confirmed (a typo during setup) – nothing to merge on the GDT server. Please only enter the new address into Klick-Tipp."
+msgstr "Η προηγούμενη διεύθυνση δεν επιβεβαιώθηκε ποτέ (τυπογραφικό λάθος κατά τη ρύθμιση) – δεν υπάρχει τίποτα προς συγχώνευση στον διακομιστή GDT. Απλώς καταχωρίστε τη νέα διεύθυνση στο Klick-Tipp."
+
+#. emails.footer.contactOurSupport
+msgid "If you have any further questions, please contact our support."
+msgstr "Αν έχεις περαιτέρω ερωτήσεις, επικοινώνησε με την υποστήριξή μας."
+
+#. emails.footer.imprint
+msgid "Impressum"
+msgstr "Νομική σημείωση"
+
+#. emails.footer.imprintAddress [1/5]
+msgid "Gradido-Akademie"
+msgstr "Gradido-Akademie"
+
+#. emails.footer.imprintAddress [2/5]
+msgid "Institut für Wirtschaftsbionik"
+msgstr "Institut für Wirtschaftsbionik"
+
+#. emails.footer.imprintAddress [3/5]
+msgid "Pfarrweg 2"
+msgstr "Pfarrweg 2"
+
+#. emails.footer.imprintAddress [4/5]
+msgid "74653 Künzelsau"
+msgstr "74653 Künzelsau"
+
+#. emails.footer.imprintAddress [5/5]
+msgid "Deutschland"
+msgstr "Deutschland"
+
+#. emails.footer.imprintImageAlt
+msgid "Gradido-Akademie Logo"
+msgstr "Λογότυπο Gradido-Akademie"
+
+#. emails.footer.privacyPolicy
+msgid "Privacy Policy"
+msgstr "Πολιτική απορρήτου"
+
+#. emails.footer.supportEmail
+msgid "support@gradido.net"
+msgstr "support@gradido.net"
+
+#. emails.general.amountGDD
+msgid "Amount: %1 GDD"
+msgstr "Ποσό: %1 GDD"
+
+#. emails.general.answerNow
+msgid "Reply"
+msgstr "Απάντησε"
+
+#. emails.general.completeRegistration
+msgid "Complete registration"
+msgstr "Ολοκλήρωση εγγραφής"
+
+#. emails.general.contribution
+msgid "Contribution: : %1"
+msgstr "Συνεισφορά στο κοινό καλό: %1"
+
+#. emails.general.contributionDetails
+msgid "Contribution details"
+msgstr "Λεπτομέρειες συνεισφοράς"
+
+#. emails.general.detailsYouFindOnLinkToYourAccount
+msgid "You can find transaction details in your Gradido account."
+msgstr "Τις λεπτομέρειες της συναλλαγής θα τις βρεις στον λογαριασμό σου στο Gradido."
+
+#. emails.general.helloName
+msgid "Hello %1 %2,"
+msgstr "Γεια σου %1 %2,"
+
+#. emails.general.linkValidity [1/2]
+msgid "The link has a validity of %1 hours."
+msgstr "Ο σύνδεσμος ισχύει για %1 ώρες."
+
+#. emails.general.linkValidity [2/2]
+#. emails.general.linkValidityWithMinutes [2/2]
+msgid "If the validity of the link has already expired, you can have a new link sent to you here."
+msgstr "Αν η ισχύς του συνδέσμου έχει ήδη λήξει, μπορείς να ζητήσεις εδώ την αποστολή νέου συνδέσμου."
+
+#. emails.general.linkValidityWithMinutes [1/2]
+msgid "The link has a validity of %1 hours and %2 minutes."
+msgstr "Ο σύνδεσμος ισχύει για %1 ώρες και %2 λεπτά."
+
+#. emails.general.message
+msgid "Message"
+msgstr "Μήνυμα"
+
+#. emails.general.newLink
+msgid "New link"
+msgstr "Νέος σύνδεσμος"
+
+#. emails.general.orCopyLink
+msgid "Or copy the link into your browser window."
+msgstr "Ή αντίγραψε τον σύνδεσμο στο παράθυρο του προγράμματος περιήγησής σου."
+
+#. emails.general.pleaseDoNotReply
+msgid "Please do not reply to this email."
+msgstr "Παρακαλώ μην απαντήσεις σε αυτό το email."
+
+#. emails.general.requestNewLink
+msgid "Request new valid link"
+msgstr "Ζήτησε νέο έγκυρο σύνδεσμο"
+
+#. emails.general.reset
+msgid "reset"
+msgstr "επαναφορά"
+
+#. emails.general.sincerelyYours
+msgid "Kind regards,"
+msgstr "Με εκτίμηση,"
+
+#. emails.general.toAccount
+msgid "To account"
+msgstr "Στον λογαριασμό"
+
+#. emails.general.toContribution
+msgid "To contribution"
+msgstr "Στη συνεισφορά"
+
+#. emails.general.transactionDetails
+msgid "Transaction details"
+msgstr "Λεπτομέρειες συναλλαγής"
+
+#. emails.general.yourGradidoTeam
+msgid "your Gradido team"
+msgstr "η ομάδα σου Gradido"
+
+#. emails.resetPassword.pleaseClickLink
+msgid "If it was you, please click here."
+msgstr "Αν ήσουν εσύ, κάνε κλικ εδώ."
+
+#. emails.resetPassword.subject
+#. emails.resetPassword.title
+msgid "Reset password"
+msgstr "Επαναφορά κωδικού πρόσβασης"
+
+#. emails.resetPassword.youOrSomeoneResetPassword
+msgid "You, or someone else, requested a password reset for this account."
+msgstr "εσύ, ή κάποιος άλλος, ζήτησες επαναφορά κωδικού πρόσβασης για αυτόν τον λογαριασμό."
+
+#. emails.thankYouCardPaid.blockCard
+msgid "Block card"
+msgstr "Μπλοκάρισμα κάρτας"
+
+#. emails.thankYouCardPaid.card
+msgid "Card: %1"
+msgstr "Κάρτα: %1"
+
+#. emails.thankYouCardPaid.memo
+msgid "Reference: %1"
+msgstr "Αιτιολογία: %1"
+
+#. emails.thankYouCardPaid.notYou
+msgid "That was not you? Block your card right here — it stops working, your Gradido address stays."
+msgstr "Δεν ήσουν εσύ; Μπλόκαρε την κάρτα σου εδώ — παύει να λειτουργεί, η διεύθυνση Gradido παραμένει."
+
+#. emails.thankYouCardPaid.recipient
+msgid "Recipient: %1 (%2)"
+msgstr "Παραλήπτης: %1 (%2)"
+
+#. emails.thankYouCardPaid.subject
+msgid "You passed on %1 GDD with your thank you card"
+msgstr "Μεταβίβασες %1 GDD με την κάρτα ευχαριστίας σου"
+
+#. emails.thankYouCardPaid.title
+msgid "%1 GDD were passed on with your thank you card"
+msgstr "Μεταβιβάστηκαν %1 GDD με την κάρτα ευχαριστίας σου"
+
+#. emails.thankYouCardPaid.wasPaid
+msgid "%1 GDD have just been passed on with your thank you card."
+msgstr "Μόλις μεταβιβάστηκαν %1 GDD με την κάρτα ευχαριστίας σου."
+
+#. emails.transactionLinkRedeemed.hasRedeemedYourLink
+msgid "%1 (%2) has just redeemed your link."
+msgstr "%1 (%2) μόλις εξαργύρωσε τον σύνδεσμό σου."
+
+#. emails.transactionLinkRedeemed.memo
+msgid "Message: %1"
+msgstr "Μήνυμα: %1"
+
+#. emails.transactionLinkRedeemed.subject
+#. emails.transactionLinkRedeemed.title
+msgid "%1 has redeemed your Gradido link"
+msgstr "%1 εξαργύρωσε τον σύνδεσμό σου Gradido"
+
+#. emails.transactionReceived.haveReceivedAmountGDDFrom
+msgid "You have just received %1 GDD from %2."
+msgstr "μόλις έλαβες %1 GDD από %2."
+
+#. emails.transactionReceived.subject
+#. emails.transactionReceived.title
+msgid "%1 has sent you %2 Gradido"
+msgstr "%1 σου έστειλε %2 Gradido"
+
+#. general.decimalSeparator
+msgid "."
+msgstr ","

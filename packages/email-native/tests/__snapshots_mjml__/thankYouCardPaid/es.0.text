@@ -1,0 +1,35 @@
+Se han entregado {transactionAmount|&<>"'ä} GDD con tu tarjeta de agradecimiento
+
+Hola {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+Se acaban de entregar {transactionAmount|&<>"'ä} GDD con tu tarjeta de agradecimiento.
+
+Detalles de la transacción
+
+Importe: {transactionAmount|&<>"'ä} GDD
+Destinatario: {recipientName|&<>"'ä} ({recipientCommunity|&<>"'ä})
+Concepto: {transactionMemo|&<>"'ä}
+Tarjeta: {cardLabel|&<>"'ä}
+
+A la cuenta [{communityURL|&<>"'ä}/transactions]
+
+¿No has sido tú? Bloquea tu tarjeta aquí mismo: dejará de funcionar, tu dirección Gradido se mantiene.
+
+Bloquear tarjeta [{communityURL|&<>"'ä}/settings/thank-you-card?block={cardId|&<>"'ä}]
+
+Por favor, no respondas a este correo electrónico.
+
+Un cordial saludo,
+tu equipo de Gradido
+
+Si tienes más preguntas, ponte en contacto con nuestro soporte.
+support@gradido.net
+
+Aviso legal [https://gradido.net/de/impressum/]
+Política de privacidad [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

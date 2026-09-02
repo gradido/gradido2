@@ -31,13 +31,20 @@
   "scripts": {
     "build": "c-cpp-zig-build && bun scripts/sync-fast-servers.ts",
     "build:debug": "c-cpp-zig-build --debug && bun scripts/sync-fast-servers.ts",
-    "snapshots:update": "node tools/snapshots.mjs",
+    "snapshots:update": "bun tools/snapshots.mjs",
     "info": "c-cpp-zig-build info",
-    "test": "node --test tests/",
-    "bench": "node tests/mail-bench.mjs && node tests/render-bench.mjs",
+    "test": "bun --test tests/",
+    "bench": "bun tests/mail-bench.mjs && bun tests/render-bench.mjs",
     "lint": "biome check --error-on-warnings .",
     "lint:fix": "biome check --error-on-warnings . --write",
-    "build:clean": "c-cpp-zig-build clean"
+    "build:clean": "c-cpp-zig-build clean",
+    "extract:mjml": "node tools/extract_mjml.mjs --out gen/mjml",
+    "po": "bun tools/json2po.mjs",
+    "extract:pug": "node tools/extract.mjs --out gen/pug",
+    "compare": "bun run extract:pug && bun run extract:mjml && node tools/compare_pug.mjs",
+    "preview": "bun scripts/preview.ts",
+    "preview:build": "node tools/preview.mjs",
+    "snapshots:mjml": "node tools/extract_mjml.mjs --out gen/mjml && node tools/snapshots_mjml.mjs"
   },
   "zigNative": {
     "optimize": "fast",
@@ -46,6 +53,7 @@
   "devDependencies": {
     "c-cpp-zig-build": "0.2.0",
     "html-to-text": "10.0.1",
+    "mjml": "5.4.0",
     "nodemailer": "9.0.6",
     "pug": "3.0.4"
   },

@@ -1,0 +1,36 @@
+Tu dirección de correo va a cambiar
+
+Hola {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+Se ha solicitado cambiar la dirección de correo de tu cuenta Gradido a {newEmail|&<>"'ä}.
+
+Hasta que la nueva dirección sea confirmada, esta sigue siendo válida. Si has sido tú, no tienes que hacer nada más.
+
+¿No has sido tú?
+
+¿No has sido tú? Entonces haz clic aquí: el cambio se rechaza y esta dirección se mantiene.
+
+Rechazar el cambio [{revokeLink|&<>"'ä}]
+
+O copia el enlace en la ventana de tu navegador.
+
+{revokeLink|&<>"'ä}
+
+Si rechazas el cambio, cambia también tu contraseña después.
+
+El enlace es válido hasta el {validUntil|&<>"'ä}; después, el cambio solicitado caduca por sí solo.
+
+Un cordial saludo,
+tu equipo de Gradido
+
+Si tienes más preguntas, ponte en contacto con nuestro soporte.
+support@gradido.net
+
+Aviso legal [https://gradido.net/de/impressum/]
+Política de privacidad [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

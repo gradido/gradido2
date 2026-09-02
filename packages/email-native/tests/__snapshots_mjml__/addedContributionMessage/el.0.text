@@ -1,0 +1,32 @@
+Μήνυμα σχετικά με τη συνεισφορά σου στο κοινό καλό
+
+Γεια σου {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+έλαβες ένα μήνυμα από {senderAlias|&<>"'ä} σχετικά με τη συνεισφορά σου στο κοινό καλό «{contributionMemo|&<>"'ä}».
+
+Διάβασε και απάντησε στο μήνυμα
+
+«{message|&<>"'ä}»
+
+Μπορείς να απαντήσεις απευθείας στη συνεισφορά σου.
+
+Απάντησε [{contributionFrontendLink|&<>"'ä}]
+
+Στον λογαριασμό [{communityURL|&<>"'ä}/transactions]
+
+Παρακαλώ μην απαντήσεις σε αυτό το email.
+
+Με εκτίμηση,
+η ομάδα σου Gradido
+
+Αν έχεις περαιτέρω ερωτήσεις, επικοινώνησε με την υποστήριξή μας.
+support@gradido.net
+
+Νομική σημείωση [https://gradido.net/de/impressum/]
+Πολιτική απορρήτου [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

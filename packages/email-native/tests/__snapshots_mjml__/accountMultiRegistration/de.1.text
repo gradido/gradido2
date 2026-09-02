@@ -1,0 +1,38 @@
+Erneuter Registrierungsversuch mit Deiner E-Mail
+
+Hallo {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+Deine E-Mail-Adresse wurde soeben erneut benutzt, um bei Gradido ein Konto zu registrieren.
+
+Es existiert jedoch zu Deiner E-Mail-Adresse schon ein Konto.
+
+Passwort zurücksetzen
+
+Solltest Du Dein Passwort vergessen haben, klicke bitte hier.
+
+zurücksetzen [{resendLink|&<>"'ä}]
+
+Oder kopiere den Link in Dein Browserfenster.
+
+{resendLink|&<>"'ä}
+
+Support kontaktieren
+
+Wenn Du nicht versucht hast Dich erneut zu registrieren, wende Dich bitte an unseren Support:
+
+{supportEmail|&<>"'ä}
+
+Liebe Grüße
+Dein Gradido-Team
+
+Bei weiteren Fragen kontaktiere bitte unseren Support.
+support@gradido.net
+
+Impressum [https://gradido.net/de/impressum/]
+Datenschutzerklärung [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

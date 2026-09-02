@@ -1,0 +1,36 @@
+Je e-mailadres gaat veranderen
+
+Hallo {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+Voor je Gradido-account is een wijziging van het e-mailadres naar {newEmail|&<>"'ä} aangevraagd.
+
+Totdat het nieuwe adres is bevestigd, blijft dit adres gelden. Was jij het zelf, dan hoef je niets te doen.
+
+Was jij dat niet?
+
+Was jij dat niet? Klik dan hier – de wijziging wordt afgewezen en dit adres blijft bestaan.
+
+Wijziging afwijzen [{revokeLink|&<>"'ä}]
+
+Of kopieer de link naar je browservenster.
+
+{revokeLink|&<>"'ä}
+
+Als je de wijziging afwijst, wijzig daarna dan ook je wachtwoord.
+
+De link is geldig tot {validUntil|&<>"'ä} – daarna vervalt de aangevraagde wijziging vanzelf.
+
+Hartelijke groet,
+je Gradido-team
+
+Neem bij verdere vragen contact op met onze support.
+support@gradido.net
+
+Colofon [https://gradido.net/de/impressum/]
+Privacybeleid [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

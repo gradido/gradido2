@@ -19,10 +19,17 @@
   <mj-class name="p-content" color="#696c72" />
   <mj-class name="h2" font-size="22px" font-weight="600" color="#383838" />
 
-  <!-- The three buttons of webflow.css. background-color is what Outlook gets;
-       the gradient below rides on top wherever it is supported. -->
+  <!-- The four buttons of webflow.css. background-color is what Outlook gets;
+       the gradient in mj-style rides on top wherever it is supported. Which one a
+       button is says what it MEANS, and that vocabulary is the whole point:
+         btn-gold   the way on to wherever the thing lives
+         btn-grey   the fallback ("new link")
+         btn-green  an answer to a person -- and it stands INSIDE the card
+         btn-red    takes something away for good -->
   <mj-class name="btn" color="#ffffff" border-radius="20px" inner-padding="9px 15px"
             font-size="17px" width="50%" padding="25px 0 25px 0" />
+  <mj-class name="btn-answer" color="#f5f5f5" border-radius="20px" inner-padding="9px 15px"
+            font-size="20px" font-weight="600" align="right" padding="25px 0 25px 0" />
 </mj-attributes>
 
 <mj-style>
@@ -31,5 +38,13 @@
   .btn-gold a { background-image: radial-gradient(circle farthest-corner at 0% 0%, #f9cd69, #c58d38) !important; }
   .btn-grey a { background-image: radial-gradient(circle farthest-corner at 0% 0%, #616161, #c2c2c2) !important; }
   .rule p     { background-image: linear-gradient(90deg, #c58d38, #f3cd7c 40%, #dbb056 55%, #eec05f 71%, #cc9d3d); }
+  .btn-green a{ background-image: linear-gradient(135deg, #53900c, #6e6e6e) !important; }
+  .btn-red a  { background-image: linear-gradient(135deg, #f5365c, #d0264a) !important; }
   .clink div  { line-break: anywhere; word-break: break-all; }
+
+  /* Text a person typed -- a memo, a moderator's question, the subject and body of
+     a message. Html collapses the line breaks they pressed; this keeps them.
+     Word-based clients (Outlook on Windows) support white-space poorly, so there
+     the breaks may still collapse -- unmeasured, same as in webflow.css. */
+  .human-text div { white-space: pre-line; }
 </mj-style>

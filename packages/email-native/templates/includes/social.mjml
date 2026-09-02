@@ -3,7 +3,10 @@
   cid:facebookicon, cid:telegramicon, cid:twittericon and cid:youtubeicon.
   Paths as in header.mjml: written from the template's directory.
 -->
-<mj-section padding="40px 25px 0 25px">
+<!-- css-class="socialmedia" is not decoration: TEXT_OPTIONS in tools/manifest.mjs
+     skips that selector, which is what keeps four bare URLs out of the plain text
+     part. The pug footer carries the same class for the same reason. -->
+<mj-section css-class="socialmedia" padding="40px 25px 0 25px">
   <mj-column>
     <mj-social mode="horizontal" icon-size="40px" align="center" padding="0">
       <mj-social-element name="facebook-noshare" href="https://www.facebook.com/groups/Gradido/" src="includes/facebook-icon.png" alt="facebook" background-color="transparent" />

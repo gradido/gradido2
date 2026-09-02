@@ -13,22 +13,27 @@
 
 <mj-section padding="0 25px 20px 25px">
   <mj-column>
+    <!-- One block, not two: in the plain text part a separate mj-text would put a
+         blank line between the sentence and the address it names. pug had them in
+         one block for the same reason -- there the mailto is an inline <a>. -->
     <mj-text mj-class="muted" padding="30px 0 30px 0">
-      {{t:emails.footer.contactOurSupport}}
-    </mj-text>
-    <mj-text padding="0" font-weight="bold">
-      <a href="mailto:{{t:emails.footer.supportEmail}}" style="color:#383838;text-decoration:none;">{{t:emails.footer.supportEmail}}</a>
+      {{t:If you have any further questions, please contact our support.}}<br />
+      <a href="mailto:{{t:support@gradido.net}}" style="color:#383838;font-weight:bold;text-decoration:none;">{{t:support@gradido.net}}</a>
     </mj-text>
 
-    <mj-image src="https://gdd.gradido.net/img/brand/green.png" alt="{{t:emails.footer.imprintImageAlt}}" width="200px" padding="30px 0 30px 0" />
+    <mj-image src="https://gdd.gradido.net/img/brand/green.png" alt="{{t:Gradido-Akademie Logo}}" width="200px" padding="30px 0 30px 0" />
 
     <mj-text mj-class="muted" padding="0">
-      <a href="https://gradido.net/de/impressum/" target="_blank" style="color:#9ca0a8;">{{t:emails.footer.imprint}}</a><br />
-      <a href="https://gradido.net/de/datenschutz/" target="_blank" style="color:#9ca0a8;">{{t:emails.footer.privacyPolicy}}</a>
+      <a href="https://gradido.net/de/impressum/" target="_blank" style="color:#9ca0a8;">{{t:Impressum}}</a><br />
+      <a href="https://gradido.net/de/datenschutz/" target="_blank" style="color:#9ca0a8;">{{t:Privacy Policy}}</a>
     </mj-text>
 
     <mj-text mj-class="muted" padding="30px 0 30px 0">
-      {{t:emails.footer.imprintAddress}}
+      {{t:Gradido-Akademie}}<br />
+      {{t:Institut für Wirtschaftsbionik}}<br />
+      {{t:Pfarrweg 2}}<br />
+      {{t:74653 Künzelsau}}<br />
+      {{t:Deutschland}}
     </mj-text>
   </mj-column>
 </mj-section>

@@ -1,0 +1,36 @@
+Email Verification
+
+Hello {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+Your email address has just been registered with Gradido.
+
+Complete registration
+
+Please click here to complete the registration and activate your Gradido account.
+
+Activate account [{activationLink|&<>"'ä}]
+
+Or copy the link into your browser window.
+
+{activationLink|&<>"'ä}
+
+Request new valid link
+
+The link has a validity of {hours|&<>"'ä} hours. If the validity of the link has already expired, you can have a new link sent to you here.
+
+New link [{resendLink|&<>"'ä}]
+
+Kind regards,
+your Gradido team
+
+If you have any further questions, please contact our support.
+support@gradido.net
+
+Impressum [https://gradido.net/de/impressum/]
+Privacy Policy [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

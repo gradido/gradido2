@@ -1,0 +1,24 @@
+Адрес электронной почты изменён
+
+Здравствуйте, {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+Отныне адрес электронной почты вашего аккаунта Gradido – {newEmail|&<>"'ä}.
+
+До сих пор это был {oldEmail|&<>"'ä}.
+
+Это были не вы? Тогда немедленно обратитесь по адресу {supportEmail|&<>"'ä}.
+
+С наилучшими пожеланиями,
+ваша команда Gradido
+
+Если у вас есть другие вопросы, пожалуйста, обратитесь в нашу поддержку.
+support@gradido.net
+
+Правовая информация [https://gradido.net/de/impressum/]
+Политика конфиденциальности [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland

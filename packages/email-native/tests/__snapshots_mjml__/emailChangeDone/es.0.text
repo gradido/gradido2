@@ -1,0 +1,24 @@
+Dirección de correo cambiada
+
+Hola {firstName|&<>"'ä} {lastName|&<>"'ä},
+
+A partir de ahora, la dirección de correo de tu cuenta Gradido es {newEmail|&<>"'ä}.
+
+Hasta ahora era {oldEmail|&<>"'ä}.
+
+¿No has sido tú? Entonces contacta de inmediato con {supportEmail|&<>"'ä}.
+
+Un cordial saludo,
+tu equipo de Gradido
+
+Si tienes más preguntas, ponte en contacto con nuestro soporte.
+support@gradido.net
+
+Aviso legal [https://gradido.net/de/impressum/]
+Política de privacidad [https://gradido.net/de/datenschutz/]
+
+Gradido-Akademie
+Institut für Wirtschaftsbionik
+Pfarrweg 2
+74653 Künzelsau
+Deutschland
