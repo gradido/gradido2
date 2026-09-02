@@ -4,18 +4,19 @@
 
 Только что вашей картой благодарности передано {transactionAmount|&<>"'ä} GDD.
 
-
 Сведения о транзакции
 
 Сумма: {transactionAmount|&<>"'ä} GDD
 Получатель: {recipientName|&<>"'ä} ({recipientCommunity|&<>"'ä})
 Назначение: {transactionMemo|&<>"'ä}
 Карта: {cardLabel|&<>"'ä}
+
 В аккаунт [{communityURL|&<>"'ä}/transactions]
 
 Это были не вы? Заблокируйте карту прямо здесь — она перестанет работать, ваш адрес Gradido останется.
 
 Заблокировать карту [{communityURL|&<>"'ä}/settings/thank-you-card?block={cardId|&<>"'ä}]
+
 Пожалуйста, не отвечайте на это письмо.
 
 С наилучшими пожеланиями,
@@ -25,8 +26,8 @@
 support@gradido.net
 
 Правовая информация [https://gradido.net/de/impressum/]
-
 Политика конфиденциальности [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

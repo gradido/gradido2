@@ -1,0 +1,51 @@
+<!--
+  transactionLinkRedeemed/html.pug as MJML -- a spike, not a source.
+
+  How the markers, the includes and the preview settings work is written once, in
+  accountActivation.mjml. This file is the six-line skeleton plus what makes this
+  mail this mail.
+-->
+<!-- lang= is layout.pug's html(lang=locale): a slot the RENDERER fills from the
+     locale it was called with, not one a caller supplies -- which is why it does
+     not show up in the struct. -->
+<mjml lang="{{v:locale}}">
+  <mj-head>
+    <mj-include path="includes/head.mjml" />
+    <mj-title>{{t:%1 has redeemed your Gradido link|senderAlias}}</mj-title>
+  </mj-head>
+
+  <mj-body>
+    <mj-include path="includes/top.mjml" />
+
+    <mj-section padding="15px 25px 0 25px">
+      <mj-column>
+        <mj-text mj-class="h2">{{t:%1 has redeemed your Gradido link|senderAlias}}</mj-text>
+      </mj-column>
+    </mj-section>
+
+    <mj-section padding="20px 25px 0 25px">
+      <mj-column>
+        <mj-include path="includes/salutation.mjml" />
+        <mj-text mj-class="muted">{{t:%1 (%2) has just redeemed your link.|senderAlias,senderCommunity}}</mj-text>
+      </mj-column>
+    </mj-section>
+
+    <mj-wrapper background-color="#f5f5f5" border="1px solid #808080" border-radius="24px" padding="20px 8% 40px 8%">
+      <mj-section background-color="#f5f5f5">
+        <mj-column>
+          <mj-text mj-class="h2" padding="20px 0 0 0">{{t:Transaction details}}</mj-text>
+          <mj-text mj-class="p-content" css-class="human-text" padding="15px 0 15px 0">
+            {{t:Amount: %1 GDD|transactionAmount}}<br />
+            {{t:Message: %1|transactionMemo}}<br />
+            {{t:You can find transaction details in your Gradido account.}}
+          </mj-text>
+          <mj-button mj-class="btn" css-class="btn-gold" background-color="#c58d38"
+                      href="{{v:communityURL}}/transactions">{{t:To account}}</mj-button>
+          <mj-include path="includes/do-not-reply.mjml" />
+        </mj-column>
+      </mj-section>
+    </mj-wrapper>
+
+    <mj-include path="includes/bottom.mjml" />
+  </mj-body>
+</mjml>

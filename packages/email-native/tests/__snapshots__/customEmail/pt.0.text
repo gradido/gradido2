@@ -3,8 +3,11 @@ Olá {firstName|&<>"'ä} {lastName|&<>"'ä},
 acabaste de receber uma mensagem de {senderAlias|&<>"'ä}
 
 {subject|&<>"'ä}
+
 {memo|&<>"'ä}
+
 Responder [{communityURL|&<>"'ä}/send/{senderCommunityUuid|&<>"'ä}/{senderUuid|&<>"'ä}?art=email]
+
 Para a conta [{communityURL|&<>"'ä}/transactions]
 
 Com os melhores cumprimentos,
@@ -14,8 +17,8 @@ Se tiveres mais questões, contacta o nosso suporte.
 support@gradido.net
 
 Aviso legal [https://gradido.net/de/impressum/]
-
 Política de privacidade [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

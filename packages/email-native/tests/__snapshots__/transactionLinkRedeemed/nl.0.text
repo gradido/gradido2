@@ -4,13 +4,14 @@ Hallo {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 {senderAlias|&<>"'ä} ({senderCommunity|&<>"'ä}) heeft zojuist je link ingewisseld.
 
-
 Transactiedetails
 
 Bedrag: {transactionAmount|&<>"'ä} GDD
 Bericht: {transactionMemo|&<>"'ä}
 De details van de transactie vind je in je Gradido-account.
+
 Naar het account [{communityURL|&<>"'ä}/transactions]
+
 Beantwoord deze e-mail alsjeblieft niet.
 
 Hartelijke groet,
@@ -20,8 +21,8 @@ Neem bij verdere vragen contact op met onze support.
 support@gradido.net
 
 Colofon [https://gradido.net/de/impressum/]
-
 Privacybeleid [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

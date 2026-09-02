@@ -4,13 +4,16 @@ Ciao {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 il tuo contributo al bene comune «{contributionMemo|&<>"'ä}» è stato eliminato da {senderAlias|&<>"'ä}.
 
-
 Dettagli del contributo
 
 Trovi i tuoi contributi al bene comune e i relativi messaggi nel tuo account Gradido.
+
 Al contributo [{contributionFrontendLink|&<>"'ä}]
+
 Oppure copia il link nella finestra del tuo browser.
+
 {contributionFrontendLink|&<>"'ä}
+
 Per favore, non rispondere a questa e-mail.
 
 Cordiali saluti,
@@ -20,8 +23,8 @@ Per ulteriori domande, contatta il nostro supporto.
 support@gradido.net
 
 Note legali [https://gradido.net/de/impressum/]
-
 Informativa sulla privacy [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

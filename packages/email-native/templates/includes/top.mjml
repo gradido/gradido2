@@ -1,0 +1,6 @@
+<!--
+  Everything above the content of a mail, as one include. This is the file that
+  answers "a new band across every mail": it goes in here once, rather than into
+  17 templates. Same reason bottom.mjml exists.
+-->
+<mj-include path="header.mjml" />

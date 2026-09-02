@@ -4,13 +4,16 @@ Hello {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 Your common good contribution “{contributionMemo|&<>"'ä}” has just been approved by {senderAlias|&<>"'ä}. Your Gradido account has been credited with {contributionAmount|&<>"'ä} GDD.
 
-
 Contribution details
 
 You will find your common good contributions and the messages about them in your Gradido account.
+
 To contribution [{contributionFrontendLink|&<>"'ä}]
+
 Or copy the link into your browser window.
+
 {contributionFrontendLink|&<>"'ä}
+
 Please do not reply to this email.
 
 Kind regards,
@@ -20,8 +23,8 @@ If you have any further questions, please contact our support.
 support@gradido.net
 
 Impressum [https://gradido.net/de/impressum/]
-
 Privacy Policy [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

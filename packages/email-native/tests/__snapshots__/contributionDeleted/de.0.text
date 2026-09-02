@@ -4,13 +4,16 @@ Hallo {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 Dein Gemeinwohl-Beitrag „{contributionMemo|&<>"'ä}“ wurde von {senderAlias|&<>"'ä} gelöscht.
 
-
 Beitragsdetails
 
 Deine Gemeinwohl-Beiträge und die Nachrichten dazu findest Du in Deinem Gradido-Konto.
+
 Zum Beitrag [{contributionFrontendLink|&<>"'ä}]
+
 Oder kopiere den Link in Dein Browserfenster.
+
 {contributionFrontendLink|&<>"'ä}
+
 Bitte antworte nicht auf diese E-Mail.
 
 Liebe Grüße
@@ -20,8 +23,8 @@ Bei weiteren Fragen kontaktiere bitte unseren Support.
 support@gradido.net
 
 Impressum [https://gradido.net/de/impressum/]
-
 Datenschutzerklärung [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

@@ -4,18 +4,19 @@
 
 Μόλις μεταβιβάστηκαν {transactionAmount|&<>"'ä} GDD με την κάρτα ευχαριστίας σου.
 
-
 Λεπτομέρειες συναλλαγής
 
 Ποσό: {transactionAmount|&<>"'ä} GDD
 Παραλήπτης: {recipientName|&<>"'ä} ({recipientCommunity|&<>"'ä})
 Αιτιολογία: {transactionMemo|&<>"'ä}
 Κάρτα: {cardLabel|&<>"'ä}
+
 Στον λογαριασμό [{communityURL|&<>"'ä}/transactions]
 
 Δεν ήσουν εσύ; Μπλόκαρε την κάρτα σου εδώ — παύει να λειτουργεί, η διεύθυνση Gradido παραμένει.
 
 Μπλοκάρισμα κάρτας [{communityURL|&<>"'ä}/settings/thank-you-card?block={cardId|&<>"'ä}]
+
 Παρακαλώ μην απαντήσεις σε αυτό το email.
 
 Με εκτίμηση,
@@ -25,8 +26,8 @@
 support@gradido.net
 
 Νομική σημείωση [https://gradido.net/de/impressum/]
-
 Πολιτική απορρήτου [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

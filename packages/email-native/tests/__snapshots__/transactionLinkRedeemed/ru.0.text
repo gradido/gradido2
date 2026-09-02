@@ -4,13 +4,14 @@
 
 Пользователь {senderAlias|&<>"'ä} ({senderCommunity|&<>"'ä}) только что воспользовался вашей ссылкой.
 
-
 Сведения о транзакции
 
 Сумма: {transactionAmount|&<>"'ä} GDD
 Сообщение: {transactionMemo|&<>"'ä}
 Сведения о транзакции вы найдёте в вашем аккаунте Gradido.
+
 В аккаунт [{communityURL|&<>"'ä}/transactions]
+
 Пожалуйста, не отвечайте на это письмо.
 
 С наилучшими пожеланиями,
@@ -20,8 +21,8 @@
 support@gradido.net
 
 Правовая информация [https://gradido.net/de/impressum/]
-
 Политика конфиденциальности [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

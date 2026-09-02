@@ -4,13 +4,14 @@ Hello {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 {senderAlias|&<>"'ä} ({senderCommunity|&<>"'ä}) has just redeemed your link.
 
-
 Transaction details
 
 Amount: {transactionAmount|&<>"'ä} GDD
 Message: {transactionMemo|&<>"'ä}
 You can find transaction details in your Gradido account.
+
 To account [{communityURL|&<>"'ä}/transactions]
+
 Please do not reply to this email.
 
 Kind regards,
@@ -20,8 +21,8 @@ If you have any further questions, please contact our support.
 support@gradido.net
 
 Impressum [https://gradido.net/de/impressum/]
-
 Privacy Policy [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

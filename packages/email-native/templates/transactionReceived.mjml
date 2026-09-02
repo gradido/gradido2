@@ -1,0 +1,64 @@
+<!--
+  transactionReceived/html.pug as MJML -- a spike, not a source.
+
+  How the markers, the includes and the preview settings work is written once, in
+  accountActivation.mjml. This file is the six-line skeleton plus what makes this
+  mail this mail.
+
+  The reply leads into the wallet's own send form with the sender already filled in,
+  not to a mailto: neither side learns the other's address, and the reply arrives as
+  a message the software itself sends. Without the uuids there is no way back, so the
+  button is left out rather than pointed somewhere general -- that is the @if.
+-->
+<!-- lang= is layout.pug's html(lang=locale): a slot the RENDERER fills from the
+     locale it was called with, not one a caller supplies -- which is why it does
+     not show up in the struct. -->
+<mjml lang="{{v:locale}}">
+  <mj-head>
+    <mj-include path="includes/head.mjml" />
+    <mj-title>{{t:%1 has sent you %2 Gradido|senderAlias,transactionAmount}}</mj-title>
+  </mj-head>
+
+  <mj-body>
+    <mj-include path="includes/top.mjml" />
+
+    <mj-section padding="15px 25px 0 25px">
+      <mj-column>
+        <mj-text mj-class="h2">{{t:%1 has sent you %2 Gradido|senderAlias,transactionAmount}}</mj-text>
+      </mj-column>
+    </mj-section>
+
+    <mj-section padding="20px 25px 0 25px">
+      <mj-column>
+        <mj-include path="includes/salutation.mjml" />
+        <mj-text mj-class="muted">{{t:You have just received %1 GDD from %2.|transactionAmount,senderAlias}}</mj-text>
+      </mj-column>
+    </mj-section>
+
+    <mj-wrapper background-color="#f5f5f5" border="1px solid #808080" border-radius="24px" padding="20px 8% 40px 8%">
+      <mj-section background-color="#f5f5f5">
+        <mj-column>
+          <mj-text mj-class="h2" padding="20px 0 0 0">{{t:Message}}</mj-text>
+          <mj-text mj-class="p-content" css-class="human-text" align="left">{{v:memo}}</mj-text>
+          
+          <!--@if senderCommunityUuid-->
+          <!-- .button-5, the green one: an answer to a person, and it stands INSIDE the
+               card because that is where it is seen. The chatbox icon is cid:chatboxicon
+               in production; the path here is written from the template's directory. -->
+          <mj-button mj-class="btn-answer" css-class="btn-green" background-color="#53900c"
+                      href="{{v:communityURL}}/send/{{v:senderCommunityUuid}}/{{v:senderUuid}}?art=email">{{t:Reply}}</mj-button>
+          <!--@endif-->
+        </mj-column>
+      </mj-section>
+    </mj-wrapper>
+
+    <mj-section padding="0 25px">
+      <mj-column>
+        <mj-button mj-class="btn" css-class="btn-gold" background-color="#c58d38"
+                    href="{{v:communityURL}}/transactions">{{t:To account}}</mj-button>
+      </mj-column>
+    </mj-section>
+
+    <mj-include path="includes/bottom.mjml" />
+  </mj-body>
+</mjml>

@@ -1,0 +1,12 @@
+<!--
+  includes/header.pug. src="cid:gradidoheader" in production.
+
+  The path is written from the TEMPLATE's directory, not from this one: MJML
+  resolves mj-include itself, but an <img src> is resolved by whatever renders
+  the finished HTML, and that is the template being previewed.
+-->
+<mj-section>
+  <mj-column>
+    <mj-image src="includes/gradido-header.png" alt="Gradido Logo" width="680px" padding="0" />
+  </mj-column>
+</mj-section>

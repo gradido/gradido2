@@ -3,7 +3,9 @@ Hallo {firstName|&<>"'ä} {lastName|&<>"'ä},
 je hebt zojuist een bericht ontvangen van {senderAlias|&<>"'ä}
 
 {subject|&<>"'ä}
+
 {memo|&<>"'ä}
+
 Naar het account [{communityURL|&<>"'ä}/transactions]
 
 Hartelijke groet,
@@ -13,8 +15,8 @@ Neem bij verdere vragen contact op met onze support.
 support@gradido.net
 
 Colofon [https://gradido.net/de/impressum/]
-
 Privacybeleid [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

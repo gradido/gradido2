@@ -4,18 +4,20 @@ Hola {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 tú, u otra persona, has solicitado restablecer la contraseña de esta cuenta.
 
-
 Restablecer contraseña
 
 Si has sido tú, haz clic aquí.
-restablecer [{resetLink|&<>"'ä}]
-O copia el enlace en la ventana de tu navegador.
-{resetLink|&<>"'ä}
 
+restablecer [{resetLink|&<>"'ä}]
+
+O copia el enlace en la ventana de tu navegador.
+
+{resetLink|&<>"'ä}
 
 Solicitar un nuevo enlace válido
 
 El enlace tiene una validez de {hours|&<>"'ä} horas y {minutes|&<>"'ä} minutos. Si la validez del enlace ya ha expirado, aquí puedes solicitar que se te envíe un nuevo enlace.
+
 Nuevo enlace [{resendLink|&<>"'ä}]
 
 Un cordial saludo,
@@ -25,8 +27,8 @@ Si tienes más preguntas, ponte en contacto con nuestro soporte.
 support@gradido.net
 
 Aviso legal [https://gradido.net/de/impressum/]
-
 Política de privacidad [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

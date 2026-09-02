@@ -4,11 +4,12 @@ Hallo {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 Du hast soeben {transactionAmount|&<>"'ä} GDD erhalten von {senderAlias|&<>"'ä}.
 
-
 Nachricht
 
 {memo|&<>"'ä}
+
 Jetzt antworten [{communityURL|&<>"'ä}/send/{senderCommunityUuid|&<>"'ä}/{senderUuid|&<>"'ä}?art=email]
+
 Zum Konto [{communityURL|&<>"'ä}/transactions]
 
 Liebe Grüße
@@ -18,8 +19,8 @@ Bei weiteren Fragen kontaktiere bitte unseren Support.
 support@gradido.net
 
 Impressum [https://gradido.net/de/impressum/]
-
 Datenschutzerklärung [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

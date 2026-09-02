@@ -4,7 +4,6 @@ Merhaba {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 {senderAlias|&<>"'ä}, ortak yarara katkın “{contributionMemo|&<>"'ä}” hakkında sana bir mesaj gönderdi.
 
-
 Mesajı oku ve yanıtla
 
 “{message|&<>"'ä}”
@@ -12,7 +11,9 @@ Mesajı oku ve yanıtla
 Doğrudan katkının yanından yanıtlayabilirsin.
 
 Yanıtla [{contributionFrontendLink|&<>"'ä}]
+
 Hesaba git [{communityURL|&<>"'ä}/transactions]
+
 Lütfen bu e-postayı yanıtlama.
 
 Sevgiler,
@@ -22,8 +23,8 @@ Başka sorun olursa lütfen desteğimize başvur.
 support@gradido.net
 
 Künye [https://gradido.net/de/impressum/]
-
 Gizlilik politikası [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

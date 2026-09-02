@@ -4,18 +4,20 @@ Hello {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 You, or someone else, requested a password reset for this account.
 
-
 Reset password
 
 If it was you, please click here.
-reset [{resetLink|&<>"'ä}]
-Or copy the link into your browser window.
-{resetLink|&<>"'ä}
 
+reset [{resetLink|&<>"'ä}]
+
+Or copy the link into your browser window.
+
+{resetLink|&<>"'ä}
 
 Request new valid link
 
 The link has a validity of {hours|&<>"'ä} hours and {minutes|&<>"'ä} minutes. If the validity of the link has already expired, you can have a new link sent to you here.
+
 New link [{resendLink|&<>"'ä}]
 
 Kind regards,
@@ -25,8 +27,8 @@ If you have any further questions, please contact our support.
 support@gradido.net
 
 Impressum [https://gradido.net/de/impressum/]
-
 Privacy Policy [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

@@ -4,18 +4,20 @@ Bonjour {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 toi, ou quelqu'un d'autre, as demandé une réinitialisation du mot de passe pour ce compte.
 
-
 Réinitialiser le mot de passe
 
 Si c'était toi, clique ici.
-réinitialiser [{resetLink|&<>"'ä}]
-Ou copie le lien dans la fenêtre de ton navigateur.
-{resetLink|&<>"'ä}
 
+réinitialiser [{resetLink|&<>"'ä}]
+
+Ou copie le lien dans la fenêtre de ton navigateur.
+
+{resetLink|&<>"'ä}
 
 Demander un nouveau lien valide
 
 Le lien est valable {hours|&<>"'ä} heures et {minutes|&<>"'ä} minutes. Si la validité du lien a déjà expiré, tu peux te faire envoyer un nouveau lien ici.
+
 Nouveau lien [{resendLink|&<>"'ä}]
 
 Cordialement,
@@ -25,8 +27,8 @@ Pour toute autre question, contacte notre support.
 support@gradido.net
 
 Mentions légales [https://gradido.net/de/impressum/]
-
 Politique de confidentialité [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

@@ -4,7 +4,6 @@ Hallo {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 Du hast zu Deinem Gemeinwohl-Beitrag „{contributionMemo|&<>"'ä}“ eine Nachricht von {senderAlias|&<>"'ä} erhalten.
 
-
 Nachricht lesen und beantworten
 
 „{message|&<>"'ä}“
@@ -12,7 +11,9 @@ Nachricht lesen und beantworten
 Antworten kannst Du direkt bei Deinem Beitrag.
 
 Jetzt antworten [{contributionFrontendLink|&<>"'ä}]
+
 Zum Konto [{communityURL|&<>"'ä}/transactions]
+
 Bitte antworte nicht auf diese E-Mail.
 
 Liebe Grüße
@@ -22,8 +23,8 @@ Bei weiteren Fragen kontaktiere bitte unseren Support.
 support@gradido.net
 
 Impressum [https://gradido.net/de/impressum/]
-
 Datenschutzerklärung [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

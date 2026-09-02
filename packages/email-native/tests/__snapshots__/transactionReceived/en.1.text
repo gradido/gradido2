@@ -4,10 +4,10 @@ Hello {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 You have just received {transactionAmount|&<>"'ä} GDD from {senderAlias|&<>"'ä}.
 
-
 Message
 
 {memo|&<>"'ä}
+
 To account [{communityURL|&<>"'ä}/transactions]
 
 Kind regards,
@@ -17,8 +17,8 @@ If you have any further questions, please contact our support.
 support@gradido.net
 
 Impressum [https://gradido.net/de/impressum/]
-
 Privacy Policy [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

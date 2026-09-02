@@ -1,0 +1,25 @@
+<!--
+  includes/requestNewLink.pug -- the heading, the validity, and the grey fallback
+  button. Used by accountActivation and resetPassword; assistedRegistrationConfirm
+  deliberately does NOT include it (its button would disarm the very link the mail
+  is about) and carries the two validity lines on its own.
+
+  The `timeDurationObject.minutes == 0` branch is a real branch: in the generated C
+  the two cases are two programs, and GE_HAS(v->minutes) picks one. The preview
+  shows both, which is the point -- you see the longer line too.
+-->
+<mj-text mj-class="h2">{{t:Request new valid link}}</mj-text>
+
+<!--@if minutes-->
+<mj-text mj-class="p-content" padding="15px 0 15px 0">
+  {{t:The link has a validity of %1 hours and %2 minutes.|hours,minutes}}
+  {{t:If the validity of the link has already expired, you can have a new link sent to you here.}}
+</mj-text>
+<!--@else-->
+<mj-text mj-class="p-content" padding="15px 0 15px 0">
+  {{t:The link has a validity of %1 hours.|hours}}
+  {{t:If the validity of the link has already expired, you can have a new link sent to you here.}}
+</mj-text>
+<!--@endif-->
+
+<mj-button mj-class="btn" css-class="btn-grey" background-color="#8f8f8f" href="{{v:resendLink}}">{{t:New link}}</mj-button>

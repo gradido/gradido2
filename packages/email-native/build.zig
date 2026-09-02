@@ -5,21 +5,21 @@
 //!
 //! Before any of it, two codegen steps run into the zig cache:
 //!
-//!   node tools/extract.mjs  ->  ir.json                    (pug + i18n, build time only)
+//!   node tools/extract_mjml.mjs  ->  ir.json                (mjml + gettext, build time only)
 //!   node tools/gen_c.mjs    ->  service_core/email/templates.h + templates.c
 //!
-//! Every pug, JSON and PNG file under templates/ and locales/ is registered as an input,
+//! Every mjml, po and PNG file under templates/ and po/ is registered as an input,
 //! so the codegen re-runs exactly when a template changes and is skipped otherwise -- zig
 //! hashes contents, not mtimes, so a bare `touch` triggers nothing.
 //!
 //! The default step also runs `check`: the C binary renders all 810 documents and they
-//! are compared against tests/__snapshots__, the checked-in pug output. A build whose
+//! are compared against tests/__snapshots__, the checked-in extractor output. A build whose
 //! tables no longer match the templates fails there rather than in a mail.
 //!
 //! The two generated files are also installed into the output directory, because
 //! fast-servers compiles them rather than generating them: `scripts/sync-fast-servers.ts`
 //! copies them into `service-core/` after the build, which is what keeps `zig build` in
-//! fast-servers free of node and pug. That install hangs off the default step, so a plain
+//! fast-servers free of node and mjml. That install hangs off the default step, so a plain
 //! `c-cpp-zig-build` produces both the addon and the files to copy.
 //!
 //!   npx czb                                        addon, generated C, and the check
@@ -29,7 +29,7 @@
 //!   zig build -Daddon=false bench -Doptimize=ReleaseFast
 //!   ... -Dfast-servers=<path>                      another checkout of the C servers
 //!
-//! Node is needed for the codegen (pug is a JS library) and, for the addon, its
+//! Node is needed for the codegen (mjml is a JS library) and, for the addon, its
 //! headers -- which `c-cpp-zig-build` downloads and passes as -Dnode-headers.
 
 const std = @import("std");
@@ -37,13 +37,15 @@ const czb = @import("c_cpp_zig_build");
 
 const cflags = [_][]const u8{ "-std=gnu11", "-Wall", "-Wextra" };
 
-/// The pug templates and the locale catalogues, imported from gradido's
-/// core/src/emails/templates and core/src/locales and the single source of truth for
+/// The MJML templates and the message catalogues, the single source of truth for
 /// both implementations from here on.
 const templates_dir = "templates";
-const locales_dir = "locales";
+/// The message catalogues, gettext .po -- one msgid per English source string, the
+/// same convention packages/frontend uses. locales/*.json is legacy's key-based
+/// form and is kept only for tools/extract.mjs, the importer; nothing here reads it.
+const po_dir = "po";
 
-/// The pug output, checked in: what `check` holds the C binary against. Written by
+/// The extractor output, checked in: what `check` holds the C binary against. Written by
 /// `bun run snapshots:update`, see tools/snapshots.mjs.
 const snapshots_dir = "tests/__snapshots__";
 
@@ -69,15 +71,16 @@ pub fn build(b: *std.Build) !void {
     const want_http = b.option(bool, "http", "keep curl's HTTP support (default: true)") orelse true;
     const want_tls13 = b.option(bool, "tls13", "keep TLS 1.3 (default: true)") orelse true;
 
-    // ---- 1) pug + i18n -> intermediate format -------------------------------
-    const extract = b.addSystemCommand(&.{ "node", "tools/extract.mjs" });
-    extract.addArgs(&.{ "--templates", templates_dir, "--locales", locales_dir });
+    // ---- 1) mjml + gettext -> intermediate format ----------------------------
+    const extract = b.addSystemCommand(&.{ "node", "tools/extract_mjml.mjs" });
+    extract.addArgs(&.{ "--templates", templates_dir, "--po", po_dir });
     extract.addArg("--out");
     const ir_dir = extract.addOutputDirectoryArg("ir");
-    extract.addFileInput(b.path("tools/extract.mjs"));
+    extract.addFileInput(b.path("tools/extract_mjml.mjs"));
+    extract.addFileInput(b.path("tools/branches.mjs"));
     extract.addFileInput(b.path("tools/manifest.mjs"));
     try addTreeAsInput(b, extract, templates_dir);
-    try addTreeAsInput(b, extract, locales_dir);
+    try addTreeAsInput(b, extract, po_dir);
 
     // ---- 2) intermediate format -> C ---------------------------------------
     // Reads the templates once more for the inline PNGs (cid: attachments).
@@ -158,9 +161,10 @@ pub fn build(b: *std.Build) !void {
 
     // ---- check --------------------------------------------------------------
     // dump renders everything in the binary with the fixture values; verify.mjs
-    // compares that against tests/__snapshots__, which is the checked-in pug output.
-    // No pug here -- what keeps the snapshots equal to pug is tests/snapshots.test.mjs,
-    // and the two halves together are what backs "the C renders what pug renders".
+    // compares that against tests/__snapshots__, the checked-in extractor output.
+    // No mjml here -- what keeps the snapshots equal to the templates is
+    // tests/snapshots.test.mjs, and the two halves together are what backs
+    // "the C renders what the templates say".
     const run_dump = b.addRunArtifact(dump);
     const c_out = run_dump.addOutputDirectoryArg("c");
 
@@ -177,7 +181,7 @@ pub fn build(b: *std.Build) !void {
     // still agree has nothing worth copying. It costs one dump run and a file compare.
     b.getInstallStep().dependOn(&verify.step);
 
-    b.step("check", "Prove the C output equals the checked-in pug snapshots")
+    b.step("check", "Prove the C output equals the checked-in snapshots")
         .dependOn(&verify.step);
 }
 

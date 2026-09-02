@@ -1,0 +1,3 @@
+<!-- includes/salutation.pug. A fragment, not a section: it is included INSIDE an
+     mj-column, next to the paragraphs that follow it. -->
+<mj-text mj-class="muted">{{t:Hello %1 %2,|firstName,lastName}}</mj-text>
