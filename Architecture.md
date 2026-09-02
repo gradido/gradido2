@@ -313,6 +313,11 @@ fast-servers/      C — fast implementation, mirrors the domain structure
                    its own Architecture.md holds the boundary rules
 
 contracts/         language-independent JSON contracts, see below
+
+docker-compose.yml PostgreSQL, Adminer and a maildev mail sink for
+                   development. No gradido2 service runs in a container — see
+                   *Development containers* in README.md for why that is
+                   deliberate and what it costs to measure through one
 ```
 
 `packages/contract-tests` is not one of the deployable packages and holds no domain code: it is
@@ -709,6 +714,9 @@ Not carried over: the restriction to JPEG. The accepted content types are an ope
 - clang-format for linting C/C++ code
 - google test for testing C/C++ code
 - cargo for `fast-servers/dht-node`, and nowhere else
+- docker only for the development services next to the code — a database, a database UI and a
+  mail sink. Nothing this project ships is built or run in a container, and nothing in the
+  build depends on one being there
 
 Which language is used for what, and the sanitizer and fuzzing requirements that come with
 native code, are in [fast-servers/Architecture.md](fast-servers/Architecture.md).
