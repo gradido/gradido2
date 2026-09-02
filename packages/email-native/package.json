@@ -1,6 +1,6 @@
 {
   "name": "@gradido/email-native",
-  "description": "The e-mail templates as C: pug rendered at build time into a byte pool and an op list, plus service-core's SMTP mailer, behind N-API. The same generated C is compiled by fast-servers.",
+  "description": "The e-mail templates as C: MJML rendered at build time into a byte pool and an op list, plus service-core's SMTP mailer, behind N-API. The same generated C is compiled by fast-servers.",
   "private": true,
   "license": "Apache-2.0",
   "author": "Gradido Academy - https://www.gradido.net",
@@ -31,7 +31,7 @@
   "scripts": {
     "build": "c-cpp-zig-build && bun scripts/sync-fast-servers.ts",
     "build:debug": "c-cpp-zig-build --debug && bun scripts/sync-fast-servers.ts",
-    "snapshots:update": "bun tools/snapshots.mjs",
+    "snapshots:update": "bun run extract:mjml && node tools/snapshots.mjs",
     "info": "c-cpp-zig-build info",
     "test": "bun --test tests/",
     "bench": "bun tests/mail-bench.mjs && bun tests/render-bench.mjs",
@@ -41,10 +41,9 @@
     "extract:mjml": "node tools/extract_mjml.mjs --out gen/mjml",
     "po": "bun tools/json2po.mjs",
     "extract:pug": "node tools/extract.mjs --out gen/pug",
-    "compare": "bun run extract:pug && bun run extract:mjml && node tools/compare_pug.mjs",
     "preview": "bun scripts/preview.ts",
     "preview:build": "node tools/preview.mjs",
-    "snapshots:mjml": "node tools/extract_mjml.mjs --out gen/mjml && node tools/snapshots_mjml.mjs"
+    "import:pug": "bun run extract:pug && bun run extract:mjml && node tools/compare_pug.mjs"
   },
   "zigNative": {
     "optimize": "fast",

@@ -1,58 +1,75 @@
 /*
- * The pug half of the snapshot guarantee: what pug renders today has to equal what
- * is checked in under tests/__snapshots__.
+ * The extractor renders today what the snapshots say.
  *
- * The pug sources are the source of truth; the snapshots are how a change to them
- * becomes visible. A new pug version, an edited template, a corrected translation --
- * each shows up here as a diff over exactly the documents it reached, and nowhere
- * else. `bun run snapshots:update` is what accepts such a change.
+ * This is the first of the three that hold the C honest, and the only one that
+ * does not involve C at all:
  *
- * The other half is elsewhere and reads the same files: tests/addon.test.js compares
- * the addon against them, and `zig build check` compares the whole C matrix
- * (tools/verify.mjs). So neither implementation is ever compared against itself.
+ *   tests/snapshots.test.mjs   the extractor renders what the snapshots say
+ *   tests/preview.test.mjs     the preview page renders what the snapshots say
+ *   zig build check            the C binary renders what the snapshots say
+ *
+ * None of them compares an implementation against itself. This one is what keeps
+ * the reference honest -- an MJML upgrade, an edited template or a corrected
+ * translation shows up here first, as a diff over exactly the documents it
+ * reached. Read that diff and then run `bun run snapshots:update`; the other way
+ * round the review has already happened without you.
  */
-
-import assert from 'node:assert'
+import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import test from 'node:test'
+import { test } from 'node:test'
+import { fileURLToPath } from 'node:url'
 import { SNAPSHOT_DIR } from '../tools/manifest.mjs'
-import { renderAll } from '../tools/render_pug.mjs'
+import { fixture } from '../tools/variants.mjs'
 
-const HINT = 'run `bun run snapshots:update` and read the diff'
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const IR = path.join(ROOT, 'gen', 'mjml', 'ir.json')
 
-/** Every file under `dir`, relative to it. */
-function walk(dir, prefix = '') {
-  const out = []
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const rel = path.join(prefix, entry.name)
-    if (entry.isDirectory()) out.push(...walk(path.join(dir, entry.name), rel))
-    else out.push(rel)
-  }
-  return out
-}
+const escape = (s) =>
+  String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 
-test('pug renders what the snapshots say', () => {
+/** ge_render_*, with `locale` filled by the renderer rather than by a caller. */
+const fill = (ops, locale) =>
+  ops
+    .map((op) => {
+      if (op.t === 'lit') return op.s
+      const value = op.name === 'locale' ? locale : fixture(op.name)
+      return op.esc === 'html' ? escape(value) : value
+    })
+    .join('')
+
+const walk = (dir, prefix = '') =>
+  fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? walk(path.join(dir, e.name), path.join(prefix, e.name)) : [path.join(prefix, e.name)],
+  )
+
+const ready = fs.existsSync(IR)
+
+test('the extractor renders what the snapshots say', { skip: ready ? false : 'run: bun run extract:mjml' }, () => {
+  const ir = JSON.parse(fs.readFileSync(IR, 'utf8'))
   const onDisk = new Set(walk(SNAPSHOT_DIR))
-  const rendered = new Set()
-  const differ = []
+  const seen = new Set()
+  const problems = []
 
-  for (const doc of renderAll()) {
-    rendered.add(doc.snapshot)
-    const file = path.join(SNAPSHOT_DIR, doc.snapshot)
-    if (!onDisk.has(doc.snapshot)) {
-      differ.push(`${doc.snapshot}: no snapshot for it`)
-      continue
+  for (const t of ir.templates) {
+    for (const kind of ['html', 'text', 'subject']) {
+      t.renders[kind].forEach((perVariant, li) => {
+        perVariant.forEach((ops, vi) => {
+          const rel = path.join(t.name, `${ir.locales[li]}.${vi}.${kind}`)
+          seen.add(rel)
+          if (!onDisk.has(rel)) { problems.push(`${rel}: no snapshot`); return }
+          const want = fs.readFileSync(path.join(SNAPSHOT_DIR, rel), 'utf8')
+          if (fill(ops, ir.locales[li]) !== want) problems.push(`${rel}: renders something else now`)
+        })
+      })
     }
-    if (!fs.readFileSync(file).equals(Buffer.from(doc.text, 'utf8')))
-      differ.push(`${doc.snapshot}: pug renders something else now`)
   }
+  for (const stale of onDisk) if (!seen.has(stale)) problems.push(`${stale}: snapshot with no document`)
 
-  for (const stale of onDisk)
-    if (!rendered.has(stale)) differ.push(`${stale}: snapshot for a document nobody renders`)
-
-  assert.deepEqual(differ, [], `${differ.length} document(s) differ -- ${HINT}`)
-  // 17 templates x 10 locales x variants x {html, subject, text}. A template that stopped
-  // being rendered at all would otherwise pass the loop above in silence.
-  assert.equal(rendered.size, 810)
+  assert.deepEqual(
+    problems,
+    [],
+    `${problems.length} document(s) differ -- run \`bun run snapshots:update\` and read the diff`,
+  )
+  assert.equal(seen.size, 810)
 })

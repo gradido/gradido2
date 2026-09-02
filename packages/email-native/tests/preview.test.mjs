@@ -16,12 +16,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { SNAPSHOT_DIR as SNAP } from '../tools/manifest.mjs'
 import { pack } from '../tools/preview.mjs'
 import { fixture } from '../tools/variants.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const IR = path.join(ROOT, 'gen', 'mjml', 'ir.json')
-const SNAP = path.join(ROOT, 'tests', '__snapshots_mjml__')
 
 const ready = fs.existsSync(IR) && fs.existsSync(SNAP)
 
@@ -40,7 +40,7 @@ function pageRenderer() {
   return factory()
 }
 
-test('the preview renders what the snapshots say', { skip: ready ? false : 'run: bun run snapshots:mjml' }, () => {
+test('the preview renders what the snapshots say', { skip: ready ? false : 'run: bun run snapshots:update' }, () => {
   const render = pageRenderer()
   const ir = JSON.parse(fs.readFileSync(IR, 'utf8'))
 
@@ -52,10 +52,10 @@ test('the preview renders what the snapshots say', { skip: ready ? false : 'run:
       p.docs[kind].forEach((perVariant, li) => {
         perVariant.forEach((doc, vi) => {
           const file = path.join(SNAP, t.name, `${ir.locales[li]}.${vi}.${kind}`)
-          const want = fs.readFileSync(file, 'utf8').replace(/\n$/, '')
+          const want = fs.readFileSync(file, 'utf8')
           // `locale` is the renderer's, not a caller's -- the page passes the
           // locale it is showing, the same way C passes the one it was called with.
-          const got = render(doc, p.pool, p.slots, values, fixture('locale'))
+          const got = render(doc, p.pool, p.slots, values, ir.locales[li])
           assert.equal(got, want, `${t.name}/${ir.locales[li]}.${vi}.${kind}`)
           checked++
         })

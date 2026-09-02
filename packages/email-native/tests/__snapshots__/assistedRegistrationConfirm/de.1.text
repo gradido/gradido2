@@ -3,16 +3,21 @@ Dein Gradido-Konto ist eingerichtet
 Hallo {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 Gemeinsam mit einem Gradido-Mitglied wurde soeben ein Konto für Dich eingerichtet — mit dieser E-Mail-Adresse.
-Bitte bestätige, dass diese Adresse Dir gehört — erst dann bleibt Dein Konto dauerhaft geöffnet.
 
+Bitte bestätige, dass diese Adresse Dir gehört — erst dann bleibt Dein Konto dauerhaft geöffnet.
 
 E-Mail-Adresse bestätigen
 
 Klicke bitte hier, um Deine E-Mail-Adresse zu bestätigen.
+
 Adresse bestätigen [{confirmLink|&<>"'ä}]
+
 Oder kopiere den Link in Dein Browserfenster.
+
 {confirmLink|&<>"'ä}
+
 Der Link hat eine Gültigkeit von {hours|&<>"'ä} Stunden. Sollte die Gültigkeit des Links bereits abgelaufen sein, kannst Du Dir hier einen neuen Link schicken lassen.
+
 Du weißt nichts von diesem Konto? Dann ignoriere diese E-Mail — ohne Bestätigung bleibt das Konto verschlossen.
 
 Liebe Grüße
@@ -22,8 +27,8 @@ Bei weiteren Fragen kontaktiere bitte unseren Support.
 support@gradido.net
 
 Impressum [https://gradido.net/de/impressum/]
-
 Datenschutzerklärung [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

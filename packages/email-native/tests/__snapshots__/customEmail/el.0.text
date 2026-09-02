@@ -3,8 +3,11 @@
 μόλις έλαβες ένα μήνυμα από {senderAlias|&<>"'ä}
 
 {subject|&<>"'ä}
+
 {memo|&<>"'ä}
+
 Απάντησε [{communityURL|&<>"'ä}/send/{senderCommunityUuid|&<>"'ä}/{senderUuid|&<>"'ä}?art=email]
+
 Στον λογαριασμό [{communityURL|&<>"'ä}/transactions]
 
 Με εκτίμηση,
@@ -14,8 +17,8 @@
 support@gradido.net
 
 Νομική σημείωση [https://gradido.net/de/impressum/]
-
 Πολιτική απορρήτου [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

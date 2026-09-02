@@ -1,9 +1,12 @@
 /*
  * locales/<lang>.json  ->  po/<lang>/messages.po
  *
- * A one-way conversion, run once and then thrown away -- from here on the .po
- * files are the source. It exists so the step is reviewable rather than a pile of
- * hand edits: run it, read `git diff`, and every string is accounted for.
+ * The importer's other half. po/ is the source now; locales/*.json is legacy's
+ * key-based catalogue, kept so that a template arriving THERE can be brought over
+ * here -- its strings by this tool, its markup by hand with tools/compare_pug.mjs
+ * checking the result.
+ *
+ * Run it, read `git diff`: every string is accounted for.
  *
  * Three things change on the way:
  *
@@ -25,12 +28,19 @@
  * the named braces: it is what lets a translator reorder without touching code.
  * It is also what packages/frontend already does (`t.__('… %1 …', value)`).
  *
- *   node tools/json2po.mjs            writes po/<lang>/messages.po
- *   node tools/json2po.mjs --check    verifies the .po round-trips to the JSON
+ *   node tools/json2po.mjs            MERGE: new messages in, existing ones kept
+ *   node tools/json2po.mjs --check    verify the .po round-trips to the JSON
+ *   node tools/json2po.mjs --overwrite   throw the .po away and rebuild from JSON
+ *
+ * Merge is the default, and that is the whole point once the .po files are the
+ * source. A new template in legacy brings new keys with it; those come in, and a
+ * translation somebody has since improved in the .po stays as it is. --overwrite
+ * is the initial conversion and a way to lose work; it says so when you run it.
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readPo, writePo } from './po.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const LOCALE_DIR = path.join(ROOT, 'locales')
@@ -62,33 +72,6 @@ const toPositional = (s, order, where) =>
     if (i < 0) throw new Error(`${where}: {${name}} is not in the English string (params: ${order.join(', ') || 'none'})`)
     return `%${i + 1}`
   })
-
-const poString = (s) => {
-  const escaped = s
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\t/g, '\\t')
-  // A string with newlines is written as multiple lines, the way msgfmt does it,
-  // so a translator's editor shows the break instead of a literal \n.
-  if (!escaped.includes('\n')) return `"${escaped}"`
-  const parts = escaped.split('\n')
-  const lines = parts.slice(0, -1).map((p) => `"${p}\\n"`)
-  if (parts.at(-1) !== '') lines.push(`"${parts.at(-1)}"`)
-  return `""\n${lines.join('\n')}`
-}
-
-const HEADER = (locale) =>
-  [
-    'msgid ""',
-    'msgstr ""',
-    '"Project-Id-Version: gradido2-email\\n"',
-    '"MIME-Version: 1.0\\n"',
-    '"Content-Type: text/plain; charset=UTF-8\\n"',
-    '"Content-Transfer-Encoding: 8bit\\n"',
-    `"Language: ${locale}\\n"`,
-    '"Plural-Forms: nplurals=2; plural=(n != 1);\\n"',
-    '',
-  ].join('\n')
 
 const source = read(SOURCE)
 const keys = Object.keys(source)
@@ -189,25 +172,49 @@ if (conflicts.length) {
   process.exit(1)
 }
 
+const OVERWRITE = process.argv.includes('--overwrite')
+let totalNew = 0
+let totalKept = 0
+let totalStale = 0
+
 for (const locale of LOCALES) {
   const cat = read(locale)
-  const body = entries
-    .map((e) => {
-      const msgstr = toPositional(partOf(cat, e.unit, locale), e.unit.order, `${locale}:${e.unit.key}`)
-      return [
-        // the legacy key(s), kept as a comment: the bridge back to locales/
-        ...e.keys.map((k) => `#. ${k}`),
-        `msgid ${poString(e.msgid)}`,
-        // English is the source language: msgstr stays empty, gettext falls back
-        // to the msgid. That is what makes a missing translation degrade to
-        // English instead of to nothing.
-        `msgstr ${locale === SOURCE ? '""' : poString(msgstr)}`,
-      ].join('\n')
-    })
-    .join('\n\n')
+  const file = path.join(PO_DIR, locale, 'messages.po')
+  const existing = !OVERWRITE && fs.existsSync(file) ? readPo(file) : { byId: new Map() }
 
-  const dir = path.join(PO_DIR, locale)
-  fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(path.join(dir, 'messages.po'), `${HEADER(locale)}\n${body}\n`)
-  console.log(`${locale}: ${entries.length} messages (${keys.length} keys) -> po/${locale}/messages.po`)
+  const out = entries.map((e) => {
+    const fromJson = toPositional(partOf(cat, e.unit, locale), e.unit.order, `${locale}:${e.unit.key}`)
+    const had = existing.byId.get(e.msgid)
+    // English is the source language: msgstr stays empty, gettext falls back to
+    // the msgid. That is what makes a missing translation degrade to English
+    // instead of to nothing.
+    if (locale === SOURCE) return { comments: e.keys.map((k) => `#. ${k}`), msgid: e.msgid, msgstr: '' }
+    if (had === undefined) totalNew++
+    else totalKept++
+    return {
+      comments: e.keys.map((k) => `#. ${k}`),
+      msgid: e.msgid,
+      // What is already in the .po wins: it may have been corrected there since.
+      msgstr: had ?? fromJson,
+    }
+  })
+
+  const known = new Set(entries.map((e) => e.msgid))
+  for (const id of existing.byId.keys()) if (!known.has(id)) totalStale++
+
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  writePo(file, locale, out)
 }
+
+const langs = LOCALES.length - 1 // English carries no translations
+console.log(
+  OVERWRITE
+    ? `overwritten: ${entries.length} messages x ${LOCALES.length} locales, from locales/*.json`
+    : `merged: ${totalNew / langs || 0} new, ${totalKept / langs || 0} kept per language` +
+      `, ${entries.length} messages x ${LOCALES.length} locales`,
+)
+if (totalStale)
+  console.log(
+    `${totalStale / langs} message(s) are in the .po but no longer in locales/*.json` +
+      ' -- dropped, which is what a removed template looks like.',
+  )

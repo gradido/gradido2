@@ -4,13 +4,16 @@
 
 ваш вклад в общее благо «{contributionMemo|&<>"'ä}» только что был изменён пользователем {senderAlias|&<>"'ä} и теперь звучит так: «{contributionMemoUpdated|&<>"'ä}»
 
-
 Сведения о вкладе
 
 Ваши вклады в общее благо и сообщения к ним вы найдёте в вашем аккаунте Gradido.
+
 К вкладу [{contributionFrontendLink|&<>"'ä}]
+
 Или скопируйте ссылку в окно вашего браузера.
+
 {contributionFrontendLink|&<>"'ä}
+
 Пожалуйста, не отвечайте на это письмо.
 
 С наилучшими пожеланиями,
@@ -20,8 +23,8 @@
 support@gradido.net
 
 Правовая информация [https://gradido.net/de/impressum/]
-
 Политика конфиденциальности [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

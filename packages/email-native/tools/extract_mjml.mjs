@@ -29,7 +29,8 @@ import mjml2html from 'mjml'
 import fs from 'node:fs'
 import path from 'node:path'
 import { scanBranches, selectBranches } from './branches.mjs'
-import { LOCALES, OUT_DIR, TEMPLATE_ROOT, TEMPLATES, TEXT_OPTIONS_MJML } from './manifest.mjs'
+import { readPo, translationOf } from './po.mjs'
+import { LOCALES, OUT_DIR, TEMPLATE_ROOT, TEMPLATES, TEXT_OPTIONS } from './manifest.mjs'
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`)
@@ -52,38 +53,12 @@ const unescapeHtml = (s) =>
     ({ amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", '#x27': "'" })[e],
   )
 
-// ------------------------------------------------------------------ catalogues
-/** Enough of a .po reader for what json2po.mjs writes; no plurals, none are used. */
-const readPo = (file) => {
-  const unquote = (line) =>
-    line
-      .slice(line.indexOf('"') + 1, line.lastIndexOf('"'))
-      .replace(/\\(n|t|"|\\)/g, (_, c) => ({ n: '\n', t: '\t', '"': '"', '\\': '\\' })[c])
-  const catalogue = {}
-  let field = null
-  let id = ''
-  let str = ''
-  const flush = () => {
-    if (id) catalogue[id] = str || id // empty msgstr: the source is the translation
-    id = ''
-    str = ''
-  }
-  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
-    if (line.startsWith('#')) continue
-    if (line.trim() === '') { flush(); continue }
-    if (line.startsWith('msgid ')) { flush(); field = 'id'; id = unquote(line); continue }
-    if (line.startsWith('msgstr ')) { field = 'str'; str = unquote(line); continue }
-    if (line.trimStart().startsWith('"')) {
-      if (field === 'id') id += unquote(line)
-      else str += unquote(line)
-    }
-  }
-  flush()
-  return catalogue
-}
-
+// ---------------------------------------------------------------- catalogues
 const catalogues = Object.fromEntries(
-  LOCALES.map((l) => [l, readPo(path.join(PO_DIR, l, 'messages.po'))]),
+  LOCALES.map((l) => {
+    const { byId } = readPo(path.join(PO_DIR, l, 'messages.po'))
+    return [l, byId]
+  }),
 )
 
 /**
@@ -112,9 +87,8 @@ const substitute = (xml, catalogue, mode) => {
     .replace(V_RE, (_, name) => sentinel(name))
     .replace(T_RE, (_, msgid, args) => {
       const slots = (args || '').split(',').map((s) => s.trim()).filter(Boolean)
-      const text = catalogue[msgid]
-      if (text === undefined) throw new Error(`no message for ${JSON.stringify(msgid)}`)
-      return esc(text).replace(/%(\d+)/g, (m, n) => (slots[n - 1] ? sentinel(slots[n - 1]) : m))
+      if (!catalogue.has(msgid)) throw new Error(`no message for ${JSON.stringify(msgid)}`)
+      return esc(translationOf(catalogue, msgid)).replace(/%(\d+)/g, (m, n) => (slots[n - 1] ? sentinel(slots[n - 1]) : m))
     })
 }
 
@@ -254,7 +228,7 @@ for (const [name, spec] of Object.entries(TEMPLATES)) {
        * the whole of the difference between MJML's text part and pug's, once the
        * wording is equal -- measured over all 270 documents, not assumed.
        */
-      const text = convert(html, TEXT_OPTIONS_MJML).replace(/\n{3,}/g, '\n\n').trim()
+      const text = convert(html, TEXT_OPTIONS).replace(/\n{3,}/g, '\n\n').trim()
       perText.push(chunkify(text, 'plain'))
     }
     renders.html.push(perHtml)

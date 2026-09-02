@@ -306,10 +306,10 @@ extern const ge_template_info_t GE_TEMPLATES[17];
  * values are added at runtime: at most 6 output bytes per input byte
  * (" -> &quot;), counted per slot USE rather than per slot -- some values
  * appear twice in a document (a link as a button and as plain text). */
-#define GE_MAX_STATIC_HTML     21962u
+#define GE_MAX_STATIC_HTML     25779u
 #define GE_MAX_STATIC_SUBJECT  119u
-#define GE_MAX_STATIC_TEXT     2011u
-#define GE_MAX_SLOT_REFS       13u
+#define GE_MAX_STATIC_TEXT     2016u
+#define GE_MAX_SLOT_REFS       17u
 
 /* Upper bound for one document if no input value is longer than max_field. */
 #define GE_BUF_SIZE(max_field) \

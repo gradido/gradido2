@@ -18,7 +18,7 @@ import { convert } from 'html-to-text'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { TEXT_OPTIONS_MJML as TEXT_OPTIONS } from './manifest.mjs'
+import { TEXT_OPTIONS } from './manifest.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const arg = (name, fallback) => {

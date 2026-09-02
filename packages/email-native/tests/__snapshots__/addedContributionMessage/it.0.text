@@ -4,7 +4,6 @@ Ciao {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 hai ricevuto un messaggio da {senderAlias|&<>"'ä} riguardo al tuo contributo al bene comune «{contributionMemo|&<>"'ä}».
 
-
 Leggi e rispondi al messaggio
 
 «{message|&<>"'ä}»
@@ -12,7 +11,9 @@ Leggi e rispondi al messaggio
 Puoi rispondere direttamente al tuo contributo.
 
 Rispondi [{contributionFrontendLink|&<>"'ä}]
+
 All'account [{communityURL|&<>"'ä}/transactions]
+
 Per favore, non rispondere a questa e-mail.
 
 Cordiali saluti,
@@ -22,8 +23,8 @@ Per ulteriori domande, contatta il nostro supporto.
 support@gradido.net
 
 Note legali [https://gradido.net/de/impressum/]
-
 Informativa sulla privacy [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2
