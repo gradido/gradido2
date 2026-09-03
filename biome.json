@@ -20,6 +20,7 @@
       "**/*.d.ts",
       "scripts/**/*.ts",
       "!**/build",
+      "!publish",
       "!**/public/locales",
       "!**/node_modules",
       "!**/coverage",
@@ -143,6 +144,7 @@
       "!**/node_modules",
       "!**/*.min.js",
       "!**/build",
+      "!publish",
       "!**/coverage",
       "!**/.zig-native"
     ]

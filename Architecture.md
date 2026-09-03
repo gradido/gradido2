@@ -765,10 +765,47 @@ so a second checkout costs nothing.
 
 ## The single binary
 
-`bun bundle` builds `build/gradido`: the backend, the frontends it serves, both native addons
-and the bun runtime, in one executable. It is what the download-and-start promise above means
-in practice — a community that wants to host itself copies one file onto a server and starts
-it, and the SQLite default means it does not have to install a database first either.
+Each implementation ships as one executable, and both of them serve the same pages:
+
+```text
+bun bundle    build/gradido — the backend, the frontends, both native addons,
+              and the bun runtime
+zig build     fast-servers/zig-out/bin/fast-servers — the roles, the frontends,
+              and nothing dynamically linked but libc and libm
+```
+
+It is what the download-and-start promise above means in practice — a community that wants to
+host itself copies one file onto a server and starts it, and the SQLite default means it does
+not have to install a database first either.
+
+### publish/, which belongs to neither
+
+Neither implementation can build a page: a page is vite's output, and the C path has no
+JavaScript in it. So the pages are built once, by the TypeScript toolchain, into a directory at
+the repository root that both builds read:
+
+```text
+publish/sites.json   which site is mounted where, and for every file its content
+                     type, its ETag and whether its name carries a content hash
+publish/frontend/    the files, exactly as they are handed out
+publish/admin/       the next one, once packages/admin exists
+```
+
+`bun run publish` writes it; `bun bundle` and `zig build` both run that first and then embed
+what the manifest *names* — not what the directory happens to hold. It is generated, so it is
+not committed, and it is a directory somebody can list: what ends up inside a binary should be
+something you can look at before it does.
+
+**The content type and the ETag are in the manifest, not in either server.** Two static servers
+that inferred a type from an extension separately would disagree about one of them eventually,
+and two that hashed the bytes separately would disagree about all of them. A deployment runs one
+implementation or the other, and a client must not be able to tell which. It also means neither
+server computes anything per request.
+
+The cost is worth naming: **`zig build` now needs bun for a complete server.** What it does not
+need it for is the server itself — `-Dpages=false` builds one with no pages, which is also what
+a machine without bun gets, and a stale `publish/` is used with a warning rather than refused.
+The alternative was a megabyte of generated C in the repository on every frontend change.
 
 It is also the reason several decisions elsewhere in this document read the way they do.
 `contracts/migrations` is *imported* rather than read at startup, because a file read at
@@ -800,9 +837,14 @@ starts the binary twice, which is also how it gets to put them on two machines.
 
 **The pages are embedded, not read.** `bun build --compile` puts a file into the executable
 when a module imports it, so `scripts/bundle.ts` generates the entry point that imports every
-file of every built frontend — a directory cannot be imported, and a list written by hand is a
-list that goes stale. `staticRoutes` then serves out of a map from URL path to embedded file,
-which is why nothing in it defends against `../`: a path that is not a key is not a file.
+file the manifest names — a directory cannot be imported, and a list written by hand is a list
+that goes stale. `build.zig` writes the same files out as C, the way it already does with
+`contracts/migrations`. Both servers then answer out of a table keyed by URL path, which is why
+neither defends against `../`: a path that is not a key is not a file.
+
+The C side sends them without copying — `sc_http_reply_static`, for bytes that outlive the
+process — which on the fallback HTTP backend is what makes a 134 KB font possible at all. See
+`fast-servers/Architecture.md`, *The pages*.
 
 **A binary is for the platform it was built on**, because the addons inside it are machine
 code. Bun's cross-compilation targets are therefore not offered; build on the target system.

@@ -1,14 +1,34 @@
 import { Elysia, NotFoundError } from 'elysia'
 
 /**
+ * One file of a site, and everything needed to hand it out.
+ *
+ * `file` is something `Bun.file()` can open. In the bundled binary those are the `/$bunfs/…`
+ * paths that `import … with { type: 'file' }` yields, so the whole site travels inside the
+ * executable; nothing here knows or cares, which is the point of naming a file rather than a
+ * directory.
+ *
+ * The type and the ETag are **not** worked out here. They come from `publish/sites.json`,
+ * where `scripts/publish.ts` wrote them, and the C server reads the same values out of the
+ * same file — so what a client gets does not depend on which implementation is deployed. It
+ * also means no request ever hashes anything: the bytes were fixed when the build ran.
+ */
+export type StaticFile = {
+  readonly file: string
+  /** The `Content-Type` header, complete with charset where one belongs. */
+  readonly type: string
+  /** The ETag, without the quotes this server puts around it on the wire. */
+  readonly etag: string
+  /** Whether the name carries a content hash, and the file may be cached for a year. */
+  readonly immutable: boolean
+}
+
+/**
  * A built frontend, ready to be handed out: `frontend` at the domain root, `admin` under
  * `/admin`, and whatever else is compiled into the binary next to them.
  *
- * `files` maps a path *relative to the site's own root* — `assets/index-Ca4jjj45.js`,
- * `locales/de/messages.json` — onto something `Bun.file()` can open. In the bundled binary
- * those are the `/$bunfs/…` paths that `import … with { type: 'file' }` yields, so the whole
- * site travels inside the executable; nothing here knows or cares, which is the point of
- * naming a file rather than a directory.
+ * `files` is keyed by the path *relative to the site's own root* — `assets/index-Ca4jjj45.js`,
+ * `locales/de/messages.json`.
  *
  * A map and not a directory walk, for two reasons that are the same reason: an embedded file
  * has no directory to walk, and a lookup that can only answer with a key somebody put in the
@@ -21,20 +41,13 @@ export type StaticSite = {
   /** Where the site is mounted: `''` for the domain root, `/admin` for a sub-path. */
   readonly basePath: string
   /** The app's entry document, served for every path the site does not have a file for. */
-  readonly index: string
-  readonly files: ReadonlyMap<string, string>
+  readonly index: StaticFile
+  readonly files: ReadonlyMap<string, StaticFile>
 }
-
-/**
- * Vite writes content-hashed names into this directory and nowhere else, which is what makes
- * a year-long cache safe: the name changes when the bytes do. Everything outside it —
- * `index.html`, `img/`, `locales/` — keeps its name across builds and is revalidated instead.
- */
-const HASHED_DIRECTORY = 'assets/'
 
 const IMMUTABLE = 'public, max-age=31536000, immutable'
 
-/** Cache it, but ask every time whether it is still current — the ETag below answers cheaply. */
+/** Cache it, but ask every time whether it is still current — the ETag answers cheaply. */
 const REVALIDATE = 'no-cache'
 
 /**
@@ -44,7 +57,7 @@ const REVALIDATE = 'no-cache'
  * That is not a convenience, it is the deployment — `Architecture.md` has a gradido2 server as
  * one binary next to a database, so the pages have to come out of it too. It also means the
  * frontend is same-origin with the backend, which is why the session cookie needs no CORS in
- * production and why `API_BASE_URL` is empty in a bundled build.
+ * production and why `API_BASE_URL` is empty in a published build.
  *
  * **What it must not do is answer for the routes.** Nearly every path of `contracts/server`
  * is still unwritten, and the contract requires those to say `ROUTE_NOT_IMPLEMENTED` rather
@@ -58,6 +71,8 @@ const REVALIDATE = 'no-cache'
  * Mounted with no sites — `bun src/index.ts`, where the frontend is served by vite on its own
  * port — every path takes that same road, so the plugin changes nothing about a server that
  * carries no pages.
+ *
+ * `fast-servers/backend/src/static_sites.c` is the same rules in C, against the same manifest.
  */
 export const staticRoutes = (sites: readonly StaticSite[]) =>
   new Elysia({
@@ -85,11 +100,7 @@ function siteFor(sites: readonly StaticSite[], path: string): StaticSite | undef
   return match
 }
 
-async function respond(
-  sites: readonly StaticSite[],
-  request: Request,
-  path: string,
-): Promise<Response> {
+function respond(sites: readonly StaticSite[], request: Request, path: string): Response {
   const site = siteFor(sites, path)
   if (site === undefined) {
     throw new NotFoundError()
@@ -100,12 +111,12 @@ async function respond(
   /* The site's own root is the app, whoever is asking. Not the `Accept` rule below: a bare
      `/` is a person opening the server, not a client that took a wrong turn. */
   if (relative === '') {
-    return await send(site.index, REVALIDATE, request)
+    return send(site.index, request)
   }
 
   const file = site.files.get(relative)
   if (file !== undefined) {
-    return await send(file, relative.startsWith(HASHED_DIRECTORY) ? IMMUTABLE : REVALIDATE, request)
+    return send(file, request)
   }
 
   /* No file of that name. `/login` and `/register` are routes of the mithril app rather than
@@ -114,44 +125,20 @@ async function respond(
   if (!(request.headers.get('accept') ?? '').includes('text/html')) {
     throw new NotFoundError()
   }
-  return await send(site.index, REVALIDATE, request)
+  return send(site.index, request)
 }
 
-/**
- * The file, or a 304 saying the copy the browser already has is still the file.
- *
- * `Bun.file()` fills in the content type from the name and the length from the bytes, for an
- * embedded file exactly as for one on disk.
- */
-async function send(file: string, cacheControl: string, request: Request): Promise<Response> {
-  const etag = await etagOf(file)
-  const headers = { 'cache-control': cacheControl, etag }
+/** The file, or a 304 saying the copy the browser already has is still the file. */
+function send(file: StaticFile, request: Request): Response {
+  const etag = `"${file.etag}"`
+  const headers = {
+    'content-type': file.type,
+    'cache-control': file.immutable ? IMMUTABLE : REVALIDATE,
+    etag,
+  }
 
   if (request.headers.get('if-none-match') === etag) {
     return new Response(null, { status: 304, headers })
   }
-  return new Response(Bun.file(file), { headers })
-}
-
-/**
- * Every file's ETag, computed once when it is first asked for.
- *
- * Once and not per request, because the bytes cannot change: they are inside the executable,
- * and a new build is a new process. Lazily and not at startup, because hashing the whole site
- * to serve one page would put the cost on the start rather than on the first visitor — a
- * server with a 130 kB font and four photographs in it should not read them to begin
- * listening.
- */
-const etags = new Map<string, string>()
-
-async function etagOf(file: string): Promise<string> {
-  const known = etags.get(file)
-  if (known !== undefined) {
-    return known
-  }
-  /* Not a cryptographic hash and not meant to be: an ETag says "same bytes as last time" to a
-     cache, and nothing downstream trusts it with anything. */
-  const etag = `"${Bun.hash(await Bun.file(file).bytes()).toString(16)}"`
-  etags.set(file, etag)
-  return etag
+  return new Response(Bun.file(file.file), { headers })
 }

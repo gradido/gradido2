@@ -17,11 +17,26 @@ be installed for it beyond a zig toolchain. That holds without an exception — 
 zlib and both database drivers included. `ldd zig-out/bin/fast-servers` names `libm` and `libc`
 and nothing else.
 
+**One thing is not compiled here: the pages.** A Gradido server serves the frontend out of its
+own process, a frontend is vite's output, and there is no JavaScript on this path. So
+`zig build` runs `bun run publish` in the repository root first and embeds what it leaves in
+`publish/` — see *The pages* in [Architecture.md](Architecture.md). A machine without bun builds
+the server and not the pages:
+
+```sh
+zig build -Dpages=false        # a server that answers ROUTE_NOT_IMPLEMENTED for every page
+```
+
+That is also what a `publish/` left over from an earlier run gets you if bun has gone missing:
+the build warns and embeds what is already there rather than refusing.
+
 Options, all with `-D`:
 
 | option | default | what it does |
 |---|---|---|
 | `h2o` | on, forced off on Windows | build the h2o HTTP backend; off selects the fallback |
+| `pages` | on | embed the frontends from `publish/` and serve them. Off builds a server with no pages — and needs no bun |
+| `publish` | `../publish` | where `bun run publish` assembled them |
 | `postgres` | on, forced off on Windows | build the PostgreSQL driver. Off also skips a 155 MB fetch |
 | `sqlite` | on | build the SQLite driver |
 | `tests` | off | the googletest binaries and the integration probe |

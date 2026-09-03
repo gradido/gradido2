@@ -11,6 +11,7 @@
   "packageManager": "bun@1.3.14",
   "scripts": {
     "bundle": "bun scripts/bundle.ts",
+    "publish": "bun scripts/publish.ts",
     "clear": "bun scripts/clean-all.ts",
     "lint": "biome check --error-on-warnings scripts contracts && turbo lint",
     "lint:fix": "biome check --error-on-warnings scripts contracts --write && turbo lint:fix",

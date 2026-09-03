@@ -625,14 +625,15 @@ sc_status sc_http_header_add(sc_http_req *req, const char *name, const char *val
     return SC_OK;
 }
 
-sc_status sc_http_reply(sc_http_req *req, int status, const char *content_type, const char *body,
-                        size_t body_len)
+/**
+ * The status line, the Content-Type and the framing -- everything both reply functions do
+ * before they differ over whether the body is copied.
+ *
+ * @return 1 when the answer is complete and nothing more is to be sent, which is what a status
+ *         that carries no representation is.
+ */
+static int begin_reply(h2o_req_t *r, int status, const char *content_type, size_t body_len)
 {
-    h2o_req_t *r = (h2o_req_t *)req;
-
-    if (r == NULL || content_type == NULL || body == NULL)
-        return SC_ERR_INVALID_ARGUMENT;
-
     r->res.status = status;
     /* The same table the other backend writes its status line from -- one status, one phrase,
      * whichever backend answered. It used to be "Error" for everything but 200 here, which was
@@ -640,12 +641,12 @@ sc_status sc_http_reply(sc_http_req *req, int status, const char *content_type, 
      * client can see the moment a route answered 400. */
     r->res.reason = sc_http_reason(status);
 
-    /* A 204 carries no body, and RFC 7230 forbids describing one. SIZE_MAX is how h2o is told
-     * there is no content-length to send; it does not fall back to chunked for this status --
-     * should_use_chunked_encoding refuses 204 explicitly -- so the answer is a status line, the
-     * connection headers and nothing else. The other backend writes the same, which is what
-     * keeps the two indistinguishable to a client. */
-    if (status == 204) {
+    /* A 204 and a 304 carry no body, and neither may describe one. SIZE_MAX is how h2o is told
+     * there is no content-length to send; it does not fall back to chunked for either status --
+     * should_use_chunked_encoding refuses both explicitly -- so the answer is a status line, the
+     * connection headers, whatever the handler added, and nothing else. The other backend
+     * writes the same, which is what keeps the two indistinguishable to a client. */
+    if (sc_http_status_omits_body(status)) {
         r->res.content_length = SIZE_MAX;
         if (r->_generator != NULL) {
             h2o_iovec_t empty = h2o_iovec_init(NULL, 0);
@@ -655,7 +656,7 @@ sc_status sc_http_reply(sc_http_req *req, int status, const char *content_type, 
              * from a null pointer is undefined even for zero bytes. */
             h2o_send_inline(r, "", 0);
         }
-        return SC_OK;
+        return 1;
     }
     /* Set before sending, and this is not optional. h2o_send_inline deliberately leaves
      * content_length alone -- its own comment says so, because it also serves 304 responses --
@@ -665,6 +666,18 @@ sc_status sc_http_reply(sc_http_req *req, int status, const char *content_type, 
     r->res.content_length = body_len;
     h2o_add_header(&r->pool, &r->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, content_type,
                    strlen(content_type));
+    return 0;
+}
+
+sc_status sc_http_reply(sc_http_req *req, int status, const char *content_type, const char *body,
+                        size_t body_len)
+{
+    h2o_req_t *r = (h2o_req_t *)req;
+
+    if (r == NULL || content_type == NULL || body == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+    if (begin_reply(r, status, content_type, body_len))
+        return SC_OK;
 
     if (r->_generator != NULL) {
         /* A deferred request: sc_http_defer already started the response, and h2o_send_inline
@@ -679,5 +692,31 @@ sc_status sc_http_reply(sc_http_req *req, int status, const char *content_type, 
     /* h2o_send_inline copies into the request pool itself, which is what makes it safe to hand
      * it the caller's stack buffer: the pool lives exactly as long as the request. */
     h2o_send_inline(r, body, body_len);
+    return SC_OK;
+}
+
+sc_status sc_http_reply_static(sc_http_req *req, int status, const char *content_type,
+                               const char *body, size_t body_len)
+{
+    h2o_req_t *r = (h2o_req_t *)req;
+    /* h2o keeps no state in a generator that answers in one send, so one instance serves every
+     * request on every loop -- which is what h2o_send_inline's own static generator is. */
+    static h2o_generator_t generator = {NULL, NULL};
+    h2o_iovec_t buf;
+
+    if (r == NULL || content_type == NULL || body == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+    if (begin_reply(r, status, content_type, body_len))
+        return SC_OK;
+
+    /* The point of this function: the iovec names the caller's bytes instead of a copy of them.
+     * h2o holds the pointer until the write completes, and the header says what that costs the
+     * caller -- bytes that outlive the process, which for an embedded file is free. */
+    buf = h2o_iovec_init(body, body_len);
+    /* A deferred request already has a generator, and h2o_start_response asserts that it does
+     * not -- the same fork sc_http_reply has, for the same reason. */
+    if (r->_generator == NULL)
+        h2o_start_response(r, &generator);
+    h2o_send(r, &buf, 1, H2O_SEND_STATE_FINAL);
     return SC_OK;
 }

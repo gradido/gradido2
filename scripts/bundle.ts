@@ -4,74 +4,36 @@
  * What comes out is a file that a community administrator can copy onto a server and start:
  * the backend, the frontends it hands out, the native addons, and bun itself. No runtime to
  * install, no `node_modules` beside it, nothing to serve the pages with. That is the promise
- * `Architecture.md` makes for a Gradido server, and this script is where it is kept.
+ * `Architecture.md` makes for a Gradido server, and this script is where it is kept for the
+ * TypeScript path; `fast-servers/build.zig` keeps the same one for the C path, out of the same
+ * `publish/` directory.
  *
  * Three steps, and the middle one is the only one with an idea in it:
  *
- * 1. **Build what goes in.** `turbo build` per frontend and once for the native addons, so
- *    the graph and the cache are turbo's problem rather than this script's.
+ * 1. **`bun run publish`.** Builds the frontends and assembles `publish/`, which is what both
+ *    implementations serve. See `scripts/publish.ts`.
  * 2. **Write `packages/bundle/gen/main.ts`.** Bun embeds a file when a module imports it —
  *    `import x from './logo.png' with { type: 'file' }` yields a path inside the executable
  *    that `Bun.file()` opens like any other. A directory cannot be imported, so the entry
- *    point that names every file of every built frontend is generated rather than written.
- *    It is the only generated code here: it holds the imports, a map from URL path to
- *    embedded file, and one call into `packages/bundle/src`.
+ *    point that names every file of every published site is generated rather than written.
+ *    It is the only generated code here: the imports, a map from URL path to embedded file,
+ *    and one call into `packages/bundle/src`.
  * 3. **`bun build --compile`** that entry.
  *
- * The frontends are built with `API_BASE_URL` empty and `BASE_PATH` set to where the binary
- * mounts them, because in a bundle the server that hands out a page is the server the page
- * calls — see `packages/frontend/src/config/schema.ts`. Pass `API_BASE_URL=…` to override
- * that for a deployment that puts the API somewhere else.
- *
- * **The result is for the platform it was built on.** The embedded addons are compiled
- * machine code, so bun's cross-compilation targets are not offered here: a Linux build
- * carries a Linux `.node`, and there is no arrangement of flags that changes it.
+ * **The result is for the platform it was built on.** The embedded addons are compiled machine
+ * code, so bun's cross-compilation targets are not offered here: a Linux build carries a Linux
+ * `.node`, and there is no arrangement of flags that changes it.
  *
  *   bun bundle                       build/gradido, everything rebuilt as needed
  *   bun bundle --outfile=dist/srv    somewhere else
  *   bun bundle --skip-build          use what is already built (see the warning it prints)
  */
-import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
+import { type Manifest, PUBLISH, publish } from './publish'
+import { run } from './run'
 
 const ROOT = resolve(import.meta.dirname, '..')
-
-/**
- * The frontends the binary carries, in the order `staticRoutes` should match them.
- *
- * `basePath` is both where the site is mounted and what it is built with: vite writes it into
- * every asset URL of `index.html`, so the two cannot be decided separately.
- */
-const SITES = [
-  {
-    name: 'frontend',
-    package: '@gradido/frontend',
-    basePath: '',
-    build: 'packages/frontend/build',
-  },
-  /* `packages/admin` does not exist yet. It is built exactly like the frontend — vite,
-     the same `frontend-core`, its own `build/` — so it joins this list rather than needing
-     anything new:
-
-       { name: 'admin', package: '@gradido/admin', basePath: '/admin',
-         build: 'packages/admin/build' },
-
-     `staticRoutes` already prefers the longer `basePath`, so `/admin/…` goes to the admin
-     app and everything else to the frontend, and vite has to be told `BASE_PATH=/admin` —
-     which is what building it from this entry does. */
-] as const
-
-/**
- * Packages whose build output is native code the binary needs.
- *
- * `shared-native` arrives on its own — the frontend build depends on it through
- * `@gradido/shared` — but naming it here is what makes the *backend's* copy in the executable
- * a thing this script arranged rather than a side effect of something else's dependency.
- * `email-native` has no importer yet at all; `packages/bundle/src/natives.ts` says why it is
- * in the binary anyway.
- */
-const NATIVE_PACKAGES = ['@gradido/shared-native', '@gradido/email-native'] as const
 
 /** Written by this script, imported by nothing else, gitignored. */
 const ENTRY = 'packages/bundle/gen/main.ts'
@@ -88,11 +50,10 @@ async function main(): Promise<void> {
       'bundle: --skip-build — the binary gets whatever is in the build directories now,\n' +
         '        including a frontend built for a different API_BASE_URL.',
     )
-  } else {
-    await buildInputs()
   }
 
-  const entry = await writeEntry()
+  const manifest = await publish({ skipBuild: options.skipBuild })
+  const entry = await writeEntry(manifest)
   await compile(entry, options.outfile)
 }
 
@@ -123,95 +84,62 @@ function parseArguments(argv: readonly string[]): Options {
 }
 
 /**
- * Everything that has to exist before there is anything to embed.
- *
- * One `turbo build` per site, because each is built with its own `BASE_PATH` and turbo takes
- * one environment per run. The native packages go in a single run afterwards; `^build` has
- * already brought `shared-native` along by then, and turbo answers from its cache rather than
- * building it twice.
- */
-async function buildInputs(): Promise<void> {
-  for (const site of SITES) {
-    await turbo(['build', `--filter=${site.package}`], {
-      /* Empty unless a deployment says otherwise: the page is served by the server it calls.
-         `process.env` wins over the `.env` that vite loads, so a development `.env` in the
-         package cannot leak a localhost URL into a binary. */
-      API_BASE_URL: process.env.API_BASE_URL ?? '',
-      BASE_PATH: site.basePath,
-    })
-  }
-  await turbo(['build', ...NATIVE_PACKAGES.map((name) => `--filter=${name}`)], {})
-
-  /* Nothing above is allowed to have quietly produced nothing. A missing directory here means
-     a build task that did not run, and the alternative to saying so is a binary with no pages
-     in it that only fails when somebody opens it in a browser. */
-  for (const site of SITES) {
-    if (!existsSync(join(ROOT, site.build))) {
-      throw new Error(`${site.package} produced no ${site.build}`)
-    }
-  }
-}
-
-/** The files of one site, relative to its build directory, in a stable order. */
-async function siteFiles(build: string): Promise<string[]> {
-  const glob = new Bun.Glob('**/*')
-  const files: string[] = []
-  for await (const file of glob.scan({ cwd: join(ROOT, build), onlyFiles: true })) {
-    /* Bun.Glob yields the platform separator on Windows; a URL path uses the other one. */
-    files.push(file.split(/[\\/]/u).join('/'))
-  }
-  return files.sort()
-}
-
-/**
  * Writes the entry point: every embedded file, and the call that starts the binary.
  *
  * Generated and not written by hand for the reason in this file's header — a directory has no
  * import — and generated *into the package* rather than into a temporary directory, because
  * `../src` and `@gradido/backend` have to resolve, and that is what a workspace package's
  * `node_modules` is for.
+ *
+ * What it embeds is `publish/sites.json`, not a directory walk: the manifest is what the C
+ * build reads too, so the two binaries cannot end up carrying different sets of files.
  */
-async function writeEntry(): Promise<string> {
+async function writeEntry(manifest: Manifest): Promise<string> {
   const version = (await Bun.file(join(ROOT, 'package.json')).json()).version as string
   const imports: string[] = []
   const sites: string[] = []
 
-  for (const [siteIndex, site] of SITES.entries()) {
-    const files = await siteFiles(site.build)
-    if (!files.includes('index.html')) {
-      throw new Error(`${site.build}/index.html is missing — ${site.package} built no app`)
-    }
-
+  for (const [siteIndex, site] of manifest.sites.entries()) {
     const identifier = (fileIndex: number) => `s${siteIndex}f${fileIndex}`
     const entries: string[] = []
 
-    for (const [fileIndex, file] of files.entries()) {
+    for (const [fileIndex, file] of site.files.entries()) {
       /* Relative to the generated file, which sits in packages/bundle/gen. */
-      const from = relative(dirname(join(ROOT, ENTRY)), join(ROOT, site.build, file))
+      const from = relative(dirname(join(ROOT, ENTRY)), join(PUBLISH, site.dir, file.path))
       imports.push(
         `import ${identifier(fileIndex)} from ${JSON.stringify(from.split(/[\\/]/u).join('/'))} with { type: 'file' }`,
       )
-      entries.push(`        [${JSON.stringify(file)}, ${identifier(fileIndex)}],`)
+      /* The type and the ETag travel from the manifest into the binary, unchanged — see
+         StaticFile in packages/backend/src/server/staticRoutes.ts for why they are not worked
+         out at runtime. */
+      entries.push(
+        `        [${JSON.stringify(file.path)}, { file: ${identifier(fileIndex)},` +
+          ` type: ${JSON.stringify(file.type)}, etag: ${JSON.stringify(file.etag)},` +
+          ` immutable: ${file.immutable} }],`,
+      )
     }
+
+    const indexAt = site.files.findIndex((file) => file.path === site.index)
 
     sites.push(
       [
         '    {',
         `      name: ${JSON.stringify(site.name)},`,
         `      basePath: ${JSON.stringify(site.basePath)},`,
-        `      index: ${identifier(files.indexOf('index.html'))},`,
+        `      index: { file: ${identifier(indexAt)},` +
+          ` type: ${JSON.stringify(site.files[indexAt]?.type)},` +
+          ` etag: ${JSON.stringify(site.files[indexAt]?.etag)}, immutable: false },`,
         '      files: new Map([',
         ...entries,
         '      ]),',
         '    },',
       ].join('\n'),
     )
-
-    console.log(`bundle: ${site.name} — ${files.length} files from ${site.build}`)
   }
 
   const source = [
-    '/* Generated by scripts/bundle.ts. Not edited, not committed — see packages/bundle/.gitignore.',
+    '/* Generated by scripts/bundle.ts out of publish/. Not edited, not committed —',
+    '   see packages/bundle/.gitignore.',
     '',
     '   Every import below is a file bun copies into the executable; what it binds is the path',
     '   that file has inside it. The map turns a URL path back into one of them. */',
@@ -253,35 +181,6 @@ async function compile(entry: string, outfile: string): Promise<void> {
   console.log(`bundle: ${relative(ROOT, outfile)} — ${(size / 1024 / 1024).toFixed(1)} MB`)
 }
 
-/**
- * turbo, through the bun that is running this script.
- *
- * `bun x` rather than the bare name, because the name finds whatever turbo is on the PATH —
- * on this machine a globally installed 2.5.8 next to the repository's pinned 2.10.5 — and a
- * build that silently uses a different version of the tool that owns the dependency graph is
- * a build nobody can reproduce.
- */
-async function turbo(args: readonly string[], env: Record<string, string>): Promise<void> {
-  await run([process.execPath, 'x', 'turbo', ...args], env)
-}
-
-async function run(command: readonly string[], env: Record<string, string>): Promise<void> {
-  /* `bun` rather than the absolute path it was started from — the line is meant to be a
-     command somebody can read, and retype. */
-  console.log(
-    `bundle: ${command.map((part) => (part === process.execPath ? 'bun' : part)).join(' ')}`,
-  )
-  const child = Bun.spawn(command, {
-    cwd: ROOT,
-    env: { ...process.env, ...env },
-    stdio: ['inherit', 'inherit', 'inherit'],
-  })
-  const code = await child.exited
-  if (code !== 0) {
-    throw new Error(`${command.slice(1).join(' ')} failed with exit code ${code}`)
-  }
-}
-
 function usage(): string {
   return `bun bundle — build the single Gradido executable
 
@@ -289,8 +188,8 @@ function usage(): string {
   --skip-build      do not build the frontends and the addons first
   -h, --help        this text
 
-The frontends are built for the binary that serves them: API_BASE_URL empty, BASE_PATH set
-to where each is mounted. Set API_BASE_URL in the environment to override the first.`
+The pages come from publish/, which \`bun run publish\` assembles and which the C build reads
+as well. Set API_BASE_URL in the environment to point the pages at another origin.`
 }
 
 main().catch((error) => {

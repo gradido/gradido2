@@ -72,6 +72,18 @@ typedef struct sc_http_config {
  */
 const char *sc_http_reason(int status);
 
+/**
+ * Whether a response with this status carries no representation at all: no body, no
+ * Content-Type, no Content-Length.
+ *
+ * 204 and 304, and the two are here rather than in each backend for the reason above -- what a
+ * client reads off the wire may not depend on which backend answered. RFC 7230 forbids
+ * describing a body on a 204; RFC 7232 forbids sending one on a 304, and a length that
+ * described the representation the client already has would only invite a reader to wait for
+ * it.
+ */
+int sc_http_status_omits_body(int status);
+
 /** Names the backend this build linked: "h2o" or "libuv+picohttpparser". Never NULL. */
 const char *sc_http_backend_name(void);
 
@@ -251,6 +263,22 @@ sc_status sc_http_header_add(sc_http_req *req, const char *name, const char *val
  */
 sc_status sc_http_reply(sc_http_req *req, int status, const char *content_type, const char *body,
                         size_t body_len);
+
+/**
+ * The same answer, for bytes that outlive the process: an embedded file, a string literal.
+ *
+ * @p body is **borrowed and never copied**, which is the whole difference. It must still be
+ * there when the answer goes on the wire, which is after the handler returned -- so anything
+ * that lives on a stack, in an arena or in a request pool is `sc_http_reply` and not this.
+ *
+ * Two things follow, and the static web server needs both. The h2o backend hands the pointer
+ * to the kernel rather than copying a 134 KB font into the request pool once per visitor. The
+ * fallback backend is no longer bounded by the buffer it serialises a response into, which is
+ * 8 KiB: the headers go in that buffer and the body is written beside it, so a file larger than
+ * any answer a route produces can still be served on the backend that exists for Windows.
+ */
+sc_status sc_http_reply_static(sc_http_req *req, int status, const char *content_type,
+                               const char *body, size_t body_len);
 
 /**
  * Liveness, and deliberately nothing more: it reports that the process is up and which role

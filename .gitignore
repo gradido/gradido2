@@ -7,6 +7,9 @@ node_modules
 dist
 build
 .turbo
+
+# what `bun run publish` assembles for both servers to embed; see scripts/publish.ts
+/publish
 messages.pot
 .metadata
 .env
