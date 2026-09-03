@@ -125,6 +125,12 @@ Build system and cross compiler. No application code — its API still moves bet
 `../AGENTS.md`, *Toolchain*, holds where the pinned toolchain comes from and why the number is
 worth reading rather than guessing.
 
+The pin is `c-cpp-zig-build`'s, and this build can be handed it: `bun run zig build` from the
+repository root runs the Zig that package downloads -- the same compiler `shared-native` is
+built with, on every machine the same, and no zig to install. `bun bundle` uses it when
+`BUNDLE_C=1` asks for the C binary. `zig build` with a system toolchain is unchanged and stays
+the shortest way to work in here.
+
 `CMakeLists.txt` mirrors `build.zig` and exists for the one target zig cannot serve, the MSVC
 ABI. When the two disagree, `build.zig` is right.
 

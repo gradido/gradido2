@@ -10,6 +10,19 @@ arithmetic, decay, signing — exists once, in C, and is used by both.
 See [Architecture.md](Architecture.md) for the design and [AGENTS.md](AGENTS.md) for the
 working rules.
 
+## What you need
+
+**[bun](https://bun.com), and optionally Docker.** Everything else is a dependency of the
+project rather than a prerequisite of the machine: `bun install` brings the JavaScript side, and
+the Zig toolchain that compiles the C — `shared-native`, `email-native` and the whole of
+`fast-servers` — is downloaded and verified by
+[`c-cpp-zig-build`](https://www.npmjs.com/package/c-cpp-zig-build) into `~/.zig-build`, shared
+across checkouts. Docker is only for the development database, its web UI and a mail sink; see
+*Development containers* below.
+
+A system `zig` is used when you ask for it (`zig build` inside `fast-servers/`) and is never
+required — `bun run zig build` does the same with the pinned one.
+
 ## One binary
 
 ```sh
@@ -27,10 +40,17 @@ and it opens a SQLite database beside itself and asks who this community is. Tha
 download-and-start promise [Architecture.md](Architecture.md) makes; `scripts/bundle.ts` and
 `fast-servers/build.zig` are where it is kept.
 
-| variable | default | what it builds |
+| variable | default | what it does |
 |---|---|---|
-| `BUNDLE_TS` | `1` | `build/gradido2` — the TypeScript path, the reference implementation |
-| `BUNDLE_C` | `0` | `build/gradido2-fast` — the C path. Needs a zig toolchain, and a first build fetches and compiles h2o, LibreSSL and libpq |
+| `BUNDLE_TS` | `1` | build `build/gradido2` — the TypeScript path, the reference implementation |
+| `BUNDLE_C` | `0` | build `build/gradido2-fast` — the C path. Downloads its own Zig toolchain; a first build fetches and compiles h2o, LibreSSL and libpq, so it takes minutes |
+| `BUNDLE_C_OPTIMIZE` | `fast` | how the C binary is optimised: `fast`, `safe` or `small` |
+
+`fast` is ReleaseFast, which is what the fast path is for. `safe` is the same optimiser plus the
+checks that **trap on undefined behaviour** instead of continuing into it — the one to ship when
+an installation matters more than a microsecond. `small` optimises for size. A plain `zig build`
+still gives a developer a Debug binary; a bundle is a release and never does. Which mode a file
+carries is `./gradido2-fast --version`.
 
 > [!IMPORTANT]
 > The two are **implementations of the same server, not components of one**. A deployment runs

@@ -39,6 +39,12 @@
 
 #define FS_VERSION "0.0.1"
 
+/* Set by the build -- see build.zig and CMakeLists.txt. A compiler that was handed neither says
+ * so rather than claiming a mode it does not know. */
+#ifndef FS_OPTIMIZE
+#define FS_OPTIMIZE "unknown"
+#endif
+
 typedef sc_status (*fs_role_fn)(const sc_config *cfg, const sc_quit_flag *quit);
 
 typedef struct fs_role {
@@ -111,6 +117,10 @@ static void print_version(void)
 {
     printf("gradido2-fast %s\n", FS_VERSION);
     printf("http backend: %s\n", sc_http_backend_name());
+    /* Which of the release modes this is. ReleaseFast is what a bundle ships by default;
+     * ReleaseSafe keeps the checks that trap on undefined behaviour, and a Debug binary on a
+     * server is a mistake worth being able to see. */
+    printf("optimize: %s\n", FS_OPTIMIZE);
     /* Which databases this binary could open. No role opens one yet -- service_core/db.h says
      * what is missing before one can -- and which drivers are in is still a property of the
      * build that is worth being able to read off it rather than infer from how it was made. */

@@ -997,6 +997,10 @@ pub fn build(b: *std.Build) void {
         }),
     });
     applySanitize(exe.root_module, sanitize);
+    // What `--version` reports about how this binary was made. A release ships one of three
+    // optimize modes -- `BUNDLE_C_OPTIMIZE` in scripts/bundle.ts picks it -- and which one a
+    // file on a server was built with is otherwise not a question anybody can answer.
+    exe.root_module.addCMacro("FS_OPTIMIZE", b.fmt("\"{s}\"", .{@tagName(optimize)}));
     if (libc_file) |file| exe.setLibCFile(file);
     addComponentIncludes(b, exe);
     addHostSystemPaths(b, exe, target);

@@ -15,11 +15,17 @@
  * which to build, so a release job sets them once rather than remembering two commands:
  *
  *   BUNDLE_TS=1   the TypeScript binary. The default
- *   BUNDLE_C=0    the C binary. Off by default, because it needs a zig toolchain and
- *                 a first build fetches and compiles h2o, LibreSSL and libpq
+ *   BUNDLE_C=0    the C binary. Off by default, because a first build fetches and
+ *                 compiles h2o, LibreSSL and libpq, which takes minutes rather than
+ *                 seconds. Nothing has to be installed for it: the Zig toolchain is
+ *                 downloaded by c-cpp-zig-build, the same one shared-native uses
  *
  * Both take 0/1 or false/true. `BUNDLE_C=1 bun bundle` builds both; `BUNDLE_TS=0 BUNDLE_C=1`
- * builds only the C one.
+ * builds only the C one. A third says how hard the C compiler tries:
+ *
+ *   BUNDLE_C_OPTIMIZE=fast   `fast`, `safe` or `small` — see C_OPTIMIZE below. The
+ *                            default is a release mode, because a bundle is a release;
+ *                            `zig build` on its own still gives a developer Debug
  *
  * The TypeScript binary is built in three steps, and the middle one is the only one with an
  * idea in it:
@@ -48,11 +54,37 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import { type Manifest, PUBLISH, readManifest } from './publish'
 import { run, turbo } from './run'
+import { zigExe } from './zig'
 
 const ROOT = resolve(import.meta.dirname, '..')
 
 /** Written by this script, imported by nothing else, gitignored. */
 const ENTRY = 'packages/bundle/gen/main.ts'
+
+/**
+ * How hard the C compiler tries, and at what.
+ *
+ * Zig's three release modes, under the names `c-cpp-zig-build` gives them — `shared-native`
+ * declares `"optimize": "small"` and `email-native` `"fast"` in their `zigNative` blocks, and a
+ * third spelling of the same three things would be one too many.
+ *
+ *   fast    ReleaseFast. What a deployment gets, and what the fast path is for
+ *   safe    ReleaseSafe. The same optimiser, plus the checks that trap on undefined
+ *           behaviour instead of continuing into it. Slower, and the one to ship when
+ *           an installation matters more than a microsecond
+ *   small   ReleaseSmall. Optimised for size, for a machine where that is the constraint
+ *
+ * Debug is deliberately not one of them: it is what `zig build` gives a developer and is not a
+ * thing to hand to a community. `--version` reports which mode a binary carries, so a file on a
+ * server can be asked rather than guessed about.
+ */
+const C_OPTIMIZE = {
+  fast: 'ReleaseFast',
+  safe: 'ReleaseSafe',
+  small: 'ReleaseSmall',
+} as const
+
+type COptimize = keyof typeof C_OPTIMIZE
 
 /** The product's name. The C implementation is the same product, and says which one it is. */
 const TS_BINARY = process.platform === 'win32' ? 'gradido2.exe' : 'gradido2'
@@ -83,7 +115,7 @@ async function main(): Promise<void> {
     await compileTypeScript(entry, join(options.outdir, TS_BINARY))
   }
   if (options.c) {
-    await compileC(join(options.outdir, C_BINARY))
+    await compileC(join(options.outdir, C_BINARY), options.cOptimize)
   }
 }
 
@@ -91,6 +123,7 @@ type Options = {
   readonly outdir: string
   readonly typescript: boolean
   readonly c: boolean
+  readonly cOptimize: COptimize
   readonly help: boolean
 }
 
@@ -114,7 +147,20 @@ function parseArguments(argv: readonly string[]): Options {
     throw new Error('BUNDLE_TS=0 and BUNDLE_C=0: there is nothing to build')
   }
 
-  return { outdir: resolve(ROOT, outdir), typescript, c, help }
+  return { outdir: resolve(ROOT, outdir), typescript, c, cOptimize: cOptimize(), help }
+}
+
+/** Which release mode the C binary is built in. Refused rather than guessed at, as above. */
+function cOptimize(): COptimize {
+  const value = process.env.BUNDLE_C_OPTIMIZE
+  if (value === undefined || value === '') {
+    return 'fast'
+  }
+  const mode = value.toLowerCase()
+  if (!(mode in C_OPTIMIZE)) {
+    throw new Error(`BUNDLE_C_OPTIMIZE="${value}" is none of ${Object.keys(C_OPTIMIZE).join(', ')}`)
+  }
+  return mode as COptimize
 }
 
 /**
@@ -245,24 +291,34 @@ async function compileTypeScript(entry: string, outfile: string): Promise<void> 
  * cache hit rather than a second build. Which of the two callers ran first is then not something
  * either of them has to know.
  */
-async function compileC(outfile: string): Promise<void> {
-  if (Bun.which('zig') === null) {
-    /* Asked for by an environment variable, so the failure has to name it: "zig: not found" a
-       minute into a release job says nothing about which switch wanted it. */
-    throw new Error(
-      'BUNDLE_C=1 needs a zig toolchain on the PATH, which is what builds the C server.\n' +
-        '  fast-servers/README.md has what it does with it. Leave BUNDLE_C unset to build\n' +
-        '  only the TypeScript binary.',
-    )
-  }
-  await run(['zig', 'build', '-p', dirname(outfile), '--prefix-exe-dir', '.'], {}, FAST_SERVERS)
-  report(outfile)
+async function compileC(outfile: string, optimize: COptimize): Promise<void> {
+  /* Not `zig` off the PATH: the toolchain is a dependency of this project rather than a
+     prerequisite of the machine, so it is the one `c-cpp-zig-build` pins and downloads -- the
+     same compiler that builds shared-native, on every machine the same. See scripts/zig.ts.
+     Nothing has to be installed for a C binary but bun. */
+  await run(
+    [
+      await zigExe(),
+      'build',
+      `-Doptimize=${C_OPTIMIZE[optimize]}`,
+      '-p',
+      dirname(outfile),
+      '--prefix-exe-dir',
+      '.',
+    ],
+    {},
+    FAST_SERVERS,
+  )
+  report(outfile, C_OPTIMIZE[optimize])
 }
 
-function report(outfile: string): void {
-  console.log(
-    `bundle: ${relative(ROOT, outfile)} — ${(Bun.file(outfile).size / 1024 / 1024).toFixed(1)} MB`,
-  )
+function report(outfile: string, note = ''): void {
+  /* Relative while it is inside the repository, absolute once `--outdir` points elsewhere: a
+     line of `../../../..` is not a path anybody reads. */
+  const shown = relative(ROOT, outfile)
+  const where = shown.startsWith('..') ? outfile : shown
+  const size = (Bun.file(outfile).size / 1024 / 1024).toFixed(1)
+  console.log(`bundle: ${where} — ${size} MB${note === '' ? '' : `, ${note}`}`)
 }
 
 function usage(): string {
@@ -272,7 +328,10 @@ function usage(): string {
   -h, --help        this text
 
   BUNDLE_TS=1       build build/${TS_BINARY}, the TypeScript path (the default)
-  BUNDLE_C=0        build build/${C_BINARY}, the C path (needs a zig toolchain)
+  BUNDLE_C=0        build build/${C_BINARY}, the C path (downloads its own Zig
+                    toolchain; a first build takes minutes)
+  BUNDLE_C_OPTIMIZE=fast
+                    how the C binary is optimised: fast, safe or small
 
 A deployment runs one implementation or the other, never both against one database.
 

@@ -520,7 +520,9 @@ Prefer the smallest structure that expresses the actual business requirement.
 Pinned versions, so they are not guessed:
 
 ```text
-zig    pinned by c-cpp-zig-build, which builds shared-native.
+zig    pinned by c-cpp-zig-build, which builds shared-native -- and, through
+       `bun run zig`, fast-servers too, so a machine with bun on it can build
+       the C path without installing anything.
        One place, not three — legacy pinned 0.15.2 in
        build_helper/const.ts while ../h20Test asked for 0.15.1.
        Read the version out of the package; do not guess it and do

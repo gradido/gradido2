@@ -718,6 +718,8 @@ Not carried over: the restriction to JPEG. The accepted content types are an ope
 - bun + turborepo + tsgo + biome on the TypeScript side
 - zig as C/C++ compiler and as package manager for compatible third-party libs
 - zig as compiler for the shared-native module used from TypeScript
+- the zig toolchain itself downloaded and verified by c-cpp-zig-build, for both — see
+  *The self-provisioning build*
 - clang-format for linting C/C++ code
 - google test for testing C/C++ code
 - cargo for `fast-servers/dht-node`, and nowhere else
@@ -741,6 +743,13 @@ The native module is built by [`c-cpp-zig-build`](https://www.npmjs.com/package/
 (`github.com/gradido/c_cpp_zig_build`), which downloads the pinned Zig toolchain and the Node
 headers for the current platform. A TypeScript developer runs `bun install` followed by
 `turbo @gradido/backend#start` and needs to know nothing about any of it.
+
+**The same toolchain builds the fast path.** `bun run zig build` hands `fast-servers/build.zig`
+the Zig that package downloaded, so the C implementation — h2o, LibreSSL, both database drivers
+and all — needs nothing installed either, and both halves of the repository compile with one
+pinned compiler rather than with whatever each machine has. A system `zig` is still used when
+somebody asks for it, and is no longer a prerequisite for anything. What a developer needs is
+bun, and Docker only for the development database.
 
 This is part of the continuity plan, not a convenience: the TypeScript fallback path is not
 C-free, so it stays viable exactly as long as it keeps building itself. That the build lives
@@ -775,7 +784,9 @@ BUNDLE_C=1 bun bundle  build/gradido2-fast beside it — the roles, the frontend
 ```
 
 `BUNDLE_TS` and `BUNDLE_C` decide which; the reference implementation is the default, because
-that is the one that is always current. The two are alternatives and not halves — *One
+that is the one that is always current. `BUNDLE_C_OPTIMIZE` decides how hard the C compiler
+tries — `fast` by default, `safe` for a deployment that would rather trap on undefined behaviour
+than run into it, `small` where size is the constraint. The two are alternatives and not halves — *One
 implementation per deployment* above — and being built into one directory does not make them
 otherwise. A plain `zig build` still installs into `fast-servers/zig-out`; `build/` is where a
 release goes.

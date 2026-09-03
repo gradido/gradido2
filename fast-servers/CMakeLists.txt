@@ -490,6 +490,11 @@ target_link_libraries(backend_core PUBLIC service_core)
 add_executable(gradido2-fast src/main.c)
 target_include_directories(gradido2-fast PRIVATE ${FS_INCLUDE_DIRS})
 target_compile_options(gradido2-fast PRIVATE ${FS_WARNING_FLAGS})
+# The mirror of build.zig's FS_OPTIMIZE: what `--version` reports about how this was built. A
+# generator expression rather than CMAKE_BUILD_TYPE, because a multi-config generator -- which
+# is what the MSVC build this file exists for uses -- decides that at build time, not here.
+target_compile_definitions(gradido2-fast PRIVATE
+  FS_OPTIMIZE="$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,unknown>")
 # main.c runs each role on a uv_thread_t; the rest arrives through service_core.
 target_link_libraries(gradido2-fast PRIVATE backend federation dht_node backend_core service_core uv_a)
 

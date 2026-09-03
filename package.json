@@ -12,6 +12,7 @@
   "scripts": {
     "bundle": "bun scripts/bundle.ts",
     "publish": "bun scripts/publish.ts",
+    "zig": "bun scripts/zig.ts",
     "clear": "bun scripts/clean-all.ts",
     "lint": "biome check --error-on-warnings scripts contracts && turbo lint",
     "lint:fix": "biome check --error-on-warnings scripts contracts --write && turbo lint:fix",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.16",
+    "c-cpp-zig-build": "0.2.0",
     "turbo": "2.10.5"
   },
   "engines": {
