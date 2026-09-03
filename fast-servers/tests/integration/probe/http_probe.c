@@ -208,6 +208,65 @@ static int handle_defer_stats(sc_http_req *req, void *user_data)
 }
 
 /** Fixed answer, so the suite has something whose bytes it knows exactly. */
+/*
+ * A body that is bigger than any buffer either backend serialises a response into, answered
+ * with sc_http_reply_static.
+ *
+ * That function exists for the static web server -- an embedded page is bytes that outlive the
+ * process, so they are handed to the socket rather than copied -- and the size is the point:
+ * the fallback backend puts a response head in a 16 KiB buffer and copies an ordinary body into
+ * an 8 KiB one, so a 100 KB file only goes out at all because the body is written beside the
+ * head instead of into it. h2o has no such limit and is here for the other half of the claim:
+ * that both backends put the same bytes on the wire.
+ *
+ * Static storage, filled once before the server starts, which is what the "outlives the
+ * process" contract asks for.
+ */
+#define STATIC_BODY_LEN (100 * 1024)
+
+static char g_static_body[STATIC_BODY_LEN];
+
+static void fill_static_body(void)
+{
+    size_t i;
+
+    /* Every byte value in order, so a test can check the whole thing arrived in order rather
+     * than merely arrived at the right length. */
+    for (i = 0; i != STATIC_BODY_LEN; ++i)
+        g_static_body[i] = (char)(i % 256);
+}
+
+static int handle_static(sc_http_req *req, void *user_data)
+{
+    (void)user_data;
+
+    if (!sc_http_method_is(req, "GET"))
+        return -1;
+    (void)sc_http_header_add(req, "etag", "\"probe\"", sizeof("\"probe\"") - 1);
+    (void)sc_http_reply_static(req, 200, "application/octet-stream", g_static_body,
+                               STATIC_BODY_LEN);
+    return 0;
+}
+
+/**
+ * A 304, which is what the static server answers a revalidation with.
+ *
+ * Neither backend may describe a body on one -- no Content-Length, no Content-Type -- and both
+ * have to keep the headers the handler added, because those are what the cache came for. The
+ * connection has to stay usable afterwards, which is the part that goes wrong when a response
+ * says nothing about its framing.
+ */
+static int handle_not_modified(sc_http_req *req, void *user_data)
+{
+    (void)user_data;
+
+    if (!sc_http_method_is(req, "GET"))
+        return -1;
+    (void)sc_http_header_add(req, "etag", "\"probe\"", sizeof("\"probe\"") - 1);
+    (void)sc_http_reply(req, 304, "text/plain", "ignored", 7);
+    return 0;
+}
+
 static int handle_hello(sc_http_req *req, void *user_data)
 {
     static const char kBody[] = "Hello World\n";
@@ -328,7 +387,11 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    fill_static_body();
+
     if (sc_http_route(server, "/hello", handle_hello, NULL) != SC_OK ||
+        sc_http_route(server, "/static", handle_static, NULL) != SC_OK ||
+        sc_http_route(server, "/not-modified", handle_not_modified, NULL) != SC_OK ||
         sc_http_route(server, "/echo", handle_echo, NULL) != SC_OK ||
         sc_http_route(server, "/echo-header", handle_echo_header, NULL) != SC_OK ||
         sc_http_route(server, "/whoami", handle_whoami, NULL) != SC_OK ||

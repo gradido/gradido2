@@ -123,10 +123,18 @@ for (const nativeRoot of NATIVE_ROOTS) {
   console.log()
 }
 
+/**
+ * What only the repository root has.
+ *
+ * `publish/` is the built frontends both servers embed -- see scripts/publish.ts. It belongs to
+ * neither implementation, which is why it is here rather than in the per-workspace list.
+ */
+const ROOT_TARGETS = [...TARGETS, 'publish']
+
 // Also clean root-level targets.
 console.log('Root:')
 
-for (const target of TARGETS) {
+for (const target of ROOT_TARGETS) {
   await removeIfExists(join(ROOT, target))
 }
 

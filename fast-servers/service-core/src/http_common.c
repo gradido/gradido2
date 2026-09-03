@@ -15,6 +15,8 @@ const char *sc_http_reason(int status)
         return "OK";
     case 204:
         return "No Content";
+    case 304:
+        return "Not Modified";
     case 400:
         return "Bad Request";
     case 401:
@@ -38,6 +40,11 @@ const char *sc_http_reason(int status)
     default:
         return status < 400 ? "OK" : "Error";
     }
+}
+
+int sc_http_status_omits_body(int status)
+{
+    return status == 204 || status == 304;
 }
 
 int sc_http_health(sc_http_req *req, void *user_data)

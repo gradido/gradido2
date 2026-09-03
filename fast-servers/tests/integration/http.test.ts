@@ -482,6 +482,56 @@ describe('chunked transfer encoding', () => {
   })
 })
 
+describe('a body that outlives the handler', () => {
+  /*
+   * sc_http_reply_static, which is what the static web server answers a page with: the bytes are
+   * in the executable, so they are handed to the socket rather than copied. The size is why this
+   * is here -- the fallback backend copies an ordinary body into an 8 KiB buffer and serialises
+   * the head into a 16 KiB one, and a frontend carries a 134 KB font.
+   */
+  test('100 KB goes out whole, on both backends', async () => {
+    const response = await once(get('/static'))
+    const body = bodyOf(response)
+
+    expect(statusOf(response)).toBe(200)
+    expect(headOf(response)).toContain(`Content-Length: ${100 * 1024}`)
+    expect(body.length).toBe(100 * 1024)
+    /* Every byte value in order, so a body that arrived at the right length but out of order --
+     * two write vectors is what this is testing -- is not mistaken for a pass. */
+    expect(body.equals(everyByte(400))).toBe(true)
+  })
+
+  test('a header the handler added survives a static reply', async () => {
+    expect(headOf(await once(get('/static')))).toContain('etag: "probe"')
+  })
+
+  test('a 304 describes no body and keeps its headers', async () => {
+    const response = await once(get('/not-modified'))
+    const head = headOf(response)
+
+    expect(statusOf(response)).toBe(304)
+    expect(bodyOf(response).length).toBe(0)
+    /* RFC 7232: no body on a 304, and nothing describing one. A Content-Length of 0 would be a
+     * cache waiting for a representation the answer says it is not sending. */
+    expect(head).not.toContain('Content-Length')
+    expect(head).not.toContain('Content-Type')
+    /* What the revalidation came for. */
+    expect(head).toContain('etag: "probe"')
+  })
+
+  test('a connection survives a 304 and serves the next request', async () => {
+    const socket = await connect()
+    socket.send('GET /not-modified HTTP/1.1\r\nHost: x\r\n\r\n')
+    socket.send('GET /hello HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n')
+    const response = await socket.readAll()
+    socket.close()
+
+    /* Two answers on one connection: a 304 whose framing was wrong would swallow the second. */
+    expect(responseCount(response)).toBe(2)
+    expect(response.toString()).toContain('Hello World')
+  })
+})
+
 describe('answering later', () => {
   /** `/defer` hands the request to a worker thread, which sends the ticket back after a wait.
    *  What is being tested is that the answer arrives on the loop that owns the request. */

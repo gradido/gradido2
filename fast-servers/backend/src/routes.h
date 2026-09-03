@@ -26,4 +26,17 @@ int backend_user_create(sc_http_req *req, void *user_data);
  */
 int backend_route_not_implemented(sc_http_req *req, void *user_data);
 
+/**
+ * What the server registers as its default route: the pages first, the answer above second.
+ *
+ * The order is the whole design. A static server consulted *before* the routes would shadow
+ * them; one that answered a 404 itself would take ROUTE_NOT_IMPLEMENTED away from every
+ * contracted path that is not written yet. So it runs last and only claims what it recognises
+ * -- see backend/static_sites.h. The reference path mounts the same two in the same order,
+ * with the static plugin last and its NotFoundError falling through to the error handler.
+ *
+ * It lives in static_sites.c, with the half of it that can decline.
+ */
+int backend_route_default(sc_http_req *req, void *user_data);
+
 #endif /* BACKEND_ROUTES_H */

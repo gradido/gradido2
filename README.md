@@ -13,33 +13,42 @@ working rules.
 ## One binary
 
 ```sh
-bun bundle                     # build/gradido — the server, the pages, the addons, bun
-./build/gradido                # start it: the backend, and the frontend it hands out
+bun run publish                # publish/ — the built frontends both servers hand out
+bun bundle                     # build/gradido — the TypeScript server, with them inside
+./build/gradido                # start it: the backend, and the frontend it serves
 ./build/gradido --help         # the services and commands it has
+
+cd fast-servers && zig build   # zig-out/bin/fast-servers — the C server, same pages
 ```
 
-`bun bundle` compiles the whole TypeScript path into a single executable: the backend, the
-frontends it serves, the native addons, and the bun runtime itself. Nothing has to be
-installed next to it — copy the file onto a server, start it, and it opens a SQLite database
-beside itself and asks who this community is. That is the download-and-start promise
-[Architecture.md](Architecture.md) makes, and `scripts/bundle.ts` is where it is kept; the
-script's header describes the three steps and why the middle one generates code.
+Either implementation ships as a single executable: the server, the frontends it serves, and
+its runtime. Nothing has to be installed next to it — copy the file onto a server, start it,
+and it opens a SQLite database beside itself and asks who this community is. That is the
+download-and-start promise [Architecture.md](Architecture.md) makes; `scripts/bundle.ts` and
+`fast-servers/build.zig` are where it is kept.
+
+**The pages belong to neither and are built once.** `bun run publish` assembles `publish/` — the
+built frontends plus a manifest saying where each is mounted and what every file's content type
+and ETag are — and both builds embed what it names. Neither server can build a page: a page is
+vite's output. `bun bundle` and `zig build` both run it themselves; run it alone to look at what
+a binary would carry. It is generated, so it is gitignored.
 
 | what | where it comes from |
 |---|---|
 | the backend | `packages/backend`, started through `runBackend` rather than by importing a file that runs |
-| the frontend | `packages/frontend/build`, every file embedded and handed out by `packages/backend/src/server/staticRoutes.ts` |
+| the frontend | `publish/frontend`, every file embedded and handed out by `packages/backend/src/server/staticRoutes.ts` — and by `fast-servers/backend/src/static_routes.c` on the other path |
 | `shared-native`, `email-native` | the `.node` addons, embedded the same way |
-| federation, dht-node, admin | not written yet. `packages/bundle/src/cli.ts` and `scripts/bundle.ts` say where each joins |
+| federation, dht-node, admin | not written yet. `packages/bundle/src/cli.ts` and `scripts/publish.ts` say where each joins |
 
 Configuration is the environment, as it is for a checkout — `packages/backend/.env.dist`
 lists what there is, and a `.env` next to the binary is read. The frontend inside it calls
 the origin it was served from, so a deployment has no URL to configure and the backend sends
 no CORS headers to itself; `bun bundle` is what builds it that way.
 
-**The binary is for the platform it was built on.** The embedded addons are machine code, so
-there is no cross-compilation flag that would help: build it on the system it will run on, or
-on one like it.
+**The TypeScript binary is for the platform it was built on.** The embedded addons are machine
+code, so there is no cross-compilation flag that would help: build it on the system it will run
+on, or on one like it. The C one cross-compiles freely — `fast-servers/README.md` has the
+targets — because everything in it is compiled from source by the same toolchain.
 
 ## Development containers
 

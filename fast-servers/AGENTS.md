@@ -344,6 +344,39 @@ how many sessions, how long a mail waits, what happens after a failure -- belong
 
 ---
 
+## 3d. The pages are built elsewhere
+
+The backend serves the frontend out of its own process -- `backend/src/static_routes.c`, with the
+files in `backend/include/backend/static_sites.h`. It cannot build one: a page is vite's output.
+
+```text
+bun run publish        builds the frontends into publish/ at the repository root,
+                       with a manifest that says where each is mounted and what
+                       every file's content type and ETag are
+zig build              runs that first, then embeds what the manifest names
+zig build -Dpages=false   a server with no pages, and no bun needed
+```
+
+Three rules follow:
+
+- **Do not decide a content type or an ETag here.** Both are read out of `publish/sites.json`,
+  because the TypeScript server reads the same values out of the same file and a client must not
+  be able to tell the two implementations apart. A MIME table in C would be a second source of
+  truth for a question that has one answer -- `scripts/publish.ts` is where a new extension gets
+  a line.
+- **Do not read a page off the disk at runtime.** Same rule as the migrations, same reason: a
+  server has to stay shippable as one file. What may sit beside the binary is *data* -- the
+  SQLite database, the media directory -- not what a build produced.
+- **A page is answered with `sc_http_reply_static`**, which borrows the bytes rather than
+  copying them. That is what lets the fallback backend serve a 134 KB font at all, and it is why
+  the function's contract is that the bytes outlive the process.
+
+`packages/backend/src/server/staticRoutes.ts` is the same behaviour on the reference path, and
+its test file is where the rules are written down as assertions. Changing one without the other
+is how the two start answering differently.
+
+---
+
 ## 4. Safety net
 
 Not optional, and less so where the code was AI-generated:
@@ -467,6 +500,18 @@ h2o    it stops reading a connection while a response is pending, so a
        the write fails. The fallback keeps reading and sees the EOF. Do
        not build anything on being told; build on the request staying
        alive until it is answered, which is what the generator gives you.
+http   sc_http_reply copies the body, because a handler's buffer is usually
+       gone by the time the answer is written. sc_http_reply_static does not:
+       it is for bytes that outlive the process -- an embedded page, a string
+       literal -- and it is not an optimisation you may reach for with an
+       arena buffer, it is a promise about lifetime
+http   the fallback backend writes the head and the body as two vectors of one
+       uv_write, so OUT_BUF bounds the *headers* and not the response. Before
+       that a body over 8 KiB was refused and one over 16 KiB tore the
+       connection down -- which no route hit and every font does
+http   204 and 304 carry no body and may not describe one: no Content-Length,
+       no Content-Type. sc_http_status_omits_body is the one answer both
+       backends read, the way sc_http_reason is for the phrase
 http   a deferred request's ticket packs loop, slot and generation, and the
        slot's generation and phase share one word so that validating a
        ticket and claiming it are one CAS. Two steps is a race: a slot

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "backend/static_sites.h"
 #include "backend_core/backend_core.h"
 #include "backend_core/database/migrations.h"
 #include "cors.h"
@@ -70,11 +71,13 @@ sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit)
     status = sc_http_route(server, SC_HTTP_HEALTH_PATH, sc_http_health, (void *)"backend");
     if (status == SC_OK)
         status = sc_http_route(server, "/user/create", backend_user_create, &context);
-    /* Everything else is a contracted route this implementation does not serve yet, and it says
-     * so rather than 404ing: a deployment runs one implementation and never forwards to the
-     * other, so "not here" has to be distinguishable from "nowhere". */
+    /* Everything no route matched: the pages this binary carries first -- a file they have, or
+     * a browser navigating to a route of the app -- and otherwise a contracted route this
+     * implementation does not serve yet, which says so rather than 404ing. A deployment runs one
+     * implementation and never forwards to the other, so "not here" has to be distinguishable
+     * from "nowhere". */
     if (status == SC_OK)
-        status = sc_http_route_default(server, backend_route_not_implemented, NULL);
+        status = sc_http_route_default(server, backend_route_default, NULL);
     /* Before all of them, because which origins may call this server is a property of the
      * deployment and not of a path -- and because a rule that has to be remembered at every new
      * route is a rule that will be forgotten at one. */
@@ -84,9 +87,13 @@ sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit)
         status = sc_http_listen(server);
 
     if (status == SC_OK) {
-        sc_log_value data[3] = {SC_LOG_STR("impl", "fast"),
+        sc_log_value data[4] = {SC_LOG_STR("impl", "fast"),
                                 SC_LOG_STR("db", sc_db_kind_name(db_config.kind)),
-                                SC_LOG_UINT("port", cfg->backend_port)};
+                                SC_LOG_UINT("port", cfg->backend_port),
+                                /* Which frontends this build carries, so that a binary built
+                                 * without pages says so on the line that says it is up rather
+                                 * than by 501ing at whoever opens it in a browser. */
+                                SC_LOG_UINT("sites", backend_static_site_count)};
 
         sc_log_info(SC_CAT_STARTUP, "server.cors", "cross-origin: %s",
                     cors.development ? "any origin, which is what development is for"
@@ -94,7 +101,7 @@ sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit)
         sc_log_context log = {0};
 
         log.data = data;
-        log.data_count = 3;
+        log.data_count = 4;
         sc_log_event(SC_LOG_INFO, SC_CAT_STARTUP, "startup.server.started", &log,
                      "backend listening on http://%s:%u", cfg->listen_host,
                      (unsigned)cfg->backend_port);

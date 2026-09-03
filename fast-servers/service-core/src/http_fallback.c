@@ -14,6 +14,7 @@
  */
 #include "service_core/http.h"
 
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -109,6 +110,15 @@ struct sc_http_req {
     int status;
     const char *content_type;
     size_t reply_len;
+    /*
+     * What respond() puts on the wire: `reply` for an answer that was copied here, the caller's
+     * own bytes for sc_http_reply_static. Never dereferenced when reply_len is 0.
+     *
+     * The pointer rather than the buffer, because the body is written beside the headers rather
+     * than into them -- see respond() -- so a static file is not bounded by REPLY_MAX and never
+     * copied at all.
+     */
+    const char *reply_ptr;
     char reply[REPLY_MAX];
 };
 
@@ -310,49 +320,64 @@ static void on_written(uv_write_t *w, int status)
 static void respond(struct conn *c, int status, const char *content_type, const char *body,
                     size_t body_len, int keep_alive, const char *extra_headers)
 {
-    uv_buf_t buf;
+    uv_buf_t bufs[2];
     const char *extra = extra_headers != NULL ? extra_headers : "";
-    /* A 204 carries no body, and RFC 7230 forbids describing one: no Content-Length, and no
-     * Content-Type for a representation that is not there. h2o omits both for the same status,
+    /* A 204 and a 304 carry no body, and neither may describe one: no Content-Length, and no
+     * Content-Type for a representation that is not there. h2o omits both for the same statuses,
      * which is what keeps the two backends indistinguishable to a client. */
-    int n = status == 204
-                ? snprintf(c->out, OUT_BUF,
-                           "HTTP/1.1 %d %s\r\n"
-                           "Connection: %s\r\n"
-                           "%s"
-                           "\r\n",
-                           status, sc_http_reason(status), keep_alive ? "keep-alive" : "close", extra)
-                : snprintf(c->out, OUT_BUF,
-                           "HTTP/1.1 %d %s\r\n"
-                           "Content-Type: %s\r\n"
-                           "Content-Length: %zu\r\n"
-                           "Connection: %s\r\n"
-                           "%s"
-                           "\r\n",
-                           status, sc_http_reason(status), content_type, body_len,
-                           keep_alive ? "keep-alive" : "close", extra);
-    /* A body a 204 must not carry is dropped here rather than refused: the status is the
+    int n =
+        sc_http_status_omits_body(status)
+            ? snprintf(c->out, OUT_BUF,
+                       "HTTP/1.1 %d %s\r\n"
+                       "Connection: %s\r\n"
+                       "%s"
+                       "\r\n",
+                       status, sc_http_reason(status), keep_alive ? "keep-alive" : "close", extra)
+            : snprintf(c->out, OUT_BUF,
+                       "HTTP/1.1 %d %s\r\n"
+                       "Content-Type: %s\r\n"
+                       "Content-Length: %zu\r\n"
+                       "Connection: %s\r\n"
+                       "%s"
+                       "\r\n",
+                       status, sc_http_reason(status), content_type, body_len,
+                       keep_alive ? "keep-alive" : "close", extra);
+    /* A body a status must not carry is dropped here rather than refused: the status is the
      * caller's decision and the framing is this function's, so the two cannot disagree on the
      * wire whatever a handler passed in. */
-    if (status == 204)
+    if (sc_http_status_omits_body(status))
         body_len = 0;
-    if (n < 0 || (size_t)n + body_len > OUT_BUF) {
+    if (n < 0 || (size_t)n >= OUT_BUF) {
         /* Cannot even say what went wrong within the buffer. */
         teardown(c);
         return;
     }
-    if (body_len != 0)
-        memcpy(c->out + n, body, body_len);
-    c->out_len = (size_t)n + body_len;
+    c->out_len = (size_t)n;
 
     if (!keep_alive)
         c->close_after_write = 1;
 
     uv_read_stop((uv_stream_t *)&c->handle);
-    buf = uv_buf_init(c->out, (unsigned)c->out_len);
+    /*
+     * The head out of this connection's buffer, the body from wherever it already is. Two
+     * vectors and not one buffer, which is what lets this backend answer with a 134 KB font:
+     * OUT_BUF then bounds the *headers* rather than the whole response, and nothing is copied
+     * on the way out.
+     *
+     * Both pointers have to outlive the write, and both do: `out` belongs to the connection,
+     * and the body is either `req->reply` -- also the connection's, and not touched again until
+     * on_written lets the next request be processed -- or bytes sc_http_reply_static promised
+     * outlive the process.
+     */
+    bufs[0] = uv_buf_init(c->out, (unsigned)c->out_len);
+    /* uv_buf_t names a mutable buffer because libuv reads *into* one as well; a write only ever
+     * reads from it. The cast through uintptr_t is the const removal spelled out rather than
+     * hidden in a (char *). */
+    if (body_len != 0)
+        bufs[1] = uv_buf_init((char *)(uintptr_t)body, (unsigned)body_len);
     c->writing = 1;
     c->wr.data = c;
-    uv_write(&c->wr, (uv_stream_t *)&c->handle, &buf, 1, on_written);
+    uv_write(&c->wr, (uv_stream_t *)&c->handle, bufs, body_len != 0 ? 2 : 1, on_written);
 }
 
 static void fail(struct conn *c, int status, const char *body)
@@ -568,6 +593,7 @@ static void dispatch(struct conn *c, struct sc_http_req *req)
     req->status = 404;
     req->content_type = "text/plain";
     req->reply_len = 0;
+    req->reply_ptr = NULL;
 }
 
 static void process(struct conn *c)
@@ -682,11 +708,12 @@ static void process(struct conn *c)
             req->status = 500;
             req->content_type = "text/plain";
             req->reply_len = 0;
+            req->reply_ptr = NULL;
         }
 
         keep = wants_keep_alive(req);
         /* Copies the answer out before the buffer moves. */
-        respond(c, req->status, req->content_type, req->reply, req->reply_len, keep,
+        respond(c, req->status, req->content_type, req->reply_ptr, req->reply_len, keep,
                 req->extra_headers);
         consume(c, wire_len);
     }
@@ -773,9 +800,10 @@ static void deliver(sc_http_server *server, int32_t slot)
         c->req.status = 500;
         c->req.content_type = "text/plain";
         c->req.reply_len = 0;
+        c->req.reply_ptr = NULL;
     }
     keep = wants_keep_alive(&c->req);
-    respond(c, c->req.status, c->req.content_type, c->req.reply, c->req.reply_len, keep,
+    respond(c, c->req.status, c->req.content_type, c->req.reply_ptr, c->req.reply_len, keep,
             c->req.extra_headers);
     consume(c, c->deferred_wire_len);
 }
@@ -1081,9 +1109,34 @@ sc_status sc_http_reply(sc_http_req *req, int status, const char *content_type, 
         return SC_ERR_TOO_LONG;
 
     /* Copied rather than borrowed: the answer goes out after the handler has returned, and a
-     * handler's own buffer is usually a stack array that is gone by then. */
+     * handler's own buffer is usually a stack array that is gone by then. What outlives the
+     * handler by itself goes through sc_http_reply_static and is not copied. */
     if (body_len != 0)
         memcpy(req->reply, body, body_len);
+    req->reply_ptr = req->reply;
+    req->reply_len = body_len;
+    req->status = status;
+    req->content_type = content_type;
+    req->replied = 1;
+    return SC_OK;
+}
+
+sc_status sc_http_reply_static(sc_http_req *req, int status, const char *content_type,
+                               const char *body, size_t body_len)
+{
+    if (req == NULL || content_type == NULL || body == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+
+    /* libuv counts a write vector's length in an unsigned int. Nothing this serves comes near
+     * it, and a body that did would otherwise be truncated to its low 32 bits -- refused here,
+     * where it can be reported, rather than sent wrong. */
+    if (body_len > UINT_MAX)
+        return SC_ERR_TOO_LONG;
+
+    /* No REPLY_MAX and no copy: the header promises these bytes outlive the process, and
+     * respond() writes them straight out of wherever they are. That is what lets this backend
+     * hand out a file bigger than any answer it can serialise. */
+    req->reply_ptr = body;
     req->reply_len = body_len;
     req->status = status;
     req->content_type = content_type;

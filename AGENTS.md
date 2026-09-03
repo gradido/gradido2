@@ -118,6 +118,10 @@ fast-servers/      C, mirrors the domain structure of packages/
                    writing C, they are not summarised here
 contracts/         language-independent JSON contracts, see section 5
                    has its own AGENTS.md for the file formats
+publish/           generated, gitignored: the built frontends and a manifest
+                   naming what each server embeds. Belongs to neither
+                   implementation — both read it, neither may write it by hand.
+                   `bun run publish` is what fills it
 ```
 
 **Every workspace package is `@gradido/<directory>`.** The directory keeps the plain name,
@@ -535,8 +539,12 @@ bun run lint        bun run lint:fix
 bun run typecheck
 bun run test
 bun install && turbo @gradido/backend#start
+bun run publish     publish/ — the built frontends both servers embed
 bun bundle          build/gradido — everything in one executable
 ```
+
+`bun bundle` runs `bun run publish` itself, and so does `zig build` in `fast-servers`. Run it
+alone when you want to look at what a binary would carry.
 
 Each of these goes through turbo, and turbo is what knows the dependency graph. `test`
 depends on `^build`, so `shared-native` — determinism-critical C behind N-API — is compiled
@@ -567,6 +575,10 @@ That is data. It is created by the server, it survives an update of the binary, 
 exactly where it belongs. What may not be on the disk is what came out of the build — code,
 migrations, mail templates, pages — because that is what a checkout has and what a copied
 binary does not.
+
+The same two rules hold for `fast-servers`, which embeds the same pages out of the same
+`publish/` — `fast-servers/AGENTS.md` section 3d. A change to what a page is served with
+belongs in `scripts/publish.ts`, where both servers read it from, and not in either server.
 
 Record Elysia idioms that keep being reinvented here as well; h2o belongs in
 `fast-servers/AGENTS.md`. Three that have already cost something:

@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Elysia } from 'elysia'
-import { type StaticSite, staticRoutes } from './staticRoutes'
+import { type StaticFile, type StaticSite, staticRoutes } from './staticRoutes'
 
 /**
  * The static server, against files on disk.
@@ -23,28 +23,57 @@ const ADMIN_INDEX = '<!doctype html><title>admin</title>'
 
 beforeAll(async () => {
   const directory = await mkdtemp(join(tmpdir(), 'gradido-static-'))
-  const write = async (name: string, content: string): Promise<string> => {
+  /* What `publish/sites.json` carries per file, minus the parts this test does not vary. */
+  const write = async (
+    name: string,
+    content: string,
+    rest: Omit<StaticFile, 'file'>,
+  ): Promise<StaticFile> => {
     const path = join(directory, name)
     await Bun.write(path, content)
-    return path
+    return { file: path, ...rest }
   }
+  const html = { type: 'text/html; charset=utf-8', immutable: false }
 
   const frontend: StaticSite = {
     name: 'frontend',
     basePath: '',
-    index: await write('index.html', INDEX),
+    index: await write('index.html', INDEX, { ...html, etag: 'aaa' }),
     files: new Map([
-      ['index.html', await write('index2.html', INDEX)],
-      ['assets/app-abc123.js', await write('app.js', 'console.log(1)')],
-      ['locales/de/messages.json', await write('messages.json', '{"hello":"hallo"}')],
+      ['index.html', await write('index2.html', INDEX, { ...html, etag: 'aaa' })],
+      [
+        'assets/app-abc123.js',
+        await write('app.js', 'console.log(1)', {
+          type: 'text/javascript; charset=utf-8',
+          etag: 'bbb',
+          immutable: true,
+        }),
+      ],
+      [
+        'locales/de/messages.json',
+        await write('messages.json', '{"hello":"hallo"}', {
+          type: 'application/json; charset=utf-8',
+          etag: 'ccc',
+          immutable: false,
+        }),
+      ],
     ]),
   }
 
   const admin: StaticSite = {
     name: 'admin',
     basePath: '/admin',
-    index: await write('admin.html', ADMIN_INDEX),
-    files: new Map([['assets/admin-def456.js', await write('admin.js', 'console.log(2)')]]),
+    index: await write('admin.html', ADMIN_INDEX, { ...html, etag: 'ddd' }),
+    files: new Map([
+      [
+        'assets/admin-def456.js',
+        await write('admin.js', 'console.log(2)', {
+          type: 'text/javascript; charset=utf-8',
+          etag: 'eee',
+          immutable: true,
+        }),
+      ],
+    ]),
   }
 
   /* A bare Elysia and not `createBackendApp`: what the app makes of a NotFoundError is the
@@ -80,12 +109,20 @@ describe('staticRoutes', () => {
 
   it('answers a revalidation with 304 and no body', async () => {
     const first = await get('/locales/de/messages.json')
-    const etag = first.headers.get('etag')
-    expect(etag).toBeString()
+    /* The manifest's value, quoted — not something this server computed. */
+    expect(first.headers.get('etag')).toBe('"ccc"')
 
-    const second = await get('/locales/de/messages.json', { 'if-none-match': etag as string })
+    const second = await get('/locales/de/messages.json', { 'if-none-match': '"ccc"' })
     expect(second.status).toBe(304)
     expect(await second.text()).toBe('')
+  })
+
+  it('serves the type the manifest gave it', async () => {
+    /* Not what Bun infers from the extension: the same string the C server reads out of the
+       same manifest, so a client cannot tell the two implementations apart. */
+    expect((await get('/assets/app-abc123.js')).headers.get('content-type')).toBe(
+      'text/javascript; charset=utf-8',
+    )
   })
 
   it('gives a browser the app for a route of the app', async () => {
