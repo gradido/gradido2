@@ -8,18 +8,39 @@ here; this file is only how to build and run it.
 ## Build
 
 ```sh
-zig build                      # the binary, in zig-out/bin/fast-servers
+zig build                      # the binary, in zig-out/bin/gradido2-fast
 zig build run -- --federation  # build and run, roles after --
 ```
 
+**No zig installed?** Then run it from the repository root, where the toolchain is a dependency
+rather than a prerequisite:
+
+```sh
+bun run zig build              # the same build, with the Zig c-cpp-zig-build downloads
+bun run zig build -Dtests test
+```
+
+`c-cpp-zig-build` already downloads a pinned Zig for `shared-native` and `email-native`,
+verifies the archive against the SHA-256 ziglang.org publishes and caches it in `~/.zig-build`;
+`scripts/zig.ts` hands the same one to this build, and `bun bundle` uses it when it is asked for
+the C binary. So a developer needs bun and nothing else — and the version comes from one pin
+instead of from whatever a machine happens to have. A system `zig` still works and is still the
+shortest way to work in here.
+
+The binary is named after the product rather than after this directory: `gradido2-fast` is the
+C implementation of the same server `gradido2` is, and `--version` says which one answered.
+`BUNDLE_C=1 bun bundle` in the repository root builds it into `build/` beside the other one —
+see the root [README.md](../README.md), including why having both there does not mean running
+both.
+
 `build.zig` is the master build. It fetches and compiles everything it needs, so nothing has to
-be installed for it beyond a zig toolchain. That holds without an exception — the TLS library,
-zlib and both database drivers included. `ldd zig-out/bin/fast-servers` names `libm` and `libc`
+be installed for it beyond the Zig toolchain — which is itself downloaded, see above. That holds
+without an exception: the TLS library, zlib and both database drivers included. `ldd zig-out/bin/gradido2-fast` names `libm` and `libc`
 and nothing else.
 
 **One thing is not compiled here: the pages.** A Gradido server serves the frontend out of its
 own process, a frontend is vite's output, and there is no JavaScript on this path. So
-`zig build` runs `bun run publish` in the repository root first and embeds what it leaves in
+`zig build` runs `turbo publish` in the repository root first and embeds what it leaves in
 `publish/` — see *The pages* in [Architecture.md](Architecture.md). A machine without bun builds
 the server and not the pages:
 
@@ -36,12 +57,17 @@ Options, all with `-D`:
 |---|---|---|
 | `h2o` | on, forced off on Windows | build the h2o HTTP backend; off selects the fallback |
 | `pages` | on | embed the frontends from `publish/` and serve them. Off builds a server with no pages — and needs no bun |
-| `publish` | `../publish` | where `bun run publish` assembled them |
+| `publish` | `../publish` | where `turbo publish` assembled them |
 | `postgres` | on, forced off on Windows | build the PostgreSQL driver. Off also skips a 155 MB fetch |
 | `sqlite` | on | build the SQLite driver |
 | `tests` | off | the googletest binaries and the integration probe |
 | `benchmarks` | off | the `bench_*` binaries |
 | `sanitize` | `off` | `undefined_behavior` (UBSan) or `thread` (TSan) |
+
+`-Doptimize` is zig's own and is Debug unless it is given, which is right for developing and
+wrong for shipping: `bun bundle` passes `ReleaseFast` unless `BUNDLE_C_OPTIMIZE` says `safe` or
+`small`. `gradido2-fast --version` reports which mode it was built in, so a binary on a server
+can be asked.
 
 AddressSanitizer is not in that list: zig does not ship the asan runtime, so it comes from the
 CMake build instead.

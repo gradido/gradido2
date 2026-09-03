@@ -125,6 +125,12 @@ Build system and cross compiler. No application code — its API still moves bet
 `../AGENTS.md`, *Toolchain*, holds where the pinned toolchain comes from and why the number is
 worth reading rather than guessing.
 
+The pin is `c-cpp-zig-build`'s, and this build can be handed it: `bun run zig build` from the
+repository root runs the Zig that package downloads -- the same compiler `shared-native` is
+built with, on every machine the same, and no zig to install. `bun bundle` uses it when
+`BUNDLE_C=1` asks for the C binary. `zig build` with a system toolchain is unchanged and stays
+the shortest way to work in here.
+
 `CMakeLists.txt` mirrors `build.zig` and exists for the one target zig cannot serve, the MSVC
 ABI. When the two disagree, `build.zig` is right.
 
@@ -350,10 +356,13 @@ The backend serves the frontend out of its own process -- `backend/src/static_ro
 files in `backend/include/backend/static_sites.h`. It cannot build one: a page is vite's output.
 
 ```text
-bun run publish        builds the frontends into publish/ at the repository root,
+turbo publish          builds the frontends into publish/ at the repository root,
                        with a manifest that says where each is mounted and what
                        every file's content type and ETag are
-zig build              runs that first, then embeds what the manifest names
+zig build              runs that first, then embeds what the manifest names.
+                       Through turbo, so that a `bun bundle` building both
+                       implementations publishes once and the second ask is a
+                       cache hit
 zig build -Dpages=false   a server with no pages, and no bun needed
 ```
 

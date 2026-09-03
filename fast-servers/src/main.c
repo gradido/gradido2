@@ -1,16 +1,16 @@
 /*
  * One binary, three roles, and one command that is not a role.
  *
- * `fast-servers` with no argument is the backend, which is the common case and therefore the
+ * `gradido2-fast` with no argument is the backend, which is the common case and therefore the
  * default. Each of --backend, --federation and --dht-node selects a role, and several of them
  * select several: they run in one process, on one thread each, sharing one backend-core and one
  * log stream. That is what a community server on a small machine wants, and splitting them
  * across processes on a large one needs no code change -- it is three invocations.
  *
- *   fast-servers                          the backend
- *   fast-servers --federation             federation only
- *   fast-servers --backend --dht-node     both, in one process
- *   fast-servers migrate-down             take the database down one migration, then stop
+ *   gradido2-fast                          the backend
+ *   gradido2-fast --federation             federation only
+ *   gradido2-fast --backend --dht-node     both, in one process
+ *   gradido2-fast migrate-down             take the database down one migration, then stop
  *
  * `migrate-down` is a command rather than a role and serves nothing: a serving start migrates
  * *up* to the version its code needs, so taking the database to N-1 and then serving a build
@@ -38,6 +38,12 @@
 #include "service_core/status.h"
 
 #define FS_VERSION "0.0.1"
+
+/* Set by the build -- see build.zig and CMakeLists.txt. A compiler that was handed neither says
+ * so rather than claiming a mode it does not know. */
+#ifndef FS_OPTIMIZE
+#define FS_OPTIMIZE "unknown"
+#endif
 
 typedef sc_status (*fs_role_fn)(const sc_config *cfg, const sc_quit_flag *quit);
 
@@ -89,8 +95,9 @@ static void print_usage(FILE *out)
 {
     int i;
 
-    fprintf(out, "fast-servers %s -- the C implementation of the gradido2 servers\n\n", FS_VERSION);
-    fprintf(out, "usage: fast-servers [role...]\n\n");
+    fprintf(out, "gradido2-fast %s -- the C implementation of the gradido2 servers\n\n",
+            FS_VERSION);
+    fprintf(out, "usage: gradido2-fast [role...]\n\n");
     fprintf(out, "roles (several may be combined; none means --backend):\n");
     for (i = 0; i < FS_ROLE_COUNT; ++i)
         fprintf(out, "  %-14s %s\n", kRoles[i].flag, kRoles[i].summary);
@@ -108,8 +115,12 @@ static void print_usage(FILE *out)
 
 static void print_version(void)
 {
-    printf("fast-servers %s\n", FS_VERSION);
+    printf("gradido2-fast %s\n", FS_VERSION);
     printf("http backend: %s\n", sc_http_backend_name());
+    /* Which of the release modes this is. ReleaseFast is what a bundle ships by default;
+     * ReleaseSafe keeps the checks that trap on undefined behaviour, and a Debug binary on a
+     * server is a mistake worth being able to see. */
+    printf("optimize: %s\n", FS_OPTIMIZE);
     /* Which databases this binary could open. No role opens one yet -- service_core/db.h says
      * what is missing before one can -- and which drivers are in is still a property of the
      * build that is worth being able to read off it rather than infer from how it was made. */
@@ -156,13 +167,13 @@ int main(int argc, char **argv)
             }
         }
         if (!matched) {
-            fprintf(stderr, "fast-servers: unknown argument '%s'\n\n", arg);
+            fprintf(stderr, "gradido2-fast: unknown argument '%s'\n\n", arg);
             print_usage(stderr);
             return 2;
         }
     }
     if (migrate_down && any_selected) {
-        fprintf(stderr, "fast-servers: migrate-down is a command, not a role; it serves nothing "
+        fprintf(stderr, "gradido2-fast: migrate-down is a command, not a role; it serves nothing "
                         "and cannot be combined with one\n\n");
         print_usage(stderr);
         return 2;
@@ -182,7 +193,7 @@ int main(int argc, char **argv)
     }
     sc_log_init(cfg.log_level);
     sc_config_log(&cfg);
-    sc_log_info(SC_CAT_STARTUP, "process.start", "fast-servers %s, http backend %s", FS_VERSION,
+    sc_log_info(SC_CAT_STARTUP, "process.start", "gradido2-fast %s, http backend %s", FS_VERSION,
                 sc_http_backend_name());
 
     /* libsodium wants to be initialised once, from one thread, before anything asks it for a

@@ -121,7 +121,7 @@ contracts/         language-independent JSON contracts, see section 5
 publish/           generated, gitignored: the built frontends and a manifest
                    naming what each server embeds. Belongs to neither
                    implementation — both read it, neither may write it by hand.
-                   `bun run publish` is what fills it
+                   `turbo publish` is what fills it
 ```
 
 **Every workspace package is `@gradido/<directory>`.** The directory keeps the plain name,
@@ -520,7 +520,9 @@ Prefer the smallest structure that expresses the actual business requirement.
 Pinned versions, so they are not guessed:
 
 ```text
-zig    pinned by c-cpp-zig-build, which builds shared-native.
+zig    pinned by c-cpp-zig-build, which builds shared-native -- and, through
+       `bun run zig`, fast-servers too, so a machine with bun on it can build
+       the C path without installing anything.
        One place, not three — legacy pinned 0.15.2 in
        build_helper/const.ts while ../h20Test asked for 0.15.1.
        Read the version out of the package; do not guess it and do
@@ -539,12 +541,16 @@ bun run lint        bun run lint:fix
 bun run typecheck
 bun run test
 bun install && turbo @gradido/backend#start
-bun run publish     publish/ — the built frontends both servers embed
-bun bundle          build/gradido — everything in one executable
+turbo publish       publish/ — the built frontends both servers embed
+bun bundle          build/gradido2 — the reference implementation, in one file
+BUNDLE_C=1 bun bundle   build/gradido2-fast as well, out of fast-servers/
 ```
 
-`bun bundle` runs `bun run publish` itself, and so does `zig build` in `fast-servers`. Run it
-alone when you want to look at what a binary would carry.
+`bun bundle` runs `turbo publish` itself, and so does `zig build` in `fast-servers`. Run it
+alone when you want to look at what a binary would carry — and note that it is a turbo task
+(`//#publish`), which is what stops the two of them from publishing twice: the second ask is a
+cache hit. A build that answered that question with a flag of its own would be a second, worse
+cache.
 
 Each of these goes through turbo, and turbo is what knows the dependency graph. `test`
 depends on `^build`, so `shared-native` — determinism-critical C behind N-API — is compiled

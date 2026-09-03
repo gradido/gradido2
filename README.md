@@ -10,15 +10,28 @@ arithmetic, decay, signing — exists once, in C, and is used by both.
 See [Architecture.md](Architecture.md) for the design and [AGENTS.md](AGENTS.md) for the
 working rules.
 
+## What you need
+
+**[bun](https://bun.com), and optionally Docker.** Everything else is a dependency of the
+project rather than a prerequisite of the machine: `bun install` brings the JavaScript side, and
+the Zig toolchain that compiles the C — `shared-native`, `email-native` and the whole of
+`fast-servers` — is downloaded and verified by
+[`c-cpp-zig-build`](https://www.npmjs.com/package/c-cpp-zig-build) into `~/.zig-build`, shared
+across checkouts. Docker is only for the development database, its web UI and a mail sink; see
+*Development containers* below.
+
+A system `zig` is used when you ask for it (`zig build` inside `fast-servers/`) and is never
+required — `bun run zig build` does the same with the pinned one.
+
 ## One binary
 
 ```sh
-bun run publish                # publish/ — the built frontends both servers hand out
-bun bundle                     # build/gradido — the TypeScript server, with them inside
-./build/gradido                # start it: the backend, and the frontend it serves
-./build/gradido --help         # the services and commands it has
+bun bundle                     # build/gradido2 — the TypeScript server
+BUNDLE_C=1 bun bundle          # and build/gradido2-fast, the C one, beside it
+./build/gradido2               # start it: the backend, and the frontend it serves
+./build/gradido2 --help        # the services and commands it has
 
-cd fast-servers && zig build   # zig-out/bin/fast-servers — the C server, same pages
+turbo publish                  # only the pages, for looking at what a binary would carry
 ```
 
 Either implementation ships as a single executable: the server, the frontends it serves, and
@@ -27,11 +40,34 @@ and it opens a SQLite database beside itself and asks who this community is. Tha
 download-and-start promise [Architecture.md](Architecture.md) makes; `scripts/bundle.ts` and
 `fast-servers/build.zig` are where it is kept.
 
-**The pages belong to neither and are built once.** `bun run publish` assembles `publish/` — the
+| variable | default | what it does |
+|---|---|---|
+| `BUNDLE_TS` | `1` | build `build/gradido2` — the TypeScript path, the reference implementation |
+| `BUNDLE_C` | `0` | build `build/gradido2-fast` — the C path. Downloads its own Zig toolchain; a first build fetches and compiles h2o, LibreSSL and libpq, so it takes minutes |
+| `BUNDLE_C_OPTIMIZE` | `fast` | how the C binary is optimised: `fast`, `safe` or `small` |
+
+`fast` is ReleaseFast, which is what the fast path is for. `safe` is the same optimiser plus the
+checks that **trap on undefined behaviour** instead of continuing into it — the one to ship when
+an installation matters more than a microsecond. `small` optimises for size. A plain `zig build`
+still gives a developer a Debug binary; a bundle is a release and never does. Which mode a file
+carries is `./gradido2-fast --version`.
+
+> [!IMPORTANT]
+> The two are **implementations of the same server, not components of one**. A deployment runs
+> one or the other, and never both against one database — they each hold the session cache in
+> their own process, and two of them migrating one schema is not a state either can report.
+> `AGENTS.md`, *C is the fast implementation*, has the whole rule. Sitting next to each other in
+> `build/` makes them easy to compare and easy to confuse; deploy one file.
+
+A plain `zig build` in `fast-servers/` still writes `zig-out/bin/gradido2-fast`, which is where
+the C build keeps its own artifact. `build/` is what a release goes into.
+
+**The pages belong to neither and are built once.** `turbo publish` assembles `publish/` — the
 built frontends plus a manifest saying where each is mounted and what every file's content type
 and ETag are — and both builds embed what it names. Neither server can build a page: a page is
-vite's output. `bun bundle` and `zig build` both run it themselves; run it alone to look at what
-a binary would carry. It is generated, so it is gitignored.
+vite's output. `bun bundle` and `zig build` both run it themselves — and both go through
+turbo, so building both implementations publishes once and the second ask is a cache hit. It is
+generated, so it is gitignored.
 
 | what | where it comes from |
 |---|---|
@@ -49,6 +85,10 @@ no CORS headers to itself; `bun bundle` is what builds it that way.
 code, so there is no cross-compilation flag that would help: build it on the system it will run
 on, or on one like it. The C one cross-compiles freely — `fast-servers/README.md` has the
 targets — because everything in it is compiled from source by the same toolchain.
+
+Both are named after the product rather than after their directory: `gradido2` is the server,
+and `-fast` says which of the two implementations answered when somebody reads `--version` off
+a machine six months from now.
 
 ## Development containers
 
