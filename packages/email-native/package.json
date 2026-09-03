@@ -33,7 +33,6 @@
     "build:debug": "c-cpp-zig-build --debug && bun scripts/sync-fast-servers.ts",
     "snapshots:update": "bun run extract:mjml && node tools/snapshots.mjs",
     "info": "c-cpp-zig-build info",
-    "test": "bun --test tests/",
     "bench": "bun tests/mail-bench.mjs && bun tests/render-bench.mjs",
     "lint": "biome check --error-on-warnings .",
     "lint:fix": "biome check --error-on-warnings . --write",

@@ -85,7 +85,12 @@ TEST_F(DbConfigTest, DefaultsAreTheTypeScriptDefaults)
     sc_db_config config{};
 
     ASSERT_EQ(sc_db_config_load(&config), SC_OK);
-    EXPECT_EQ(config.kind, SC_DB_POSTGRESQL);
+    /* SQLite is the default and PostgreSQL is the reference, which are two different things --
+     * `../../Architecture.md`, *DB*. An unconfigured start has to work, and defaulting to a
+     * server nobody has installed meant thirty seconds of waiting and then an exit. The
+     * PostgreSQL values below are still read and still have defaults; which of the two sets is
+     * used is what DB_TYPE decides. */
+    EXPECT_EQ(config.kind, SC_DB_SQLITE);
     EXPECT_STREQ(config.host, "localhost");
     EXPECT_EQ(config.port, 5432);
     EXPECT_STREQ(config.user, "gradido");
@@ -122,7 +127,9 @@ TEST_F(DbConfigTest, AnEmptyTypeIsTheDefault)
 
     set_env("DB_TYPE", "");
     ASSERT_EQ(sc_db_config_load(&config), SC_OK);
-    EXPECT_EQ(config.kind, SC_DB_POSTGRESQL);
+    /* Set-but-empty is the same as unset, because that is what an `.env` with `DB_TYPE=` on a
+     * line of its own produces, and it means "I have not decided" either way. */
+    EXPECT_EQ(config.kind, SC_DB_SQLITE);
 }
 
 TEST_F(DbConfigTest, AThirdDatabaseIsRefused)
@@ -163,8 +170,11 @@ TEST_F(DbConfigTest, AnEmptyPasswordIsRefusedInProduction)
 {
     sc_db_config config{};
 
-    /* The same rule, from the same variable, as the TypeScript path: "an empty database
-     * password is not acceptable in production". */
+    /* The same rule, from the same variables, as the TypeScript path: "an empty database
+     * password is not acceptable in production". Two variables, because a password only means
+     * anything for PostgreSQL -- so DB_TYPE is set here rather than left to the default, which
+     * is SQLite and would make this test pass without ever reaching the rule. */
+    set_env("DB_TYPE", "postgresql");
     set_env("NODE_ENV", "production");
     EXPECT_EQ(sc_db_config_load(&config), SC_ERR_MALFORMED);
 
@@ -176,6 +186,9 @@ TEST_F(DbConfigTest, AnEmptyPasswordIsFineOutsideProductionAndForSqlite)
 {
     sc_db_config config{};
 
+    /* PostgreSQL for the first two, for the reason above: what is being tested is that
+     * NODE_ENV is what decides, and against SQLite nothing would be decided at all. */
+    set_env("DB_TYPE", "postgresql");
     EXPECT_EQ(sc_db_config_load(&config), SC_OK);
 
     set_env("NODE_ENV", "development");

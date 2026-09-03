@@ -66,8 +66,8 @@ export const DATABASE_PASSWORD_MESSAGE =
  * ```
  *
  * Reading the parsed config rather than `process.env` is what makes it right: `DB_TYPE` and
- * `NODE_ENV` arrive with their defaults already applied, so an unset `DB_TYPE` is the
- * PostgreSQL it will actually be, not an `undefined` the rule has to guess about.
+ * `NODE_ENV` arrive with their defaults already applied, so an unset `DB_TYPE` is the SQLite it
+ * will actually be, not an `undefined` the rule has to guess about.
  */
 export function isDatabasePasswordAcceptable(config: DatabaseCheckable): boolean {
   return (
