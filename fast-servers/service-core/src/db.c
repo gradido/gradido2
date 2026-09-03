@@ -110,10 +110,10 @@ sc_status sc_db_config_load(sc_db_config *out)
         return SC_ERR_INVALID_ARGUMENT;
     memset(out, 0, sizeof(*out));
 
-    if (type == NULL || type[0] == '\0' || strcmp(type, "postgresql") == 0) {
-        out->kind = SC_DB_POSTGRESQL;
-    } else if (strcmp(type, "sqlite") == 0) {
+    if (type == NULL || type[0] == '\0' || strcmp(type, "sqlite") == 0) {
         out->kind = SC_DB_SQLITE;
+    } else if (strcmp(type, "postgresql") == 0) {
+        out->kind = SC_DB_POSTGRESQL;
     } else {
         sc_log_fatal(SC_CAT_STARTUP, "config.database_type_invalid",
                      "DB_TYPE is '%s', which is neither postgresql nor sqlite", type);
@@ -150,8 +150,7 @@ sc_status sc_db_config_load(sc_db_config *out)
      * this refuses to start -- so does the TypeScript path, and that is where the exemption has
      * to be decided if it is ever wanted. Not here: a rule that is stricter on one path than
      * the other is a rule an operator learns twice.
-     */
-    if (out->kind == SC_DB_POSTGRESQL && out->password[0] == '\0') {
+     */    if (out->kind == SC_DB_POSTGRESQL && out->password[0] == '\0') {
         const char *node_env = getenv("NODE_ENV");
         if (node_env != NULL && strcmp(node_env, "production") == 0) {
             sc_log_fatal(SC_CAT_STARTUP, "config.database_password_empty",
