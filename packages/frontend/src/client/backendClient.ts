@@ -4,8 +4,15 @@ import { CONFIG } from '../config'
 
 /* Everything a client of ours sends. The session will travel in a cookie: same-origin in a
    deployment, where the backend serves this bundle too, and cross-origin only in
-   development, which is the one case the backend sends CORS headers for. */
-const options = { fetch: { credentials: 'include' } } as const
+   development, which is the one case the backend sends CORS headers for.
+
+   `keepDomain` because Eden otherwise "helps": a domain without `://` gets `https://` put in
+   front of it, which turns the empty `API_BASE_URL` of a deployment — meaning *this* origin,
+   see config/schema.ts — into `https:///user/create`. With it the domain is concatenated as
+   written, so an empty one leaves a relative URL and the browser resolves it against the page.
+   The schema has already dropped a trailing slash, which is the other thing Eden would have
+   done here. */
+const options = { fetch: { credentials: 'include' }, keepDomain: true } as const
 
 /**
  * The `user` domain of the backend, as a typed object.

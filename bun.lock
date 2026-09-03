@@ -42,6 +42,21 @@
         "@typescript/native-preview": "7.0.0-dev.20260421.2",
       },
     },
+    "packages/bundle": {
+      "name": "@gradido/bundle",
+      "version": "0.0.1",
+      "dependencies": {
+        "@gradido/backend": "workspace:*",
+        "@gradido/email-native": "workspace:*",
+        "@gradido/shared": "workspace:*",
+      },
+      "devDependencies": {
+        "@biomejs/biome": "2.4.16",
+        "@types/bun": "1.3.14",
+        "@types/node": "26.1.1",
+        "@typescript/native-preview": "7.0.0-dev.20260421.2",
+      },
+    },
     "packages/contract-tests": {
       "name": "@gradido/contract-tests",
       "dependencies": {
@@ -244,6 +259,8 @@
     "@gradido/backend": ["@gradido/backend@workspace:packages/backend"],
 
     "@gradido/backend-core": ["@gradido/backend-core@workspace:packages/backend-core"],
+
+    "@gradido/bundle": ["@gradido/bundle@workspace:packages/bundle"],
 
     "@gradido/contract-tests": ["@gradido/contract-tests@workspace:packages/contract-tests"],
 

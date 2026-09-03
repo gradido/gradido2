@@ -10,6 +10,37 @@ arithmetic, decay, signing — exists once, in C, and is used by both.
 See [Architecture.md](Architecture.md) for the design and [AGENTS.md](AGENTS.md) for the
 working rules.
 
+## One binary
+
+```sh
+bun bundle                     # build/gradido — the server, the pages, the addons, bun
+./build/gradido                # start it: the backend, and the frontend it hands out
+./build/gradido --help         # the services and commands it has
+```
+
+`bun bundle` compiles the whole TypeScript path into a single executable: the backend, the
+frontends it serves, the native addons, and the bun runtime itself. Nothing has to be
+installed next to it — copy the file onto a server, start it, and it opens a SQLite database
+beside itself and asks who this community is. That is the download-and-start promise
+[Architecture.md](Architecture.md) makes, and `scripts/bundle.ts` is where it is kept; the
+script's header describes the three steps and why the middle one generates code.
+
+| what | where it comes from |
+|---|---|
+| the backend | `packages/backend`, started through `runBackend` rather than by importing a file that runs |
+| the frontend | `packages/frontend/build`, every file embedded and handed out by `packages/backend/src/server/staticRoutes.ts` |
+| `shared-native`, `email-native` | the `.node` addons, embedded the same way |
+| federation, dht-node, admin | not written yet. `packages/bundle/src/cli.ts` and `scripts/bundle.ts` say where each joins |
+
+Configuration is the environment, as it is for a checkout — `packages/backend/.env.dist`
+lists what there is, and a `.env` next to the binary is read. The frontend inside it calls
+the origin it was served from, so a deployment has no URL to configure and the backend sends
+no CORS headers to itself; `bun bundle` is what builds it that way.
+
+**The binary is for the platform it was built on.** The embedded addons are machine code, so
+there is no cross-compilation flag that would help: build it on the system it will run on, or
+on one like it.
+
 ## Development containers
 
 `docker-compose.yml` starts the three services a developer needs and nothing else: the

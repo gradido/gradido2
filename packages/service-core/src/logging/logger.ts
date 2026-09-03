@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import pino from 'pino'
+import pretty from 'pino-pretty'
 import type { RuntimeConfig } from '..'
 
 /**
@@ -118,49 +119,70 @@ function createPinoLogger(env: RuntimeConfig): pino.Logger {
      timestamp is already unix milliseconds, which is what the contract asks for. */
   const options: pino.LoggerOptions = { level: env.LOG_LEVEL, base: null }
 
-  try {
-    return pino({ ...options, transport: { targets: transportTargets(env) } })
-  } catch (error) {
-    /* Transports resolve their targets dynamically, which a bundled build can defeat.
-       Losing pretty printing or the log file is survivable; starting without a logger is
-       not. */
-    // biome-ignore lint/suspicious/noConsole: this is the failure of the logger itself
-    console.warn('log transport unavailable, falling back to plain stdout:', error)
-    return pino(options)
-  }
+  return pino(options, pino.multistream(logStreams(env)))
 }
 
-function transportTargets(env: RuntimeConfig): pino.TransportTargetOptions[] {
-  const targets: pino.TransportTargetOptions[] = []
+/**
+ * Where the lines go: stdout always, and a file when one is configured.
+ *
+ * **Streams and not pino transports.** A transport is a worker thread that pino starts by
+ * *name* -- `target: 'pino-pretty'` -- and resolves at runtime, which needs a `node_modules`
+ * to resolve it in. The single binary has none: `bun build --compile` puts every module
+ * inside the executable, where nothing can be looked up by package name. A transport there
+ * fails at the first line, so a bundled server would either start without its log file or
+ * not start at all -- and shipping as one file is what the reference path is for. See
+ * `scripts/bundle.ts`.
+ *
+ * The same streams are used when the server runs from a checkout, because two ways of
+ * logging is one more than a thing needs, and the difference is not worth having: the same
+ * bytes are written either way. What is given up is the worker thread that did the writing,
+ * so a line is now formatted in the process that logged it. pino's own benchmark for that is
+ * roughly a microsecond, and the destinations below are still buffered -- `sync: false`
+ * means a write reaches the fd when the buffer fills or `flush()` asks for it, not while
+ * the request waits.
+ */
+function logStreams(env: RuntimeConfig): pino.StreamEntry[] {
+  const streams: pino.StreamEntry[] = []
 
   if (env.LOG_FILE) {
     mkdirSync(dirname(env.LOG_FILE), { recursive: true })
-    targets.push({
-      target: 'pino/file',
+    streams.push({
       level: env.LOG_LEVEL,
-      options: { destination: env.LOG_FILE, mkdir: true, append: true, sync: false },
+      stream: pino.destination({ dest: env.LOG_FILE, mkdir: true, append: true, sync: false }),
     })
   }
 
-  targets.push(
-    env.NODE_ENV === 'development'
-      ? {
-          target: 'pino-pretty',
-          level: env.LOG_LEVEL,
-          options: {
+  streams.push({
+    level: env.LOG_LEVEL,
+    stream:
+      env.NODE_ENV === 'development'
+        ? pretty({
             colorize: true,
             translateTime: 'SYS:standard',
             messageFormat: '[{cat}] {event} {msg}',
-          },
-        }
-      : {
-          target: 'pino/file',
-          level: env.LOG_LEVEL,
-          /* 1 is stdout. The JSON on stdout is the contracted format; whoever runs the
+            sync: WATCHED,
+          })
+        : /* 1 is stdout. The JSON on stdout is the contracted format; whoever runs the
              process decides where it goes. */
-          options: { destination: 1, sync: false },
-        },
-  )
+          pino.destination({ dest: 1, sync: WATCHED }),
+  })
 
-  return targets
+  return streams
 }
+
+/**
+ * Whether stdout is a terminal — whether somebody is reading the output as it appears.
+ *
+ * A buffered write reaches the fd when the buffer fills, which for a log going into a pipe or
+ * a file is exactly right and costs nothing: nobody is comparing the moment a line arrives
+ * with anything else. On a terminal somebody is, because the process also writes there
+ * *directly* -- `setup/askForHomeCommunity.ts` prints a prompt and waits for an answer -- and
+ * a direct write is not buffered. The two then arrive in the wrong order: the first start of a
+ * server showed its question, and the migration line that came before it afterwards.
+ *
+ * So the terminal gets synchronous writes and everything else keeps the buffer. It is the case
+ * where ordering is worth a syscall per line and where there is no throughput to protect: a
+ * person is reading, at reading speed. A server logging into a pipe under load is the case
+ * `sync: false` exists for, and it still has it.
+ */
+const WATCHED = process.stdout.isTTY === true
