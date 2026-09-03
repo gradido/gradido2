@@ -23,8 +23,8 @@ const arg = (name, fallback) => {
 export const TEMPLATE_ROOT = path.resolve(arg('templates', path.join(ROOT, 'templates')))
 export const LOCALE_DIR = path.resolve(arg('locales', path.join(ROOT, 'locales')))
 export const OUT_DIR = path.resolve(arg('out', path.join(ROOT, 'gen')))
-// The pug output, checked in. tools/snapshots.mjs writes it, the tests and
-// tools/verify.mjs compare against it.
+// The MJML output, checked in. tools/snapshots.mjs writes it, tests/snapshots.test.mjs
+// and tools/verify.mjs compare against it.
 export const SNAPSHOT_DIR = path.resolve(
   arg('snapshots', path.join(ROOT, 'tests', '__snapshots__')),
 )
@@ -130,7 +130,7 @@ export const TEMPLATES = {
  *   skipped            Four icon links with no text: as plain text they are four bare URLs
  *                      glued together, which is worse than leaving them out.
  */
-export const TEXT_OPTIONS = {
+export const TEXT_OPTIONS_PUG = {
   wordwrap: false,
   selectors: [
     { selector: 'img', format: 'skip' },
@@ -153,3 +153,22 @@ export const ASSETS = [
   ['youtubeicon', 'youtube-icon.png', 'image/png'],
   ['chatboxicon', 'chatbox-icon.png', 'image/png'],
 ]
+
+/*
+ * What html-to-text makes of a rendered mail.
+ *
+ * `div` is the rule that matters and it is not a taste: MJML marks a paragraph up
+ * as <div>, and html-to-text gives a <div> one newline where it gives a <p> a blank
+ * line on each side. Without it a mail arrives as one dense block.
+ *
+ * TEXT_OPTIONS_PUG above is the same thing minus that rule, for tools/extract.mjs --
+ * the importer, which reads legacy's pug and exists so a new template arriving there
+ * can be checked against its MJML translation. It is not part of the build.
+ */
+export const TEXT_OPTIONS = {
+  ...TEXT_OPTIONS_PUG,
+  selectors: [
+    ...TEXT_OPTIONS_PUG.selectors,
+    { selector: 'div', options: { leadingLineBreaks: 2, trailingLineBreaks: 2 } },
+  ],
+}

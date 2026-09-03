@@ -7,6 +7,7 @@ Indirizzo precedente: {oldEmail|&<>"'ä}
 Nuovo indirizzo: {newEmail|&<>"'ä}
 
 Per il server GDT conta ancora il primo indirizzo di questo account: {gdtEmail|&<>"'ä}.
+
 L'indirizzo precedente non è mai stato confermato (errore di battitura durante la creazione): non c'è nulla da unire sul server GDT. Inserisci solo il nuovo indirizzo in Klick-Tipp.
 
 Cordiali saluti,
@@ -16,8 +17,8 @@ Per ulteriori domande, contatta il nostro supporto.
 support@gradido.net
 
 Note legali [https://gradido.net/de/impressum/]
-
 Informativa sulla privacy [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

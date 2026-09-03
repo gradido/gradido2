@@ -4,14 +4,18 @@ Hallo {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 Du möchtest die E-Mail-Adresse Deines Gradido-Kontos auf diese Adresse ändern.
 
-
 Neue E-Mail-Adresse bestätigen
 
 Bitte bestätige mit einem Klick, dass diese Adresse Dir gehört.
+
 Neue Adresse bestätigen [{confirmLink|&<>"'ä}]
+
 Oder kopiere den Link in Dein Browserfenster.
+
 {confirmLink|&<>"'ä}
+
 Der Link gilt bis {validUntil|&<>"'ä}. Danach kannst Du Dir in Deinen Einstellungen eine neue E-Mail schicken lassen.
+
 Wenn Du diese Änderung nicht angestoßen hast, kannst Du diese E-Mail einfach ignorieren – ohne Deine Bestätigung ändert sich nichts.
 
 Liebe Grüße
@@ -21,8 +25,8 @@ Bei weiteren Fragen kontaktiere bitte unseren Support.
 support@gradido.net
 
 Impressum [https://gradido.net/de/impressum/]
-
 Datenschutzerklärung [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

@@ -4,7 +4,6 @@
 
 вы получили сообщение от {senderAlias|&<>"'ä} по поводу вашего вклада в общее благо «{contributionMemo|&<>"'ä}».
 
-
 Прочитать и ответить на сообщение
 
 «{message|&<>"'ä}»
@@ -12,7 +11,9 @@
 Ответить можно прямо у вашего вклада.
 
 Ответить [{contributionFrontendLink|&<>"'ä}]
+
 В аккаунт [{communityURL|&<>"'ä}/transactions]
+
 Пожалуйста, не отвечайте на это письмо.
 
 С наилучшими пожеланиями,
@@ -22,8 +23,8 @@
 support@gradido.net
 
 Правовая информация [https://gradido.net/de/impressum/]
-
 Политика конфиденциальности [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

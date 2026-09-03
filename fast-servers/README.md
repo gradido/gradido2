@@ -98,6 +98,15 @@ that sent nothing says nothing:
 SC_MAIL_TEST_URL=smtp://127.0.0.1:2525 ./zig-out/bin/test_mail
 ```
 
+The maildev container of the root `docker-compose.yml` is the same thing with a web interface
+on it, which is easier when the question is what a mail *looks* like rather than whether it was
+accepted:
+
+```sh
+docker compose up -d maildev
+SC_MAIL_TEST_URL=smtp://127.0.0.1:1026 ./zig-out/bin/test_mail
+```
+
 `SC_MAIL_SLOW_URL` points at a *deliberately slow* SMTP server — 150 ms per mail or more — and
 enables the one test that watches the worker pool grow under a backlog and retire again
 afterwards. Any relay that answers slowly will do. `SC_MAIL_TEST_LOG` turns the mailer's log
@@ -188,6 +197,13 @@ sqlite     compiled from sqlite.org's amalgamation; -Dsqlite=false leaves it out
 libpq is built against the same LibreSSL h2o uses, so a database on another machine is reached
 over TLS. On the same machine, point `DB_HOST` at the socket directory instead — it is 83.4 →
 48.1 µs for one connection string.
+
+> [!WARNING]
+> The repository root has a `docker-compose.yml` with a PostgreSQL for development. Do not
+> benchmark against it. A published container port replaces that socket with TCP through a
+> network namespace and NAT — the 48.1 µs above is not reachable from it — and on Windows and
+> macOS the packet crosses a virtual machine on top. Feature work against it is fine; a number
+> out of it says something about docker. See *Development containers* in the root README.md.
 
 The variables are the ones the TypeScript path reads, with the same defaults:
 

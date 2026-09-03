@@ -1,0 +1,39 @@
+<!--
+  includes/footer.pug, without the social row -- that one is its own file so this
+  stays readable. Paths in mj-include are relative to THIS file.
+-->
+<mj-include path="social.mjml" />
+
+<!-- .line: the gold rule. border-color is the fallback under the gradient. -->
+<mj-section padding="40px 25px 0 25px">
+  <mj-column>
+    <mj-divider border-width="13px" border-color="#dbb056" border-style="solid" padding="0" css-class="rule" />
+  </mj-column>
+</mj-section>
+
+<mj-section padding="0 25px 20px 25px">
+  <mj-column>
+    <!-- One block, not two: in the plain text part a separate mj-text would put a
+         blank line between the sentence and the address it names. pug had them in
+         one block for the same reason -- there the mailto is an inline <a>. -->
+    <mj-text mj-class="muted" padding="30px 0 30px 0">
+      {{t:If you have any further questions, please contact our support.}}<br />
+      <a href="mailto:{{t:support@gradido.net}}" style="color:#383838;font-weight:bold;text-decoration:none;">{{t:support@gradido.net}}</a>
+    </mj-text>
+
+    <mj-image src="https://gdd.gradido.net/img/brand/green.png" alt="{{t:Gradido-Akademie Logo}}" width="200px" padding="30px 0 30px 0" />
+
+    <mj-text mj-class="muted" padding="0">
+      <a href="https://gradido.net/de/impressum/" target="_blank" style="color:#9ca0a8;">{{t:Impressum}}</a><br />
+      <a href="https://gradido.net/de/datenschutz/" target="_blank" style="color:#9ca0a8;">{{t:Privacy Policy}}</a>
+    </mj-text>
+
+    <mj-text mj-class="muted" padding="30px 0 30px 0">
+      {{t:Gradido-Akademie}}<br />
+      {{t:Institut für Wirtschaftsbionik}}<br />
+      {{t:Pfarrweg 2}}<br />
+      {{t:74653 Künzelsau}}<br />
+      {{t:Deutschland}}
+    </mj-text>
+  </mj-column>
+</mj-section>

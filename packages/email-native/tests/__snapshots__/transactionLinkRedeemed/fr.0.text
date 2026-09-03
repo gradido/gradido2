@@ -4,13 +4,14 @@ Bonjour {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 {senderAlias|&<>"'ä} ({senderCommunity|&<>"'ä}) vient d'utiliser ton lien.
 
-
 Détails de la transaction
 
 Montant : {transactionAmount|&<>"'ä} GDD
 Message : {transactionMemo|&<>"'ä}
 Tu trouveras les détails de la transaction dans ton compte Gradido.
+
 Vers le compte [{communityURL|&<>"'ä}/transactions]
+
 Merci de ne pas répondre à cet e-mail.
 
 Cordialement,
@@ -20,8 +21,8 @@ Pour toute autre question, contacte notre support.
 support@gradido.net
 
 Mentions légales [https://gradido.net/de/impressum/]
-
 Politique de confidentialité [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

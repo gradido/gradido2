@@ -5,7 +5,7 @@ import { convert } from 'html-to-text'
 import pug from 'pug'
 import fs from 'fs'
 import path from 'path'
-import { TEMPLATE_ROOT, LOCALE_DIR, OUT_DIR, LOCALES, TEMPLATES, TEXT_OPTIONS } from './manifest.mjs'
+import { TEMPLATE_ROOT, LOCALE_DIR, OUT_DIR, LOCALES, TEMPLATES, TEXT_OPTIONS_PUG as TEXT_OPTIONS } from './manifest.mjs'
 
 // U+0001 / U+0002 never occur in HTML or CSS, and pug's escaper leaves them
 // alone -- so they survive attribute contexts too.

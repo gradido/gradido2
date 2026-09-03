@@ -6,14 +6,18 @@ Foi pedida uma alteração do endereço de e-mail da tua conta Gradido para {new
 
 Até o novo endereço ser confirmado, este continua válido. Se foste tu, não precisas de fazer mais nada.
 
-
 Não foste tu?
 
 Não foste tu? Então clica aqui – a alteração é rejeitada e este endereço mantém-se.
+
 Rejeitar a alteração [{revokeLink|&<>"'ä}]
+
 Ou copia o link para a janela do teu navegador.
+
 {revokeLink|&<>"'ä}
+
 Se rejeitares a alteração, altera também a tua palavra-passe a seguir.
+
 A ligação é válida até {validUntil|&<>"'ä} – depois, a alteração pedida expira por si.
 
 Com os melhores cumprimentos,
@@ -23,8 +27,8 @@ Se tiveres mais questões, contacta o nosso suporte.
 support@gradido.net
 
 Aviso legal [https://gradido.net/de/impressum/]
-
 Política de privacidade [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

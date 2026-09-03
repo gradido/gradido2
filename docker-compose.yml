@@ -1,0 +1,109 @@
+# Development services for gradido2: a database, a database UI and a mail sink.
+#
+# These containers exist so that a developer can work against PostgreSQL and against real
+# SMTP without installing either. They are not a deployment: no gradido2 service is built
+# or run here, and the warning in README.md, "Development containers", says why running
+# the servers themselves in docker is the wrong measurement to take.
+#
+#   docker compose up -d              postgres, adminer and maildev
+#   docker compose up -d postgres     the database alone
+#   docker compose down               stop; the database volume survives
+#   docker compose down -v            stop and delete the database
+
+services:
+
+  #########################################################
+  ## POSTGRESQL ###########################################
+  #########################################################
+  # The reference database. SQLite is the default of the servers and needs no service --
+  # this is here for the behaviour that is defined against PostgreSQL.
+  postgres:
+    image: postgres:17.6-alpine
+    networks:
+      - gradido-net
+    ports:
+      # Published, because the servers run on the host and connect over TCP. Deliberately
+      # not 5432, and not 5433 either: a host that has PostgreSQL installed already owns
+      # 5432, and 5433, 5434, ... are what pg_createcluster and the EDB installers hand to
+      # a second and third cluster -- so the "obvious" fallback is the next port likely to
+      # be taken. 15432 is outside that range and still recognisably postgres.
+      - ${DB_PORT:-15432}:5432
+    environment:
+      # the defaults of packages/backend/.env.dist, so that DB_TYPE=postgresql is the only
+      # line a developer has to change
+      - POSTGRES_USER=${DB_USER:-gradido}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-gradido}
+      - POSTGRES_DB=${DB_DATABASE:-gradido_community}
+      # UTC, because every timestamp this project stores is (Architecture.md, DB)
+      - TZ=UTC
+      - PGTZ=UTC
+    volumes:
+      - db_vol:/var/lib/postgresql/data
+    healthcheck:
+      # adminer waits for this, and so can a `docker compose up --wait` in a script
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-gradido} -d ${DB_DATABASE:-gradido_community}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  #########################################################
+  ## ADMINER ##############################################
+  #########################################################
+  # The database UI, and the same one for both repositories: adminer speaks PostgreSQL,
+  # MySQL/MariaDB and SQLite, so it opens ../gradido's MariaDB and this project's PostgreSQL
+  # with one interface -- which is the whole reason it is here rather than pgAdmin, and it
+  # covers SQLite too, which is what a gradido2 server uses when nothing is configured.
+  # It is an official image, unlike every phpPgAdmin one, and it logs in as the database
+  # user: no second account, no application login on top.
+  adminer:
+    image: adminer:6.0.1
+    networks:
+      - gradido-net
+    ports:
+      # 8073 and not 8074: ../gradido publishes phpMyAdmin on 8074, and the point of these
+      # defaults is that both repositories can run side by side unchanged
+      - ${ADMINER_PORT:-8073}:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # prefills the login form's Server field; the container reaches postgres by service
+      # name on gradido-net, so this is the internal 5432 and not the published port
+      - ADMINER_DEFAULT_SERVER=postgres
+    extra_hosts:
+      # so that the Server field can also name a database outside this compose file --
+      # ../gradido's MariaDB as host.docker.internal:3306, a native PostgreSQL as
+      # host.docker.internal:5432. Works under Docker Desktop and rootful Linux docker.
+      # Under *rootless* docker it resolves but connects to nothing: the daemon has its own
+      # network namespace and the host's ports are not in it. Verified, not assumed.
+      - host.docker.internal:host-gateway
+    # To open a SQLite database as well -- the default of an unconfigured server -- mount the
+    # directory it lives in and give its path as the Server field. It has to be writable:
+    # SQLite writes a journal next to the file.
+    # volumes:
+    #   - ./:/gradido2
+
+  ########################################################
+  # MAILSERVER TO FAKE SMTP ##############################
+  ########################################################
+  # Catches every mail instead of delivering it. 1026 is the relay to point a server or a
+  # mail test at, 1081 the web interface that shows what arrived -- one above maildev's own
+  # 1025/1080, which ../gradido publishes with the same image, for the same reason as 8073.
+  maildev:
+    image: maildev/maildev:2.2.1
+    networks:
+      - gradido-net
+    ports:
+      - ${MAILDEV_WEB_PORT:-1081}:1080
+      - ${MAILDEV_SMTP_PORT:-1026}:1025
+
+networks:
+  # One network, and not the internal-net/external-net split of ../gradido: there the
+  # application containers talk to the database and only nginx faces outward, while here
+  # every service exists to be reached from the host -- the servers run natively next to
+  # these containers. An `internal: true` network cannot publish a port at all, which is a
+  # quiet way to end up with a database nothing outside docker can connect to.
+  gradido-net:
+
+volumes:
+  db_vol:

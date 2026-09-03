@@ -3,8 +3,11 @@ Hello {firstName|&<>"'ä} {lastName|&<>"'ä},
 you have just received a message from {senderAlias|&<>"'ä}
 
 {subject|&<>"'ä}
+
 {memo|&<>"'ä}
+
 Reply [{communityURL|&<>"'ä}/send/{senderCommunityUuid|&<>"'ä}/{senderUuid|&<>"'ä}?art=email]
+
 To account [{communityURL|&<>"'ä}/transactions]
 
 Kind regards,
@@ -14,8 +17,8 @@ If you have any further questions, please contact our support.
 support@gradido.net
 
 Impressum [https://gradido.net/de/impressum/]
-
 Privacy Policy [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

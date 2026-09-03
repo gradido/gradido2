@@ -1,0 +1,2 @@
+<!-- includes/doNotReply.pug -->
+<mj-text mj-class="p-content" padding="15px 0 0 0">{{t:Please do not reply to this email.}}</mj-text>

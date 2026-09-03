@@ -1,0 +1,10 @@
+<!-- includes/contributionDetailsCTA.pug -- the tail of all four contribution mails -->
+<mj-text mj-class="h2" padding="20px 0 0 0">{{t:Contribution details}}</mj-text>
+<mj-text mj-class="p-content" padding="15px 0 15px 0">{{t:You will find your common good contributions and the messages about them in your Gradido account.}}</mj-text>
+
+<mj-button mj-class="btn" css-class="btn-gold" background-color="#c58d38" href="{{v:contributionFrontendLink}}">{{t:To contribution}}</mj-button>
+
+<mj-text mj-class="p-content" padding="15px 0 15px 0">{{t:Or copy the link into your browser window.}}</mj-text>
+<mj-text mj-class="p-content" css-class="clink" padding="0 0 20px 0">
+  <a href="{{v:contributionFrontendLink}}" style="color:#696c72;">{{v:contributionFrontendLink}}</a>
+</mj-text>

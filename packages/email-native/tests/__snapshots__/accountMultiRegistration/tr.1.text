@@ -3,20 +3,23 @@ E-postanla yeniden kayıt denemesi
 Merhaba {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 e-posta adresin az önce Gradido'da bir hesap kaydetmek için yeniden kullanıldı.
-Ancak e-posta adresin için zaten bir hesap mevcut.
 
+Ancak e-posta adresin için zaten bir hesap mevcut.
 
 Şifreyi sıfırla
 
 Şifreni unuttuysan, lütfen buraya tıkla.
-sıfırla [{resendLink|&<>"'ä}]
-Veya bağlantıyı tarayıcı pencerene kopyala.
-{resendLink|&<>"'ä}
 
+sıfırla [{resendLink|&<>"'ä}]
+
+Veya bağlantıyı tarayıcı pencerene kopyala.
+
+{resendLink|&<>"'ä}
 
 Desteğe başvur
 
 Yeniden kaydolmayı sen denemediysen, lütfen desteğimize başvur:
+
 {supportEmail|&<>"'ä}
 
 Sevgiler,
@@ -26,8 +29,8 @@ Başka sorun olursa lütfen desteğimize başvur.
 support@gradido.net
 
 Künye [https://gradido.net/de/impressum/]
-
 Gizlilik politikası [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

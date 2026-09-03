@@ -3,7 +3,9 @@
 вы только что получили сообщение от {senderAlias|&<>"'ä}
 
 {subject|&<>"'ä}
+
 {memo|&<>"'ä}
+
 В аккаунт [{communityURL|&<>"'ä}/transactions]
 
 С наилучшими пожеланиями,
@@ -13,8 +15,8 @@
 support@gradido.net
 
 Правовая информация [https://gradido.net/de/impressum/]
-
 Политика конфиденциальности [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

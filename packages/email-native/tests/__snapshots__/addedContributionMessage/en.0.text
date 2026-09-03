@@ -4,7 +4,6 @@ Hello {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 You have received a message from {senderAlias|&<>"'ä} regarding your common good contribution “{contributionMemo|&<>"'ä}”.
 
-
 Read and reply to message
 
 „{message|&<>"'ä}“
@@ -12,7 +11,9 @@ Read and reply to message
 You can reply directly at your contribution.
 
 Reply [{contributionFrontendLink|&<>"'ä}]
+
 To account [{communityURL|&<>"'ä}/transactions]
+
 Please do not reply to this email.
 
 Kind regards,
@@ -22,8 +23,8 @@ If you have any further questions, please contact our support.
 support@gradido.net
 
 Impressum [https://gradido.net/de/impressum/]
-
 Privacy Policy [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

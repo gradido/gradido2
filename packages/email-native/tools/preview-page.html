@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gradido E-Mail-Vorschau</title>
+<style>
+  :root { color-scheme: light dark; --bg:#fff; --fg:#222; --mut:#666; --line:#d4d4d4; --panel:#f6f6f6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1a1a1a; --fg:#e8e8e8; --mut:#9a9a9a; --line:#3a3a3a; --panel:#232323; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 system-ui,sans-serif; background:var(--bg); color:var(--fg);
+         display:grid; grid-template-columns:320px 1fr; height:100vh; }
+  aside { border-right:1px solid var(--line); background:var(--panel); overflow-y:auto; padding:16px; }
+  main { display:flex; flex-direction:column; min-width:0; }
+  h1 { font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--mut); margin:0 0 12px; }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut);
+       margin:20px 0 8px; border-top:1px solid var(--line); padding-top:14px; }
+  label { display:block; font-size:12px; color:var(--mut); margin:10px 0 3px; }
+  select, textarea, input { width:100%; font:inherit; padding:5px 7px; border:1px solid var(--line);
+                            border-radius:5px; background:var(--bg); color:var(--fg); }
+  textarea { resize:vertical; min-height:2.2em; font-size:13px; }
+  nav { display:flex; gap:2px; padding:8px 12px 0; border-bottom:1px solid var(--line); align-items:center; }
+  nav button { font:inherit; padding:6px 14px; border:1px solid transparent; border-bottom:none;
+               border-radius:6px 6px 0 0; background:none; color:var(--mut); cursor:pointer; }
+  nav button[aria-selected=true] { background:var(--bg); border-color:var(--line); color:var(--fg); }
+  #subject { margin-left:auto; font-size:12px; color:var(--mut); padding-right:6px;
+             max-width:50%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #stage { flex:1; min-height:0; }
+  iframe { width:100%; height:100%; border:0; background:#fff; }
+  pre { margin:0; height:100%; overflow:auto; padding:20px; white-space:pre-wrap;
+        font:13px/1.6 ui-monospace,monospace; }
+  .hint { font-size:12px; color:var(--mut); margin-top:6px; }
+  .flag { display:flex; align-items:center; gap:8px; }
+  .flag input { width:auto; }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Vorschau</h1>
+  <label for="tpl">Template</label>
+  <select id="tpl"></select>
+  <label for="loc">Sprache</label>
+  <select id="loc"></select>
+  <label for="var">Variante</label>
+  <select id="var"></select>
+  <p class="hint" id="varhint"></p>
+  <h2>Slot-Werte</h2>
+  <div id="slots"></div>
+  <p class="hint">Nichts davon wird gespeichert. Ein 40-Zeichen-Nachname ist der Sinn der Übung.</p>
+</aside>
+<main>
+  <nav>
+    <button data-pane="html" aria-selected="true">HTML</button>
+    <button data-pane="text" aria-selected="false">Text</button>
+    <span id="subject"></span>
+  </nav>
+  <div id="stage"><iframe id="html"></iframe><pre id="text" hidden></pre></div>
+</main>
+<script type="module">
+const BOOT = __BOOTSTRAP__;
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
+  ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+
+/* ge_render_* in JavaScript: literals as they are, slot values escaped by the
+   op's own mode. Sixteen lines, and the reason the preview cannot drift from
+   what ships -- both walk the same op list. */
+function render(doc, pool, slots, values, locale) {
+  let out = '';
+  for (const op of doc) {
+    if (op[0] === 0) { out += pool[op[1]]; continue; }
+    const name = op[1] >= 0 ? slots[op[1]] : op[3];
+    const value = op[1] >= 0 ? (values[name] ?? '') : locale;
+    out += op[2] ? esc(value) : value;
+  }
+  return out;
+}
+
+const $ = (id) => document.getElementById(id);
+let data = null, values = {}, pane = 'html';
+
+async function loadTemplate(name) {
+  data = BOOT.inline ? BOOT.templates[name] : await (await fetch(`./${name}.json`)).json();
+  values = Object.fromEntries(data.slots.map((s) => [s, BOOT.samples[s] ?? s]));
+
+  $('loc').innerHTML = data.locales.map((l) => `<option>${l}</option>`).join('');
+  $('var').innerHTML = data.variants.map((v, i) =>
+    `<option value="${i}">${i}${data.conditions.length ? ' — ' + describe(i) : ''}</option>`).join('');
+  $('varhint').textContent = data.conditions.length
+    ? 'Zweige: ' + data.conditions.join(', ')
+    : 'Dieses Template hat nur eine Variante.';
+
+  $('slots').innerHTML = data.slots.map((s) =>
+    `<label for="s-${s}">${s}</label><textarea id="s-${s}" data-slot="${s}" rows="1">${esc(values[s])}</textarea>`
+  ).join('') + data.flags.map((f) =>
+    `<div class="flag"><input type="checkbox" disabled><label>${f} (Flag, wählt die Variante)</label></div>`
+  ).join('');
+  for (const el of $('slots').querySelectorAll('textarea'))
+    el.addEventListener('input', () => { values[el.dataset.slot] = el.value; draw(); });
+  draw();
+}
+
+/* Which case of each branch this variant index stands for -- the same counting
+   the extractor does, so the numbers here are the ones in the snapshots. */
+function describe(vi) {
+  const v = data.variants[vi];
+  return data.conditions.map((id, i) => `${id}=${v[i]}`).join(' ');
+}
+
+function draw() {
+  const li = $('loc').selectedIndex, vi = +$('var').value;
+  const locale = data.locales[li];
+  const one = (kind) => render(data.docs[kind][li][vi], data.pool, data.slots, values, locale);
+  $('subject').textContent = one('subject');
+  $('subject').title = one('subject');
+  if (pane === 'html') $('html').srcdoc = one('html');
+  else $('text').textContent = one('text');
+}
+
+for (const b of document.querySelectorAll('nav button'))
+  b.addEventListener('click', () => {
+    pane = b.dataset.pane;
+    for (const o of document.querySelectorAll('nav button'))
+      o.setAttribute('aria-selected', String(o === b));
+    $('html').hidden = pane !== 'html';
+    $('text').hidden = pane !== 'text';
+    draw();
+  });
+$('loc').addEventListener('change', draw);
+$('var').addEventListener('change', draw);
+$('tpl').addEventListener('change', () => loadTemplate($('tpl').value));
+
+$('tpl').innerHTML = BOOT.names.map((n) => `<option>${n}</option>`).join('');
+loadTemplate(BOOT.names[0]);
+
+/* A changed template or catalogue is not something this page can know about --
+   the server tells it. Without a server the line simply does nothing. */
+if (!BOOT.inline && window.EventSource) {
+  const es = new EventSource('/events');
+  es.onmessage = () => location.reload();
+}
+</script>
+</body>
+</html>

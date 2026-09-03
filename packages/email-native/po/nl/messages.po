@@ -1,0 +1,479 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: gradido2-email\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: nl\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. emails.accountActivation.activateAccount
+msgid "Activate account"
+msgstr "Account activeren"
+
+#. emails.accountActivation.emailRegistered
+msgid "Your email address has just been registered with Gradido."
+msgstr "je e-mailadres is zojuist geregistreerd bij Gradido."
+
+#. emails.accountActivation.pleaseClickLink
+msgid "Please click here to complete the registration and activate your Gradido account."
+msgstr "Klik hier om de registratie te voltooien en je Gradido-account te activeren."
+
+#. emails.accountActivation.subject
+#. emails.accountActivation.title
+msgid "Email Verification"
+msgstr "E-mailverificatie"
+
+#. emails.accountMultiRegistration.contactSupport
+msgid "Contact support"
+msgstr "Contact opnemen met support"
+
+#. emails.accountMultiRegistration.emailExists
+msgid "However, an account already exists for your email address."
+msgstr "Er bestaat echter al een account voor je e-mailadres."
+
+#. emails.accountMultiRegistration.emailReused
+msgid "Your email address has just been used again to register an account with Gradido."
+msgstr "je e-mailadres is zojuist opnieuw gebruikt om een account bij Gradido te registreren."
+
+#. emails.accountMultiRegistration.helperButton
+msgid "I am helping someone set up an account"
+msgstr "Ik help iemand een account aan te maken"
+
+#. emails.accountMultiRegistration.helperIntro
+msgid "If someone is sitting next to you who just used your e-mail address to start a Gradido account: continue the setup here. Together you enter their own e-mail address, and they choose their password themselves."
+msgstr "Als er iemand naast je zit die zojuist jouw e-mailadres heeft gebruikt om een Gradido-account te beginnen: ga hier verder met de installatie. Samen voeren jullie het eigen e-mailadres in, en het wachtwoord kiest hij of zij zelf."
+
+#. emails.accountMultiRegistration.helperTitle
+msgid "Helping someone at a Gradido café right now?"
+msgstr "Help je op dit moment iemand in een Gradido-café?"
+
+#. emails.accountMultiRegistration.ifYouAreNotTheOne
+msgid "If you did not try to register again, please contact our support:"
+msgstr "Als je niet hebt geprobeerd je opnieuw te registreren, neem dan contact op met onze support:"
+
+#. emails.accountMultiRegistration.onForgottenPasswordClickLink
+msgid "If you have forgotten your password, please click here."
+msgstr "Als je je wachtwoord bent vergeten, klik dan hier."
+
+#. emails.accountMultiRegistration.subject
+#. emails.accountMultiRegistration.title
+msgid "Try To Register Again With Your Email"
+msgstr "Nieuwe registratiepoging met je e-mailadres"
+
+#. emails.addedContributionMessage.commonGoodContributionMessage
+msgid "You have received a message from %1 regarding your common good contribution “%2”."
+msgstr "je hebt een bericht ontvangen van %1 over je bijdrage aan het algemeen welzijn ‘%2’."
+
+#. emails.addedContributionMessage.message
+msgid "„%1“"
+msgstr "‘%1’"
+
+#. emails.addedContributionMessage.readMessage
+msgid "Read and reply to message"
+msgstr "Bericht lezen en beantwoorden"
+
+#. emails.addedContributionMessage.subject
+#. emails.addedContributionMessage.title
+msgid "Message about your common good contribution"
+msgstr "Bericht over je bijdrage aan het algemeen welzijn"
+
+#. emails.addedContributionMessage.toSeeAndAnswerMessage
+msgid "You can reply directly at your contribution."
+msgstr "Je kunt direct bij je bijdrage antwoorden."
+
+#. emails.assistedRegistrationConfirm.accountCreated
+msgid "Together with a Gradido member, an account has just been set up for you — with this e-mail address."
+msgstr "Samen met een Gradido-lid is er zojuist een account voor je aangemaakt — met dit e-mailadres."
+
+#. emails.assistedRegistrationConfirm.clickToConfirm
+msgid "Please click here to confirm your e-mail address."
+msgstr "Klik hier om je e-mailadres te bevestigen."
+
+#. emails.assistedRegistrationConfirm.confirmButton
+msgid "Confirm address"
+msgstr "Adres bevestigen"
+
+#. emails.assistedRegistrationConfirm.confirmHeading
+msgid "Confirm e-mail address"
+msgstr "E-mailadres bevestigen"
+
+#. emails.assistedRegistrationConfirm.notYou
+msgid "You know nothing about this account? Then ignore this e-mail — without confirmation the account stays locked."
+msgstr "Weet je niets van dit account? Negeer dan deze e-mail — zonder bevestiging blijft het account gesloten."
+
+#. emails.assistedRegistrationConfirm.pleaseConfirm
+msgid "Please confirm that this address is yours — only then will your account stay open for good."
+msgstr "Bevestig dat dit adres van jou is — pas dan blijft je account blijvend geopend."
+
+#. emails.assistedRegistrationConfirm.subject
+msgid "Confirm your e-mail address"
+msgstr "Bevestig je e-mailadres"
+
+#. emails.assistedRegistrationConfirm.title
+msgid "Your Gradido account is ready"
+msgstr "Je Gradido-account is klaar"
+
+#. emails.contribution.toSeeContributionsAndMessages
+msgid "You will find your common good contributions and the messages about them in your Gradido account."
+msgstr "Je vindt je bijdragen aan het algemeen welzijn en de bijbehorende berichten in je Gradido-account."
+
+#. emails.contributionChangedByModerator.subject
+#. emails.contributionChangedByModerator.title
+msgid "Your common good contribution has been changed"
+msgstr "Je bijdrage aan het algemeen welzijn is gewijzigd"
+
+#. emails.contributionChangedByModerator.text
+msgid "your common good contribution '%1' has just been changed by %2 and now reads as '%3'"
+msgstr "je bijdrage aan het algemeen welzijn ‘%1’ is zojuist gewijzigd door %2 en luidt nu ‘%3’"
+
+#. emails.contributionConfirmed.commonGoodContributionConfirmed
+msgid "Your common good contribution “%1” has just been approved by %2. Your Gradido account has been credited with %3 GDD."
+msgstr "je bijdrage aan het algemeen welzijn ‘%1’ is zojuist bevestigd door %2. Er is %3 GDD op je Gradido-account bijgeschreven."
+
+#. emails.contributionConfirmed.subject
+#. emails.contributionConfirmed.title
+msgid "Your contribution to the common good was confirmed"
+msgstr "Je bijdrage aan het algemeen welzijn is bevestigd"
+
+#. emails.contributionDeleted.commonGoodContributionDeleted
+msgid "Your common good contribution “%1” was deleted by %2."
+msgstr "je bijdrage aan het algemeen welzijn ‘%1’ is verwijderd door %2."
+
+#. emails.contributionDeleted.subject
+#. emails.contributionDeleted.title
+msgid "Your common good contribution was deleted"
+msgstr "Je bijdrage aan het algemeen welzijn is verwijderd"
+
+#. emails.contributionDenied.commonGoodContributionDenied
+msgid "Your common good contribution “%1” was rejected by %2."
+msgstr "je bijdrage aan het algemeen welzijn ‘%1’ is afgewezen door %2."
+
+#. emails.contributionDenied.subject
+#. emails.contributionDenied.title
+msgid "Your common good contribution was rejected"
+msgstr "Je bijdrage aan het algemeen welzijn is afgewezen"
+
+#. emails.customEmail.haveReceivedMessageFrom
+msgid "you have just received a message from %1"
+msgstr "je hebt zojuist een bericht ontvangen van %1"
+
+#. emails.customEmail.title
+msgid "%1 has sent you a message"
+msgstr "%1 heeft je een bericht gestuurd"
+
+#. emails.emailChangeConfirm.confirm
+msgid "Confirm new address"
+msgstr "Nieuw adres bevestigen"
+
+#. emails.emailChangeConfirm.notYou
+msgid "If you did not ask for this change, you can simply ignore this e-mail – nothing changes without your confirmation."
+msgstr "Heb je deze wijziging niet aangevraagd, dan kun je deze e-mail gewoon negeren – zonder jouw bevestiging verandert er niets."
+
+#. emails.emailChangeConfirm.pleaseConfirm
+msgid "Please confirm with one click that this address is yours."
+msgstr "Bevestig met één klik dat dit adres van jou is."
+
+#. emails.emailChangeConfirm.subject
+msgid "Please confirm your new e-mail address"
+msgstr "Bevestig je nieuwe e-mailadres"
+
+#. emails.emailChangeConfirm.title
+msgid "Confirm new e-mail address"
+msgstr "Nieuw e-mailadres bevestigen"
+
+#. emails.emailChangeConfirm.validUntil
+msgid "The link is valid until %1. After that you can have a new e-mail sent from your settings."
+msgstr "De link is geldig tot %1. Daarna kun je in je instellingen een nieuwe e-mail laten sturen."
+
+#. emails.emailChangeConfirm.youAskedFor
+msgid "You want to change the e-mail address of your Gradido account to this address."
+msgstr "Je wilt het e-mailadres van je Gradido-account wijzigen naar dit adres."
+
+#. emails.emailChangeDone.changedTo
+msgid "From now on the e-mail address of your Gradido account is %1."
+msgstr "Vanaf nu is het e-mailadres van je Gradido-account %1."
+
+#. emails.emailChangeDone.notYou
+msgid "That was not you? Then please contact %1 right away."
+msgstr "Was jij dat niet? Neem dan meteen contact op met %1."
+
+#. emails.emailChangeDone.subject
+msgid "Your e-mail address has been changed"
+msgstr "Je e-mailadres is gewijzigd"
+
+#. emails.emailChangeDone.title
+msgid "E-mail address changed"
+msgstr "E-mailadres gewijzigd"
+
+#. emails.emailChangeDone.wasBefore
+msgid "Until now it was %1."
+msgstr "Tot nu toe was het %1."
+
+#. emails.emailChangeNotice.changePassword
+msgid "If you revoke the change, please change your password afterwards as well."
+msgstr "Als je de wijziging afwijst, wijzig daarna dan ook je wachtwoord."
+
+#. emails.emailChangeNotice.notYou
+msgid "That was not you? Then click here – the change is revoked and this address stays."
+msgstr "Was jij dat niet? Klik dan hier – de wijziging wordt afgewezen en dit adres blijft bestaan."
+
+#. emails.emailChangeNotice.notYouTitle
+msgid "That was not you?"
+msgstr "Was jij dat niet?"
+
+#. emails.emailChangeNotice.requested
+msgid "A change of the e-mail address of your Gradido account to %1 has been requested."
+msgstr "Voor je Gradido-account is een wijziging van het e-mailadres naar %1 aangevraagd."
+
+#. emails.emailChangeNotice.revoke
+msgid "Revoke change"
+msgstr "Wijziging afwijzen"
+
+#. emails.emailChangeNotice.subject
+msgid "Change of your e-mail address requested"
+msgstr "Wijziging van je e-mailadres aangevraagd"
+
+#. emails.emailChangeNotice.title
+msgid "Your e-mail address is about to change"
+msgstr "Je e-mailadres gaat veranderen"
+
+#. emails.emailChangeNotice.untilConfirmed
+msgid "Until the new address is confirmed, this one stays in force. If that was you, there is nothing more to do."
+msgstr "Totdat het nieuwe adres is bevestigd, blijft dit adres gelden. Was jij het zelf, dan hoef je niets te doen."
+
+#. emails.emailChangeNotice.validUntil
+msgid "The link is valid until %1 – after that the requested change expires by itself."
+msgstr "De link is geldig tot %1 – daarna vervalt de aangevraagde wijziging vanzelf."
+
+#. emails.emailChangeSupport.gdtHint
+msgid "For the GDT server the first address of this account still counts: %1."
+msgstr "Voor de GDT-server telt nog steeds het eerste adres van dit account: %1."
+
+#. emails.emailChangeSupport.member
+msgid "Member: %1 %2 (%3)"
+msgstr "Lid: %1 %2 (%3)"
+
+#. emails.emailChangeSupport.newEmail
+msgid "New address: %1"
+msgstr "Nieuw adres: %1"
+
+#. emails.emailChangeSupport.oldEmail
+msgid "Previous address: %1"
+msgstr "Vorig adres: %1"
+
+#. emails.emailChangeSupport.subject
+msgid "E-mail address changed: %1 %2"
+msgstr "E-mailadres gewijzigd: %1 %2"
+
+#. emails.emailChangeSupport.title
+msgid "A member has changed their e-mail address"
+msgstr "Een lid heeft zijn e-mailadres gewijzigd"
+
+#. emails.emailChangeSupport.todo
+msgid "Please merge the new address into this account on the GDT server and update Klick-Tipp."
+msgstr "Koppel het nieuwe adres op de GDT-server aan dit account en werk Klick-Tipp bij."
+
+#. emails.emailChangeSupport.todoTakeBack
+msgid "A change back to an earlier address of this account – nothing to merge on the GDT server. Please only update Klick-Tipp."
+msgstr "Terugwijziging naar een eerder adres van dit account – op de GDT-server valt niets samen te voegen. Werk alleen Klick-Tipp bij."
+
+#. emails.emailChangeSupport.todoTypoCorrection
+msgid "The previous address was never confirmed (a typo during setup) – nothing to merge on the GDT server. Please only enter the new address into Klick-Tipp."
+msgstr "Het vorige adres is nooit bevestigd (een typefout bij het aanmaken) – op de GDT-server valt niets samen te voegen. Voer alleen het nieuwe adres in Klick-Tipp in."
+
+#. emails.footer.contactOurSupport
+msgid "If you have any further questions, please contact our support."
+msgstr "Neem bij verdere vragen contact op met onze support."
+
+#. emails.footer.imprint
+msgid "Impressum"
+msgstr "Colofon"
+
+#. emails.footer.imprintAddress [1/5]
+msgid "Gradido-Akademie"
+msgstr "Gradido-Akademie"
+
+#. emails.footer.imprintAddress [2/5]
+msgid "Institut für Wirtschaftsbionik"
+msgstr "Institut für Wirtschaftsbionik"
+
+#. emails.footer.imprintAddress [3/5]
+msgid "Pfarrweg 2"
+msgstr "Pfarrweg 2"
+
+#. emails.footer.imprintAddress [4/5]
+msgid "74653 Künzelsau"
+msgstr "74653 Künzelsau"
+
+#. emails.footer.imprintAddress [5/5]
+msgid "Deutschland"
+msgstr "Deutschland"
+
+#. emails.footer.imprintImageAlt
+msgid "Gradido-Akademie Logo"
+msgstr "Logo Gradido-Akademie"
+
+#. emails.footer.privacyPolicy
+msgid "Privacy Policy"
+msgstr "Privacybeleid"
+
+#. emails.footer.supportEmail
+msgid "support@gradido.net"
+msgstr "support@gradido.net"
+
+#. emails.general.amountGDD
+msgid "Amount: %1 GDD"
+msgstr "Bedrag: %1 GDD"
+
+#. emails.general.answerNow
+msgid "Reply"
+msgstr "Beantwoorden"
+
+#. emails.general.completeRegistration
+msgid "Complete registration"
+msgstr "Registratie voltooien"
+
+#. emails.general.contribution
+msgid "Contribution: : %1"
+msgstr "Bijdrage aan het algemeen welzijn: %1"
+
+#. emails.general.contributionDetails
+msgid "Contribution details"
+msgstr "Details van de bijdrage"
+
+#. emails.general.detailsYouFindOnLinkToYourAccount
+msgid "You can find transaction details in your Gradido account."
+msgstr "De details van de transactie vind je in je Gradido-account."
+
+#. emails.general.helloName
+msgid "Hello %1 %2,"
+msgstr "Hallo %1 %2,"
+
+#. emails.general.linkValidity [1/2]
+msgid "The link has a validity of %1 hours."
+msgstr "De link is %1 uur geldig."
+
+#. emails.general.linkValidity [2/2]
+#. emails.general.linkValidityWithMinutes [2/2]
+msgid "If the validity of the link has already expired, you can have a new link sent to you here."
+msgstr "Als de geldigheid van de link al verlopen is, kun je hier een nieuwe link laten toesturen."
+
+#. emails.general.linkValidityWithMinutes [1/2]
+msgid "The link has a validity of %1 hours and %2 minutes."
+msgstr "De link is %1 uur en %2 minuten geldig."
+
+#. emails.general.message
+msgid "Message"
+msgstr "Bericht"
+
+#. emails.general.newLink
+msgid "New link"
+msgstr "Nieuwe link"
+
+#. emails.general.orCopyLink
+msgid "Or copy the link into your browser window."
+msgstr "Of kopieer de link naar je browservenster."
+
+#. emails.general.pleaseDoNotReply
+msgid "Please do not reply to this email."
+msgstr "Beantwoord deze e-mail alsjeblieft niet."
+
+#. emails.general.requestNewLink
+msgid "Request new valid link"
+msgstr "Nieuwe geldige link aanvragen"
+
+#. emails.general.reset
+msgid "reset"
+msgstr "resetten"
+
+#. emails.general.sincerelyYours
+msgid "Kind regards,"
+msgstr "Hartelijke groet,"
+
+#. emails.general.toAccount
+msgid "To account"
+msgstr "Naar het account"
+
+#. emails.general.toContribution
+msgid "To contribution"
+msgstr "Naar de bijdrage"
+
+#. emails.general.transactionDetails
+msgid "Transaction details"
+msgstr "Transactiedetails"
+
+#. emails.general.yourGradidoTeam
+msgid "your Gradido team"
+msgstr "je Gradido-team"
+
+#. emails.resetPassword.pleaseClickLink
+msgid "If it was you, please click here."
+msgstr "Als jij het was, klik dan hier."
+
+#. emails.resetPassword.subject
+#. emails.resetPassword.title
+msgid "Reset password"
+msgstr "Wachtwoord resetten"
+
+#. emails.resetPassword.youOrSomeoneResetPassword
+msgid "You, or someone else, requested a password reset for this account."
+msgstr "jij, of iemand anders, heeft voor dit account een wachtwoordreset aangevraagd."
+
+#. emails.thankYouCardPaid.blockCard
+msgid "Block card"
+msgstr "Kaart blokkeren"
+
+#. emails.thankYouCardPaid.card
+msgid "Card: %1"
+msgstr "Kaart: %1"
+
+#. emails.thankYouCardPaid.memo
+msgid "Reference: %1"
+msgstr "Omschrijving: %1"
+
+#. emails.thankYouCardPaid.notYou
+msgid "That was not you? Block your card right here — it stops working, your Gradido address stays."
+msgstr "Was jij dat niet? Blokkeer je kaart hier meteen — hij werkt daarna niet meer, je Gradido-adres blijft."
+
+#. emails.thankYouCardPaid.recipient
+msgid "Recipient: %1 (%2)"
+msgstr "Ontvanger: %1 (%2)"
+
+#. emails.thankYouCardPaid.subject
+msgid "You passed on %1 GDD with your thank you card"
+msgstr "Je hebt %1 GDD doorgegeven met je bedankkaart"
+
+#. emails.thankYouCardPaid.title
+msgid "%1 GDD were passed on with your thank you card"
+msgstr "Er is %1 GDD doorgegeven met je bedankkaart"
+
+#. emails.thankYouCardPaid.wasPaid
+msgid "%1 GDD have just been passed on with your thank you card."
+msgstr "Er is zojuist %1 GDD doorgegeven met je bedankkaart."
+
+#. emails.transactionLinkRedeemed.hasRedeemedYourLink
+msgid "%1 (%2) has just redeemed your link."
+msgstr "%1 (%2) heeft zojuist je link ingewisseld."
+
+#. emails.transactionLinkRedeemed.memo
+msgid "Message: %1"
+msgstr "Bericht: %1"
+
+#. emails.transactionLinkRedeemed.subject
+#. emails.transactionLinkRedeemed.title
+msgid "%1 has redeemed your Gradido link"
+msgstr "%1 heeft je Gradido-link ingewisseld"
+
+#. emails.transactionReceived.haveReceivedAmountGDDFrom
+msgid "You have just received %1 GDD from %2."
+msgstr "je hebt zojuist %1 GDD ontvangen van %2."
+
+#. emails.transactionReceived.subject
+#. emails.transactionReceived.title
+msgid "%1 has sent you %2 Gradido"
+msgstr "%1 heeft je %2 Gradido gestuurd"
+
+#. general.decimalSeparator
+msgid "."
+msgstr ","

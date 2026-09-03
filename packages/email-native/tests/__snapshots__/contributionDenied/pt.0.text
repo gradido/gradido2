@@ -4,13 +4,16 @@ Olá {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 a tua contribuição para o bem comum «{contributionMemo|&<>"'ä}» foi rejeitada por {senderAlias|&<>"'ä}.
 
-
 Detalhes da contribuição
 
 Encontras as tuas contribuições para o bem comum e as mensagens associadas na tua conta Gradido.
+
 Para a contribuição [{contributionFrontendLink|&<>"'ä}]
+
 Ou copia o link para a janela do teu navegador.
+
 {contributionFrontendLink|&<>"'ä}
+
 Por favor, não respondas a este e-mail.
 
 Com os melhores cumprimentos,
@@ -20,8 +23,8 @@ Se tiveres mais questões, contacta o nosso suporte.
 support@gradido.net
 
 Aviso legal [https://gradido.net/de/impressum/]
-
 Política de privacidade [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

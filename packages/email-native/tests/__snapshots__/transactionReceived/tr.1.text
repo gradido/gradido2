@@ -4,10 +4,10 @@ Merhaba {firstName|&<>"'ä} {lastName|&<>"'ä},
 
 az önce {senderAlias|&<>"'ä} tarafından {transactionAmount|&<>"'ä} GDD aldın.
 
-
 Mesaj
 
 {memo|&<>"'ä}
+
 Hesaba git [{communityURL|&<>"'ä}/transactions]
 
 Sevgiler,
@@ -17,8 +17,8 @@ Başka sorun olursa lütfen desteğimize başvur.
 support@gradido.net
 
 Künye [https://gradido.net/de/impressum/]
-
 Gizlilik politikası [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

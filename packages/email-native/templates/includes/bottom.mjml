@@ -1,0 +1,3 @@
+<!-- Everything below the content of a mail. See top.mjml. -->
+<mj-include path="greeting.mjml" />
+<mj-include path="footer.mjml" />

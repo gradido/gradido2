@@ -7,6 +7,7 @@ Vorig adres: {oldEmail|&<>"'ä}
 Nieuw adres: {newEmail|&<>"'ä}
 
 Voor de GDT-server telt nog steeds het eerste adres van dit account: {gdtEmail|&<>"'ä}.
+
 Koppel het nieuwe adres op de GDT-server aan dit account en werk Klick-Tipp bij.
 
 Hartelijke groet,
@@ -16,8 +17,8 @@ Neem bij verdere vragen contact op met onze support.
 support@gradido.net
 
 Colofon [https://gradido.net/de/impressum/]
-
 Privacybeleid [https://gradido.net/de/datenschutz/]
+
 Gradido-Akademie
 Institut für Wirtschaftsbionik
 Pfarrweg 2

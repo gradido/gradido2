@@ -1,10 +1,10 @@
 // Compares what the C binary rendered against the committed snapshots, byte for
 // byte. `zig build check` writes the C side with tools/dump.c and runs this over it;
-// nothing here touches pug, which is why the check does not need the templates.
+// nothing here touches mjml, which is why the check does not need the templates.
 //
-// The snapshots are the pug output (tools/snapshots.mjs wrote them) and
+// The snapshots are the extractor's output (tools/snapshots.mjs wrote them) and
 // tests/snapshots.test.mjs is what keeps them that. So this comparison is the second
-// half of "the C renders what pug renders", and a failure here means the generated
+// half of "the C renders what the templates say", and a failure here means the generated
 // tables and the templates have come apart -- rebuild, and if the templates really
 // changed, update the snapshots and read that diff first.
 

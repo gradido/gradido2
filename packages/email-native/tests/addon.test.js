@@ -36,9 +36,12 @@ test('introspection matches what the templates declare', () => {
 })
 
 test('the buffer limits are the build-time constants', () => {
-  assert.equal(email.limits.maxStaticHtml, 21962)
-  assert.equal(email.limits.maxStaticText, 2011)
-  assert.equal(email.limits.maxSlotRefs, 13)
+  // Written down rather than read from the header, so that a template change which
+  // moves them says so here instead of quietly raising what every thread reserves.
+  // MJML's tables: 21962/2011/13 were pug's, before templates/*.mjml replaced it.
+  assert.equal(email.limits.maxStaticHtml, 25779)
+  assert.equal(email.limits.maxStaticText, 2016)
+  assert.equal(email.limits.maxSlotRefs, 17)
 })
 
 test('the inline images are in the binary', () => {
