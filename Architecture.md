@@ -768,11 +768,17 @@ so a second checkout costs nothing.
 Each implementation ships as one executable, and both of them serve the same pages:
 
 ```text
-bun bundle    build/gradido — the backend, the frontends, both native addons,
-              and the bun runtime
-zig build     fast-servers/zig-out/bin/fast-servers — the roles, the frontends,
-              and nothing dynamically linked but libc and libm
+bun bundle             build/gradido2 — the backend, the frontends, both native
+                       addons, and the bun runtime
+BUNDLE_C=1 bun bundle  build/gradido2-fast beside it — the roles, the frontends,
+                       and nothing dynamically linked but libc and libm
 ```
+
+`BUNDLE_TS` and `BUNDLE_C` decide which; the reference implementation is the default, because
+that is the one that is always current. The two are alternatives and not halves — *One
+implementation per deployment* above — and being built into one directory does not make them
+otherwise. A plain `zig build` still installs into `fast-servers/zig-out`; `build/` is where a
+release goes.
 
 It is what the download-and-start promise above means in practice — a community that wants to
 host itself copies one file onto a server and starts it, and the SQLite default means it does
@@ -791,8 +797,9 @@ publish/frontend/    the files, exactly as they are handed out
 publish/admin/       the next one, once packages/admin exists
 ```
 
-`bun run publish` writes it; `bun bundle` and `zig build` both run that first and then embed
-what the manifest *names* — not what the directory happens to hold. It is generated, so it is
+`turbo publish` writes it; `bun bundle` and `zig build` both run that first and then embed what
+the manifest *names* — not what the directory happens to hold. It is a turbo task, which is what
+lets both of them ask without the work happening twice. It is generated, so it is
 not committed, and it is a directory somebody can list: what ends up inside a binary should be
 something you can look at before it does.
 

@@ -350,10 +350,13 @@ The backend serves the frontend out of its own process -- `backend/src/static_ro
 files in `backend/include/backend/static_sites.h`. It cannot build one: a page is vite's output.
 
 ```text
-bun run publish        builds the frontends into publish/ at the repository root,
+turbo publish          builds the frontends into publish/ at the repository root,
                        with a manifest that says where each is mounted and what
                        every file's content type and ETag are
-zig build              runs that first, then embeds what the manifest names
+zig build              runs that first, then embeds what the manifest names.
+                       Through turbo, so that a `bun bundle` building both
+                       implementations publishes once and the second ask is a
+                       cache hit
 zig build -Dpages=false   a server with no pages, and no bun needed
 ```
 

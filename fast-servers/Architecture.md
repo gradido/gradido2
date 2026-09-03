@@ -648,9 +648,11 @@ pointer, a length, and two header strings that were decided when the build ran.
 
 ### What it costs, and what it does not
 
-`zig build` now runs `bun run publish` before it configures. That is a real dependency and worth
+`zig build` now runs `turbo publish` before it configures. That is a real dependency and worth
 naming: **a complete server needs the TypeScript toolchain**, because half of what it serves was
-produced by it. What did not change is that the *server* builds with zig alone — `-Dpages=false`
+produced by it. Through turbo and not the script directly, because `bun bundle` asks for the same
+thing when it builds both implementations: publishing is a task with declared inputs, so the
+second ask is a cache hit and neither build has to know which of them ran first. What did not change is that the *server* builds with zig alone — `-Dpages=false`
 builds one with no pages in it, and that is also what a machine without bun gets. A build with a
 `publish/` already in place and no bun to refresh it warns and uses what is there.
 

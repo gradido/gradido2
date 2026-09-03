@@ -18,6 +18,21 @@
       "persistent": true,
       "cache": false
     },
+    "//#publish": {
+      "outputs": [
+        "publish/**"
+      ],
+      "inputs": [
+        "scripts/publish.ts",
+        "scripts/run.ts",
+        "packages/**",
+        "!packages/*/.turbo/**"
+      ],
+      "env": [
+        "API_BASE_URL"
+      ],
+      "cache": true
+    },
     "build": {
       "dependsOn": [
         "^build"

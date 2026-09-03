@@ -8,18 +8,24 @@ here; this file is only how to build and run it.
 ## Build
 
 ```sh
-zig build                      # the binary, in zig-out/bin/fast-servers
+zig build                      # the binary, in zig-out/bin/gradido2-fast
 zig build run -- --federation  # build and run, roles after --
 ```
 
+The binary is named after the product rather than after this directory: `gradido2-fast` is the
+C implementation of the same server `gradido2` is, and `--version` says which one answered.
+`BUNDLE_C=1 bun bundle` in the repository root builds it into `build/` beside the other one —
+see the root [README.md](../README.md), including why having both there does not mean running
+both.
+
 `build.zig` is the master build. It fetches and compiles everything it needs, so nothing has to
 be installed for it beyond a zig toolchain. That holds without an exception — the TLS library,
-zlib and both database drivers included. `ldd zig-out/bin/fast-servers` names `libm` and `libc`
+zlib and both database drivers included. `ldd zig-out/bin/gradido2-fast` names `libm` and `libc`
 and nothing else.
 
 **One thing is not compiled here: the pages.** A Gradido server serves the frontend out of its
 own process, a frontend is vite's output, and there is no JavaScript on this path. So
-`zig build` runs `bun run publish` in the repository root first and embeds what it leaves in
+`zig build` runs `turbo publish` in the repository root first and embeds what it leaves in
 `publish/` — see *The pages* in [Architecture.md](Architecture.md). A machine without bun builds
 the server and not the pages:
 
@@ -36,7 +42,7 @@ Options, all with `-D`:
 |---|---|---|
 | `h2o` | on, forced off on Windows | build the h2o HTTP backend; off selects the fallback |
 | `pages` | on | embed the frontends from `publish/` and serve them. Off builds a server with no pages — and needs no bun |
-| `publish` | `../publish` | where `bun run publish` assembled them |
+| `publish` | `../publish` | where `turbo publish` assembled them |
 | `postgres` | on, forced off on Windows | build the PostgreSQL driver. Off also skips a 155 MB fetch |
 | `sqlite` | on | build the SQLite driver |
 | `tests` | off | the googletest binaries and the integration probe |

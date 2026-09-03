@@ -753,7 +753,7 @@ fn readManifest(b: *std.Build, publish_root: []const u8) Manifest {
     const bytes = b.build_root.handle.readFileAlloc(b.allocator, path, 8 * 1024 * 1024) catch |err| {
         std.debug.panic(
             "cannot read '{s}': {s}\n" ++
-                "  The pages come from the TypeScript build: run `bun run publish` in the\n" ++
+                "  The pages come from the TypeScript build: run `turbo publish` in the\n" ++
                 "  repository root, or build without them with -Dpages=false.",
             .{ path, @errorName(err) },
         );
@@ -774,12 +774,20 @@ fn readManifest(b: *std.Build, publish_root: []const u8) Manifest {
 /// change, and the honest split is the one below -- the *server* still builds with zig alone,
 /// and `-Dpages=false` says so; what needs bun is the half of it that bun produced.
 ///
+/// **Through turbo, and that is the whole of "do not do it twice".** `publish` is a task with
+/// declared inputs and outputs, so a call that changes nothing is a cache hit in a few
+/// milliseconds -- which is what a `bun bundle` building both implementations makes of the
+/// second call. Whether the work is needed is turbo's question to answer, and a build that
+/// answered it itself with a flag would be a second, worse cache.
+///
 /// A failure is not fatal when there is already a `publish/` to fall back on: a rebuild with no
 /// network, or with bun missing, then serves the pages of the last publish rather than refusing
 /// to build at all.
 fn runPublish(b: *std.Build, publish_root: []const u8) void {
     const repo = b.pathFromRoot("..");
-    var child = std.process.Child.init(&.{ "bun", "run", "publish" }, b.allocator);
+    // `bun x` rather than a bare `turbo`: the repository pins its own, and a build that silently
+    // used whichever turbo is on the PATH is a build nobody can reproduce.
+    var child = std.process.Child.init(&.{ "bun", "x", "turbo", "publish" }, b.allocator);
     child.cwd = repo;
     child.stdin_behavior = .Ignore;
     child.stdout_behavior = .Inherit;
@@ -798,10 +806,10 @@ fn runPublish(b: *std.Build, publish_root: []const u8) void {
 fn onPublishFailure(b: *std.Build, publish_root: []const u8, why: []const u8) void {
     const manifest = b.pathJoin(&.{ publish_root, "sites.json" });
     if (b.build_root.handle.access(manifest, .{})) |_| {
-        std.log.warn("`bun run publish` did not run ({s}); using the pages already in {s}", .{ why, publish_root });
+        std.log.warn("`turbo publish` did not run ({s}); using the pages already in {s}", .{ why, publish_root });
     } else |_| {
         std.debug.panic(
-            "`bun run publish` failed ({s}) and there is no {s} to fall back on.\n" ++
+            "`turbo publish` failed ({s}) and there is no {s} to fall back on.\n" ++
                 "  The pages are built by the TypeScript toolchain -- install bun, or build\n" ++
                 "  the server without them with -Dpages=false.",
             .{ why, manifest },
@@ -859,7 +867,7 @@ pub fn build(b: *std.Build) void {
     // frontend is not the product -- and off is what a machine without bun, a sanitizer run or
     // work on the C alone wants. See staticSitesSource.
     const enable_pages = b.option(bool, "pages", "Embed the frontends from publish/ and serve them. Off builds a server that answers ROUTE_NOT_IMPLEMENTED for every page (and needs no bun)") orelse true;
-    const publish_root = b.option([]const u8, "publish", "Where `bun run publish` assembled the pages, relative to this build root") orelse "../publish";
+    const publish_root = b.option([]const u8, "publish", "Where `turbo publish` assembled the pages, relative to this build root") orelse "../publish";
     const enable_benchmarks = b.option(bool, "benchmarks", "Build the bench_* binaries") orelse false;
     const sanitize = b.option(SanitizeMode, "sanitize", "Instrument C sources: undefined_behavior (UBSan) or thread (TSan). AddressSanitizer needs the CMake build with -DFS_ENABLE_SANITIZERS=ON") orelse .off;
 
@@ -977,7 +985,11 @@ pub fn build(b: *std.Build) void {
     }
 
     const exe = b.addExecutable(.{
-        .name = "fast-servers",
+        // The product's name, not the directory's: a binary somebody copies onto a server is
+        // called what the thing is. `gradido2` is the TypeScript path's, and the suffix says
+        // which of the two implementations this one is -- ../AGENTS.md, *C is the fast
+        // implementation*.
+        .name = "gradido2-fast",
         .root_module = b.createModule(.{
             .target = target,
             .optimize = optimize,
@@ -1413,7 +1425,7 @@ pub fn build(b: *std.Build) void {
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| run_cmd.addArgs(args);
-    const run_step = b.step("run", "Run fast-servers; pass roles after --, e.g. -- --backend --dht-node");
+    const run_step = b.step("run", "Run gradido2-fast; pass roles after --, e.g. -- --backend --dht-node");
     run_step.dependOn(&run_cmd.step);
 
     const cdb_slice = cdb_targets.toOwnedSlice(b.allocator) catch @panic("OOM");

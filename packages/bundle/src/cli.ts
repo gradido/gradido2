@@ -103,9 +103,9 @@ function unavailable(service: Service, where: string): never {
 }
 
 function usage(): string {
-  return `gradido — the Gradido server: every service, and the pages, in one file
+  return `gradido2 — the Gradido server: every service, and the pages, in one file
 
-usage:  gradido [service] [command]
+usage:  gradido2 [service] [command]
 
 services
   backend       the HTTP API, and the frontends this binary carries (the default)
