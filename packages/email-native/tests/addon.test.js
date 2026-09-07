@@ -210,14 +210,17 @@ test('never uses more than its share of the thread pool', async (t) => {
       }
       for (const line of text.split('\r\n').filter(Boolean)) {
         const verb = line.slice(0, 4).toUpperCase()
-        if (verb === 'EHLO') socket.write('250-fake\r\n250 8BITMIME\r\n')
-        else if (verb === 'DATA') {
+        if (verb === 'EHLO') {
+          socket.write('250-fake\r\n250 8BITMIME\r\n')
+        } else if (verb === 'DATA') {
           socket.write('354 go\r\n')
           inData = true
         } else if (verb === 'QUIT') {
           socket.write('221 Bye\r\n')
           socket.end()
-        } else socket.write('250 Ok\r\n')
+        } else {
+          socket.write('250 Ok\r\n')
+        }
       }
     })
     socket.on('error', () => {
@@ -244,8 +247,9 @@ test('never uses more than its share of the thread pool', async (t) => {
   }, 3)
 
   const jobs = []
-  for (let i = 0; i < 10; i++)
+  for (let i = 0; i < 10; i++) {
     jobs.push(mailer.sendMail({ to: `m${i}@example.org`, subject: 's', text: 'b' }))
+  }
 
   await Promise.all(jobs)
   clearInterval(sampler)

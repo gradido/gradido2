@@ -32,7 +32,8 @@ const COMMANDS = ['serve', 'migrate-down'] as const
  */
 export type BackendOptions = {
   /** Frontends this process serves beside its routes. See `server/staticRoutes.ts`. */
-  readonly sites?: readonly StaticSite[]
+  readonly frontend?: StaticSite
+  readonly admin?: StaticSite
 }
 
 /**
@@ -61,7 +62,6 @@ export async function runBackend(
   }
 
   const appContext = await open(logger)
-  const sites = options.sites ?? []
 
   /* The routes are in ./server, one file per domain, and the frontend derives its types
      from them through Eden Treaty without importing anything that runs — see server/app.ts.
@@ -73,7 +73,7 @@ export async function runBackend(
     /* Last, so a path a route already answers is never looked for among the files. With no
        sites it changes nothing: every path takes the same road to ROUTE_NOT_IMPLEMENTED it
        took before. */
-    .use(staticRoutes(sites))
+    .use(staticRoutes(options.frontend, options.admin))
     .listen(CONFIG.BACKEND_PORT, () => {
       logger.info(
         {
@@ -83,7 +83,6 @@ export async function runBackend(
             impl: 'reference',
             db: appContext.db.kind,
             port: CONFIG.BACKEND_PORT,
-            sites: sites.map((site) => site.name),
           },
         },
         `backend listening on http://localhost:${CONFIG.BACKEND_PORT}`,

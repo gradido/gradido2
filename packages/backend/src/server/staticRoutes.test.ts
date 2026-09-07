@@ -6,16 +6,11 @@ import { Elysia } from 'elysia'
 import { type StaticFile, type StaticSite, staticRoutes } from './staticRoutes'
 
 /**
- * The static server, against files on disk.
- *
- * The bundled binary hands it embedded paths instead, and that is the same thing as far as
- * this code is concerned: both are opened with `Bun.file`, which is the whole reason the site
- * is a map of paths rather than a directory. What is worth testing is the part that is not
- * file reading — which path gets the app, which one is handed on, and what a second site under
- * a sub-path does to both.
+ * Two sites over files on disk. The bundled binary hands in `/$bunfs/…` paths instead, which
+ * `Bun.file` opens the same way, so only the routing is under test here.
  */
 
-/** The app under test, as the only thing the tests need of it: a request in, a response out. */
+/** The app under test: a request in, a response out. */
 let handle: (request: Request) => Promise<Response>
 
 const INDEX = '<!doctype html><title>frontend</title>'
@@ -23,7 +18,7 @@ const ADMIN_INDEX = '<!doctype html><title>admin</title>'
 
 beforeAll(async () => {
   const directory = await mkdtemp(join(tmpdir(), 'gradido-static-'))
-  /* What `publish/sites.json` carries per file, minus the parts this test does not vary. */
+  /* One file's entry in `publish/sites.json`, minus what these tests do not vary. */
   const write = async (
     name: string,
     content: string,
@@ -76,10 +71,9 @@ beforeAll(async () => {
     ]),
   }
 
-  /* A bare Elysia and not `createBackendApp`: what the app makes of a NotFoundError is the
-     error contract's business and is tested where that contract is. Here 404 means only
-     "the static server did not answer this", which is the decision under test. */
-  const app = new Elysia().use(staticRoutes([frontend, admin]))
+  /* A bare Elysia, not `createBackendApp`: 404 here means only that the static server did
+     not answer. What the app makes of that is tested with the error contract. */
+  const app = new Elysia().use(staticRoutes(frontend, admin))
   handle = async (request) => await app.handle(request)
 })
 
@@ -109,7 +103,7 @@ describe('staticRoutes', () => {
 
   it('answers a revalidation with 304 and no body', async () => {
     const first = await get('/locales/de/messages.json')
-    /* The manifest's value, quoted — not something this server computed. */
+    /* The manifest's value, quoted. */
     expect(first.headers.get('etag')).toBe('"ccc"')
 
     const second = await get('/locales/de/messages.json', { 'if-none-match': '"ccc"' })
@@ -118,8 +112,8 @@ describe('staticRoutes', () => {
   })
 
   it('serves the type the manifest gave it', async () => {
-    /* Not what Bun infers from the extension: the same string the C server reads out of the
-       same manifest, so a client cannot tell the two implementations apart. */
+    /* The manifest's string, not what Bun infers from the extension — the C server reads
+       the same one. */
     expect((await get('/assets/app-abc123.js')).headers.get('content-type')).toBe(
       'text/javascript; charset=utf-8',
     )
@@ -132,8 +126,7 @@ describe('staticRoutes', () => {
   })
 
   it('hands an unmatched path on when the caller does not want HTML', async () => {
-    /* The contracted ROUTE_NOT_IMPLEMENTED lives at the other end of this: 139 routes are
-       unwritten, and answering an API client with the login page would hide every one. */
+    /* Answering an API client with the login page would hide every unwritten route. */
     expect((await get('/user/login', { accept: 'application/json' })).status).toBe(404)
     expect((await get('/assets/gone.js')).status).toBe(404)
   })
@@ -142,12 +135,28 @@ describe('staticRoutes', () => {
     expect((await get('/assets/../../../etc/passwd')).status).toBe(404)
   })
 
-  it('prefers the site with the longer base path', async () => {
+  it('lets the router pick the site, by how specific the route is', async () => {
     expect(await (await get('/admin')).text()).toBe(ADMIN_INDEX)
     expect(await (await get('/admin/settings', { accept: 'text/html' })).text()).toBe(ADMIN_INDEX)
     expect((await get('/admin/assets/admin-def456.js')).status).toBe(200)
-    /* Not the admin's file, even though the name is the admin's: it was asked for at the
-       root site, which does not have it. */
+    /* Asked for at the root site, which does not have it. */
     expect((await get('/assets/admin-def456.js')).status).toBe(404)
+    /* The prefix only counts at a segment boundary, so this is the root site's. */
+    expect(await (await get('/administration', { accept: 'text/html' })).text()).toBe(INDEX)
+  })
+})
+
+describe('staticRoutes with no sites', () => {
+  /* A wildcard answering 404 here would take ROUTE_NOT_IMPLEMENTED away from every
+     unwritten route — see app.ts. */
+  it("registers nothing, so every path is still the app's to answer", async () => {
+    const app = new Elysia()
+      .onError(({ code }) => (code === 'NOT_FOUND' ? 'not implemented' : 'other'))
+      .use(staticRoutes())
+
+    for (const path of ['/', '/login', '/admin/settings']) {
+      const response = await app.handle(new Request(`http://localhost${path}`))
+      expect(await response.text()).toBe('not implemented')
+    }
   })
 })

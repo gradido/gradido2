@@ -19,3 +19,5 @@ messages.pot
 
 # Apple macOS folder attribute file
 .DS_Store
+*.sqlite
+.cache

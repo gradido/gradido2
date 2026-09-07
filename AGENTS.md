@@ -127,7 +127,7 @@ publish/           generated, gitignored: the built frontends and a manifest
 **Every workspace package is `@gradido/<directory>`.** The directory keeps the plain name,
 the package does not: `shared`, `frontend`, `backend` and `service-core` are all taken on the
 npm registry, and an unscoped workspace name is one resolution slip away from pulling a
-stranger's package instead of ours — section 13 is about exactly that class of accident. It
+stranger's package instead of ours — section 14 is about exactly that class of accident. It
 also makes an import say where the code came from: `@gradido/shared` is ours, `valibot` is
 not. Turbo addresses packages by name too, so a filter is `--filter=@gradido/backend`.
 
@@ -515,7 +515,63 @@ Prefer the smallest structure that expresses the actual business requirement.
 
 ---
 
-## 12. Toolchain
+## 12. Comments
+
+State what the code **is**. Add a reason only where the thing is unusual, and keep it to a
+sentence: an unusual line earns a "why", an ordinary one does not.
+
+Do not write the history. A comment is read by somebody looking at the code as it stands, not
+by somebody reconstructing how it got there.
+
+```text
+no:   why an earlier approach was dropped, or what another framework would do
+no:   the same reason said twice in different words
+no:   a justification for something nobody would question
+no:   counts and figures that go stale ("all 139 unwritten routes")
+yes:  what this is
+yes:  one short reason, where the code looks wrong until you know it
+yes:  a pointer to the other implementation, or to the contract it follows
+```
+
+**Reworking code means rewriting its comments.** Whatever the change removed leaves the
+comments with it — a comment describing a branch that is gone is worse than no comment,
+because it is read as current. Do not patch a block that grew under an earlier change:
+rewrite the whole block, so that what stands came out of one pass.
+
+This weighs most on AI-written code, which is nearly all of it here. Comments assembled by
+several agents over several passes accumulate: each explains its own edit, none removes the
+previous explanation, and a fifty-line block ends up arguing for a decision nobody would make
+today. Where a file has reached that state, rewriting its comments is part of the change and
+not a separate task.
+
+> **Comment what is, not how it came to be.**
+
+### Codebase Lore
+
+For architectural decisions, trade-offs, constraints, failures and notable discoveries, use
+`CODEBASE_LORE.md`. This is narrative lore, not technical documentation.
+
+Write technical truth as an abstract, humorous story. Reuse existing characters, places,
+metaphors and scenarios; do not casually replace or contradict established lore.
+
+Unlike code comments, lore is **extended, not rewritten**. Add to existing stories where
+possible. Only rewrite when the current architecture makes an existing passage factually
+wrong.
+
+Keep technical explanations out of the prose. Maintain the mapping between abstractions and
+the real code in `CODEBASE_LORE_GLOSSAR.md`. Add new terms and mappings there when introducing
+new lore.
+
+`CODEBASE_LORE.md` tells the story.
+`CODEBASE_LORE_GLOSSAR.md` tells the AI what the story means.
+
+Technical truth is authoritative; the narrative is allowed to be absurd.
+
+> Code documents what is. Lore remembers why the kingdom became strange.
+
+---
+
+## 13. Toolchain
 
 Pinned versions, so they are not guessed:
 
@@ -602,7 +658,7 @@ Record Elysia idioms that keep being reinvented here as well; h2o belongs in
 
 ---
 
-## 13. Dependencies
+## 14. Dependencies
 
 Gradido moves money. Every package added here runs with the same rights as the code that
 handles balances, and the npm registry has seen a steady run of compromised releases —
@@ -653,7 +709,7 @@ upstream projects publish. Same policy, already in place on that side.
 
 ---
 
-## 14. Change workflow
+## 15. Change workflow
 
 For a business behavior change:
 
@@ -675,7 +731,7 @@ For a new feature, start from the business operation, not from infrastructure.
 
 ---
 
-## 15. Final safety check
+## 16. Final safety check
 
 Before finishing, verify:
 
@@ -686,6 +742,7 @@ Is the database still authoritative?
 Is session state reconstructed lazily?
 Is invalidation visible near the relevant business logic?
 Does the code live in the correct domain?
+Do the comments describe the code as it now stands, in one voice?
 Did the change accidentally introduce a generic abstraction?
 Did TypeScript remain the reference behavior?
 Would the product still work if the fast path were switched off?
