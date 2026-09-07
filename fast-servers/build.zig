@@ -882,6 +882,15 @@ pub fn build(b: *std.Build) void {
         std.debug.panic("-Dh2o=true does not build for Windows: h2o is a posix event loop. " ++
             "Leave it off and the binary serves over libuv and picohttpparser instead.", .{});
     }
+    // A Windows *host* cannot even unpack the h2o checkout -- five symlinks under its deps/,
+    // and a symlink is not something the fetch can create there. That is a cross build from
+    // Windows to somewhere else, since a Windows target already left h2o off above; it fails on
+    // the fetch rather than on anything this build does, so it is worth saying why.
+    if (enable_h2o and builtin.os.tag == .windows) {
+        std.debug.panic("-Dh2o=true cannot be fetched on a Windows host: the h2o checkout " ++
+            "carries symlinks under deps/ that do not unpack there. Cross compile the h2o " ++
+            "backend from a posix host, or build with -Dh2o=false.", .{});
+    }
     // Every other target cross compiles with the fast backend, `-Dtarget=aarch64-linux-musl`
     // included -- see the .libressl entry in build.zig.zon for what that took.
 
@@ -1015,11 +1024,6 @@ pub fn build(b: *std.Build) void {
     exe.linkLibrary(sodium);
     // main.c runs each role on a uv_thread_t.
     exe.linkLibrary(uv);
-
-    // Both backends read from the h2o checkout: the fast one compiles libh2o out of it, the
-    // fallback takes picohttpparser out of its deps/. Which is why it is fetched either way --
-    // see build.zig.zon.
-    const h2o_dep = b.dependency("h2o", .{});
 
     // TLS for h2o, and for the database. build.zig.zon, .libressl, holds why it is LibreSSL and
     // not OpenSSL; the short version is that the OpenSSL package builds for x86_64 only, and an
@@ -1205,35 +1209,44 @@ pub fn build(b: *std.Build) void {
     // against service_core/http.h and does not know which one answered.
     if (enable_h2o) {
         service_core.root_module.addCMacro("H2O_USE_LIBUV", "0");
-        for (h2o_include_dirs) |dir| service_core.addIncludePath(h2o_dep.path(dir));
         // http_h2o.c includes h2o.h, which includes <openssl/ssl.h>. The header path for that
         // arrives with the library rather than as an addIncludePath, because the libressl
         // package installs its include directory and linkLibrary carries it along.
         if (libressl) |ssl| service_core.linkLibrary(ssl);
 
+        // Lazy, and asked for here rather than beside the other dependencies, because this is
+        // the only branch that wants it: on Windows the checkout does not even unpack. See
+        // build.zig.zon, .h2o.
+        //
         // Null only on a pass that is fetching a lazy dependency, and such a pass builds
-        // nothing -- the build re-runs afterwards with both in hand.
-        if (libressl != null and zlib != null) {
-            const h2o = buildH2o(b, h2o_dep, target, optimize, libressl.?, zlib.?);
-            if (libc_file) |file| h2o.setLibCFile(file);
-            http_backend_lib = h2o;
+        // nothing -- the build re-runs afterwards with all three in hand.
+        if (b.lazyDependency("h2o", .{})) |h2o_dep| {
+            for (h2o_include_dirs) |dir| service_core.addIncludePath(h2o_dep.path(dir));
+            if (libressl != null and zlib != null) {
+                const h2o = buildH2o(b, h2o_dep, target, optimize, libressl.?, zlib.?);
+                if (libc_file) |file| h2o.setLibCFile(file);
+                http_backend_lib = h2o;
+            }
         }
     } else {
         // The platform layer is already linked; the fallback backend only adds the parser.
         http_backend_lib = uv;
-        // picohttpparser, out of the same h2o checkout the other backend is built from. It is
-        // two files with no build system of their own, so they are compiled straight into
-        // service-core -- and only picohttpparser.c is named, because upstream ships a bench.c
-        // and a test.c beside it and each of those carries a main().
-        service_core.addIncludePath(h2o_dep.path("deps/picohttpparser"));
-        service_core.addCSourceFiles(.{
-            .root = h2o_dep.path("."),
-            .files = &.{"deps/picohttpparser/picohttpparser.c"},
-            // The standard is named for the same reason as in c_flags, so both builds compile
-            // the same language. The warning flags are absent: upstream is not ours to keep
-            // clean under them.
-            .flags = &.{"-std=gnu11"},
-        });
+        // picohttpparser, from upstream's own repository -- the same two files h2o vendors, and
+        // the build.zig.zon entry says how that is kept true. It is two files with no build
+        // system of their own, so they are compiled straight into service-core, and only
+        // picohttpparser.c is named because upstream ships a bench.c and a test.c beside it and
+        // each of those carries a main().
+        if (b.lazyDependency("picohttpparser", .{})) |pico_dep| {
+            service_core.addIncludePath(pico_dep.path("."));
+            service_core.addCSourceFiles(.{
+                .root = pico_dep.path("."),
+                .files = &.{"picohttpparser.c"},
+                // The standard is named for the same reason as in c_flags, so both builds
+                // compile the same language. The warning flags are absent: upstream is not
+                // ours to keep clean under them.
+                .flags = &.{"-std=gnu11"},
+            });
+        }
     }
     linkHttpBackend(exe, http_backend_lib, http_system_libs);
 

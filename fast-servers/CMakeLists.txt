@@ -157,24 +157,25 @@ FetchContent_Declare(libuv
 FetchContent_MakeAvailable(libuv)
 
 if(NOT FS_ENABLE_H2O)
-  # picohttpparser, the parser half. It has no build system of its own and lives as a submodule
-  # of h2o, so what is fetched is h2o -- shallow, and with that one submodule rather than the
-  # dozen it otherwise carries.
+  # picohttpparser, the parser half. It has no build system of its own -- two files, fetched
+  # from upstream's own repository and compiled into service-core below. Only picohttpparser.c
+  # is named, because upstream ships a bench.c and a test.c beside it and each of those carries
+  # a main(); the repository has no CMakeLists.txt at all, so MakeAvailable adds no subproject.
   #
-  # SOURCE_SUBDIR points at a directory with no CMakeLists.txt on purpose: it is what keeps
-  # MakeAvailable from calling add_subdirectory() and pulling h2o's whole build into this one.
-  # Only picohttpparser.c is compiled below, because upstream ships a bench.c and a test.c
-  # beside it and each of those carries a main().
-  FetchContent_Declare(h2o
-    GIT_REPOSITORY https://github.com/h2o/h2o.git
-    GIT_TAG 706842c0f8c0d9422efb97a4d8ef7d6ec9df87b7
-    GIT_SUBMODULES deps/picohttpparser
+  # This used to clone h2o for its vendored copy of the same two files. It stopped because that
+  # checkout carries symlinks under deps/, which a Windows host cannot create -- and Windows is
+  # exactly the machine this branch exists for. Same pin build.zig.zon names, and that entry
+  # holds why it is this commit: at f832609 these two files are byte for byte h2o's copies, so
+  # both backends parse a request head with the same code.
+  FetchContent_Declare(picohttpparser
+    GIT_REPOSITORY https://github.com/h2o/picohttpparser.git
+    GIT_TAG f8326098f63eefabfa2b6ec595d90e9ed5ed958a
+    GIT_SUBMODULES ""
     GIT_SUBMODULES_RECURSE OFF
     GIT_SHALLOW FALSE
-    SOURCE_SUBDIR deps/picohttpparser
   )
-  FetchContent_MakeAvailable(h2o)
-  set(FS_PICOHTTPPARSER_DIR ${h2o_SOURCE_DIR}/deps/picohttpparser)
+  FetchContent_MakeAvailable(picohttpparser)
+  set(FS_PICOHTTPPARSER_DIR ${picohttpparser_SOURCE_DIR})
 endif()
 
 if(FS_ENABLE_SQLITE)

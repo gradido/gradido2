@@ -34,13 +34,36 @@
         // The HTTP server on the fast path. build.zig copies the libh2o-evloop source list out
         // of this checkout's CMakeLists.txt, so the pin and that list have to move together.
         //
-        // Not lazy, although the Windows build does not compile libh2o: that build takes
-        // picohttpparser out of deps/ here, and one pinned checkout both backends read from
-        // beats a copy of two files in this repository that nothing would ever compare against
-        // the original again.
+        // Lazy, and asked for only by a build that compiles it -- which is every build but the
+        // Windows one. Not for the download: this checkout carries five symlinks under deps/
+        // (picotls, yoml and quicly each point at one shared picotest; quicly also at picotls
+        // and klib), and unpacking a symlink is what a Windows host cannot do. Fetching it
+        // there ended the build before it compiled a line, over a directory that build never
+        // opens. The parser the Windows build does want is .picohttpparser below.
         .h2o = .{
             .url = "git+https://github.com/h2o/h2o#706842c0f8c0d9422efb97a4d8ef7d6ec9df87b7",
             .hash = "N-V-__8AACufnwFkhWbkiO3KxcVcasJKyoe9sYRvT0rp5-MI",
+            .lazy = true,
+        },
+        // picohttpparser: the request head of the fallback HTTP backend, from upstream's own
+        // repository rather than out of the h2o checkout's deps/, which is where it used to
+        // come from. The reason is the one the .h2o entry gives -- the checkout does not unpack
+        // on a Windows host, and the fallback backend is the one Windows builds.
+        //
+        // Pinned at f832609, the commit before upstream added PICOHTTPPARSER_VERSION to the
+        // header: at that commit picohttpparser.c and picohttpparser.h are byte for byte the
+        // two files h2o vendors at the pin above, so the two backends parse a request head with
+        // the same code and not merely with the same library. When either pin moves, diff those
+        // two files again and move both together.
+        //
+        // A tarball rather than git+, for the same reason h2o is lazy: an archive has no
+        // symlinks in it and no picotest submodule either, so this one unpacks on Windows.
+        //
+        // Lazy: an h2o build compiles the copy inside that checkout and never asks for this.
+        .picohttpparser = .{
+            .url = "https://github.com/h2o/picohttpparser/archive/f8326098f63eefabfa2b6ec595d90e9ed5ed958a.tar.gz",
+            .hash = "N-V-__8AAIYzAQD5cS66uTf8DI2RnTHHmfCekKoOPAwJofzJ",
+            .lazy = true,
         },
         // LibreSSL: the TLS h2o is built against, and the TLS libpq speaks to the database.
         //

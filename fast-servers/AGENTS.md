@@ -153,8 +153,16 @@ libsodium          HS256, for the JWT. Same pin and the same options the
 arnm               the arena, the containers, the conversions and the JSON
                    the core is written against — arnm_result is what a grd*
                    call answers with. Same pin and options as the core.
-h2o                the fast HTTP backend, and the picohttpparser the other
-                   backend compiles. Fetched by every build for that reason.
+h2o         lazy   the fast HTTP backend. Lazy is not about the download:
+                   the checkout carries symlinks under deps/, which a Windows
+                   host cannot unpack, and the Windows build does not compile
+                   h2o anyway. Fetched only by a build that does.
+picohttpparser
+            lazy   the request head of the fallback backend, from upstream's
+                   own repository. Pinned where those two files are byte for
+                   byte h2o's vendored copies, so both backends parse with the
+                   same code; move the two pins together and diff. A tarball,
+                   which unpacks on Windows where h2o's checkout does not.
 curl               libcurl, for service-core's mail client and for the
                    outbound HTTP this project will grow. Pinned at the last
                    commit of allyourcodebase/curl that still declares zig
@@ -236,8 +244,8 @@ compiler's builtins, because libuv has no atomics and `<stdatomic.h>` is behind 
 switch on MSVC, which the CMake build has to compile.
 
 **Fetch, do not vendor.** Two files nobody would ever diff against the original again are worse
-than a download — which is why picohttpparser is taken out of the pinned h2o checkout rather
-than copied in. If something looks too small to be worth pinning, that is an argument for not
+than a download — which is why picohttpparser is a pinned fetch from upstream rather than a copy
+in this tree. If something looks too small to be worth pinning, that is an argument for not
 depending on it at all, not for copying it in.
 
 **Watch what the core starts carrying.** This build pinned yyjson itself while blockchain-core

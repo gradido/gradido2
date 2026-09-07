@@ -110,10 +110,14 @@ to deploy. It is there so that the roles, the configuration and the domain code 
 and debugged where h2o cannot build. The fast path targets the Linux server this project runs
 on, and a high-performance Windows build is not on the table.
 
-Its parser comes out of the same pinned h2o checkout h2o itself is compiled from —
-`deps/picohttpparser` — so both builds fetch h2o whatever they select. That costs the Windows
-build a download it does not compile, and it buys one pinned copy of those two files instead of
-a copy in this repository that nothing would ever compare against the original again.
+Its parser is picohttpparser, fetched from upstream's own repository and pinned at the commit
+where those two files are byte for byte the copies the h2o checkout vendors — so both backends
+parse a request head with the same code. It used to be taken out of the h2o checkout itself,
+which is tidier until you try it on Windows: that checkout carries symlinks under `deps/`, and
+unpacking one is something a Windows host cannot do, so the fetch ended the build before it
+compiled a line. h2o is a lazy dependency now and is downloaded only by a build that compiles
+it. When either pin moves, diff the two files and move both — `build.zig.zon` says so at the
+`.picohttpparser` entry, which is where the pins are.
 
 ## Tests
 
@@ -299,8 +303,9 @@ Two things it does not build, and both are why an option that is **on** in `buil
 
 - **h2o.** Compiling it is a page of `build.zig` that would have to be written a second time in
   CMake, and it does not build for the target this file exists for at all — so this build asks
-  pkg-config for an installed `libh2o-evloop` instead, and defaults to not asking. It still
-  fetches the h2o checkout either way, for its `deps/picohttpparser`.
+  pkg-config for an installed `libh2o-evloop` instead, and defaults to not asking. The h2o
+  checkout is not fetched here at all: picohttpparser comes from its own repository, at the pin
+  `build.zig.zon` names.
 - **libpq.** `zig build` compiles it out of a pinned postgres checkout; this one asks
   `find_package(PostgreSQL)`, the way it asks for curl. A Windows developer's machine does not
   normally have libpq, and failing `cmake -B build` out of the box over a driver the zig build
