@@ -1,116 +1,87 @@
 import { Elysia, NotFoundError } from 'elysia'
 
 /**
- * One file of a site, and everything needed to hand it out.
+ * One file of a site, with the headers it goes out under.
  *
- * `file` is something `Bun.file()` can open. In the bundled binary those are the `/$bunfs/…`
- * paths that `import … with { type: 'file' }` yields, so the whole site travels inside the
- * executable; nothing here knows or cares, which is the point of naming a file rather than a
- * directory.
- *
- * The type and the ETag are **not** worked out here. They come from `publish/sites.json`,
- * where `scripts/publish.ts` wrote them, and the C server reads the same values out of the
- * same file — so what a client gets does not depend on which implementation is deployed. It
- * also means no request ever hashes anything: the bytes were fixed when the build ran.
+ * `file` is anything `Bun.file()` can open — in the bundled binary a `/$bunfs/…` path from
+ * `import … with { type: 'file' }`. `type` and `etag` are read from `publish/sites.json`
+ * rather than derived from the bytes, so the C server answers with the same values.
  */
 export type StaticFile = {
   readonly file: string
-  /** The `Content-Type` header, complete with charset where one belongs. */
+  /** The `Content-Type` header, charset included. */
   readonly type: string
-  /** The ETag, without the quotes this server puts around it on the wire. */
+  /** Unquoted; `send` puts the quotes on. */
   readonly etag: string
-  /** Whether the name carries a content hash, and the file may be cached for a year. */
+  /** The name carries a content hash, so the file may be cached for a year. */
   readonly immutable: boolean
 }
 
 /**
- * A built frontend, ready to be handed out: `frontend` at the domain root, `admin` under
- * `/admin`, and whatever else is compiled into the binary next to them.
+ * A built frontend, ready to hand out.
  *
- * `files` is keyed by the path *relative to the site's own root* — `assets/index-Ca4jjj45.js`,
- * `locales/de/messages.json`.
- *
- * A map and not a directory walk, for two reasons that are the same reason: an embedded file
- * has no directory to walk, and a lookup that can only answer with a key somebody put in the
- * map cannot be talked into `../../etc/passwd`. Path traversal is not defended against below
- * because there is nothing to defend — `..` is simply not a key.
+ * `files` is keyed by the path within the site — `assets/index-Ca4jjj45.js`,
+ * `locales/de/messages.json`. A map rather than a directory walk: an embedded file has no
+ * directory, and `..` is never a key.
  */
 export type StaticSite = {
-  /** For the startup log, so it is visible which sites a binary carries. */
+  /** For the startup log, so a binary's sites are visible. */
   readonly name: string
-  /** Where the site is mounted: `''` for the domain root, `/admin` for a sub-path. */
+  /** `''` for the domain root, `/admin` for a sub-path. */
   readonly basePath: string
-  /** The app's entry document, served for every path the site does not have a file for. */
+  /** Served for every path the site has no file for. */
   readonly index: StaticFile
   readonly files: ReadonlyMap<string, StaticFile>
 }
 
 const IMMUTABLE = 'public, max-age=31536000, immutable'
 
-/** Cache it, but ask every time whether it is still current — the ETag answers cheaply. */
+/** Keep the copy, but revalidate every time — the ETag makes that cheap. */
 const REVALIDATE = 'no-cache'
 
 /**
- * The static web server: the frontend and the admin app, out of the same process that serves
- * the routes they call.
+ * The frontends, served from the process that serves the routes they call — same origin, so
+ * production needs no CORS.
  *
- * That is not a convenience, it is the deployment — `Architecture.md` has a gradido2 server as
- * one binary next to a database, so the pages have to come out of it too. It also means the
- * frontend is same-origin with the backend, which is why the session cookie needs no CORS in
- * production and why `API_BASE_URL` is empty in a published build.
+ * An unmatched path is answered with `index.html` only when the caller sent
+ * `Accept: text/html`. A bookmarked `/login` therefore works, while an API client reaches
+ * the error handler and the contracted ROUTE_NOT_IMPLEMENTED — see `app.ts`. With no sites
+ * nothing is registered at all.
  *
- * **What it must not do is answer for the routes.** Nearly every path of `contracts/server`
- * is still unwritten, and the contract requires those to say `ROUTE_NOT_IMPLEMENTED` rather
- * than 404 — see `app.ts`. A wildcard that returned `index.html` for everything would turn
- * every one of them into an HTML page, silently, and a client would parse the app as its
- * answer. So an unmatched path is only answered with the app when whoever asked wants HTML:
- * a browser navigating to `/login` sends `Accept: text/html`, an API client does not, and no
- * cleverness is needed to tell them apart. Everything else is handed on as `NotFoundError`
- * and comes back out of the app's error handler as the contracted answer.
- *
- * Mounted with no sites — `bun src/index.ts`, where the frontend is served by vite on its own
- * port — every path takes that same road, so the plugin changes nothing about a server that
- * carries no pages.
- *
- * `fast-servers/backend/src/static_sites.c` is the same rules in C, against the same manifest.
+ * `fast-servers/backend/src/static_sites.c` is the same rules in C, on the same manifest.
  */
 export function staticRoutes(frontend?: StaticSite, admin?: StaticSite) {
-  return (
-    new Elysia()
-      /* `/*` does not match the bare root in Elysia's router, so the site root is its own
-       route. Both go to the same handler, which is what makes them the same rule. */
-      .get('/*', ({ request, path, status }) => {
-        if (!frontend) {
-          return status(404, 'Not Found')
-        }
-        return respond(frontend, request, path)
-      })
-      .get('/admin', ({ request, path, status }) => {
-        if (!admin) {
-          return status(404, 'Not Found')
-        }
-        return respond(admin, request, path)
-      })
-  )
+  return new Elysia().use(siteRoutes(frontend)).use(siteRoutes(admin))
 }
 
-function respond(site: StaticSite, request: Request, path: string): Response {
-  const relative = path.slice(site.basePath.length).replace(/^\/+/u, '')
-
-  /* The site's own root is the app, whoever is asking. Not the `Accept` rule below: a bare
-     `/` is a person opening the server, not a client that took a wrong turn. */
-  if (relative === '') {
-    return send(site.index, request)
+/**
+ * The two routes one site is: its `basePath`, and everything under it.
+ *
+ * The router ranks `/admin/*` above `/*` by itself, in any registration order, so no site is
+ * picked here and `params['*']` is already the path within the site.
+ *
+ * An absent site registers nothing — a wildcard answering 404 would match every path in the
+ * process and take ROUTE_NOT_IMPLEMENTED away from the routes that are not written yet.
+ */
+function siteRoutes(site?: StaticSite) {
+  const app = new Elysia()
+  if (!site) {
+    return app
   }
+  return app
+    .get(`${site.basePath}/*`, ({ request, params }) => respond(site, request, params['*']))
+    .get(site.basePath === '' ? '/' : site.basePath, ({ request }) => send(site.index, request))
+}
 
+/** The file at `relative` — the manifest's own key — or the app, for a caller that takes HTML. */
+function respond(site: StaticSite, request: Request, relative: string): Response {
   const file = site.files.get(relative)
   if (file !== undefined) {
     return send(file, request)
   }
 
-  /* No file of that name. `/login` and `/register` are routes of the mithril app rather than
-     files, and a bookmark to one has to work — but only for a browser; see the plugin's
-     comment for why an API client is handed on instead. */
+  /* `/login` is a route of the mithril app rather than a file, and a bookmark to it has to
+     work — but only for a browser. */
   if (!(request.headers.get('accept') ?? '').includes('text/html')) {
     throw new NotFoundError()
   }
