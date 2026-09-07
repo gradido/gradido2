@@ -42,6 +42,11 @@ const isService = (value: string | undefined): value is Service =>
  * is also how it gets to put them on different machines.
  */
 export async function runGradido(argv: readonly string[], binary: GradidoBinary): Promise<void> {
+  if (!binary.sites.length || binary.sites[0].name !== 'frontend') {
+    // biome-ignore lint/suspicious/noConsole: startup can fail before there is a logger
+    console.error('Missing Frontend Page')
+    return
+  }
   const [first, ...rest] = argv
 
   if (first === '--help' || first === '-h') {
@@ -62,7 +67,7 @@ export async function runGradido(argv: readonly string[], binary: GradidoBinary)
     case 'backend':
       /* The pages go with the backend and with nothing else: they are what a browser asks
          this server for, and the federation server has no browser. */
-      return await runBackend(args, { sites: binary.sites })
+      return await runBackend(args, { frontend: binary.sites[0] })
 
     case 'federation':
       /* `packages/federation` does not exist yet. When it does, this becomes

@@ -74,38 +74,27 @@ const REVALIDATE = 'no-cache'
  *
  * `fast-servers/backend/src/static_sites.c` is the same rules in C, against the same manifest.
  */
-export const staticRoutes = (sites: readonly StaticSite[]) =>
-  new Elysia({
-    name: 'gradido.static',
-    /* Elysia deduplicates plugins by name, so the seed says which sites this one carries:
-       two static plugins with different sites are two plugins, not one. */
-    seed: sites.map((site) => site.basePath).join('|'),
-  })
-    /* `/*` does not match the bare root in Elysia's router, so the site root is its own
+export function staticRoutes(frontend?: StaticSite, admin?: StaticSite) {
+  return (
+    new Elysia()
+      /* `/*` does not match the bare root in Elysia's router, so the site root is its own
        route. Both go to the same handler, which is what makes them the same rule. */
-    .get('/', ({ request, path }) => respond(sites, request, path))
-    .get('/*', ({ request, path }) => respond(sites, request, path))
-
-/** The site a path belongs to: the longest `basePath` it starts with, so `/admin` wins over `''`. */
-function siteFor(sites: readonly StaticSite[], path: string): StaticSite | undefined {
-  let match: StaticSite | undefined
-  for (const site of sites) {
-    if (site.basePath !== '' && path !== site.basePath && !path.startsWith(`${site.basePath}/`)) {
-      continue
-    }
-    if (match === undefined || site.basePath.length > match.basePath.length) {
-      match = site
-    }
-  }
-  return match
+      .get('/*', ({ request, path, status }) => {
+        if (!frontend) {
+          return status(404, 'Not Found')
+        }
+        return respond(frontend, request, path)
+      })
+      .get('/admin', ({ request, path, status }) => {
+        if (!admin) {
+          return status(404, 'Not Found')
+        }
+        return respond(admin, request, path)
+      })
+  )
 }
 
-function respond(sites: readonly StaticSite[], request: Request, path: string): Response {
-  const site = siteFor(sites, path)
-  if (site === undefined) {
-    throw new NotFoundError()
-  }
-
+function respond(site: StaticSite, request: Request, path: string): Response {
   const relative = path.slice(site.basePath.length).replace(/^\/+/u, '')
 
   /* The site's own root is the app, whoever is asking. Not the `Accept` rule below: a bare

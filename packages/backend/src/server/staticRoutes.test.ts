@@ -79,7 +79,7 @@ beforeAll(async () => {
   /* A bare Elysia and not `createBackendApp`: what the app makes of a NotFoundError is the
      error contract's business and is tested where that contract is. Here 404 means only
      "the static server did not answer this", which is the decision under test. */
-  const app = new Elysia().use(staticRoutes([frontend, admin]))
+  const app = new Elysia().use(staticRoutes(frontend, admin))
   handle = async (request) => await app.handle(request)
 })
 
