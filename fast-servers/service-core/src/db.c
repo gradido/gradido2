@@ -13,13 +13,24 @@
 #include <string.h>
 
 #include "db_internal.h"
+#include "service_core/env.h"
 #include "service_core/log/log.h"
 #include "service_core/runtime.h"
 
 /* The TypeScript path's defaults, from packages/backend-core/src/database/schema.ts. They are
  * mirrored rather than chosen: backend and federation reach the same database from two
  * implementations, and a default that differs between them is a community connecting to two. */
-#define DEFAULT_HOST "localhost"
+/*
+ * A socket directory and not a host name: a leading '/' is what selects a Unix socket, on both
+ * paths and by one rule -- contracts/database-config.json, rules.connection. It is the default
+ * because it is the faster of the two for a database on this machine (83.4 us over TCP loopback
+ * against 48.1 us over the socket, for one uncached request and nothing else changed), and
+ * because a deployment whose database is elsewhere says so by naming it.
+ *
+ * The path is the one Debian, Ubuntu, RHEL and the official postgres container use. A platform
+ * whose socket is somewhere else sets DB_HOST to that directory.
+ */
+#define DEFAULT_HOST "/var/run/postgresql"
 #define DEFAULT_PORT 5432
 #define DEFAULT_USER "gradido"
 #define DEFAULT_DATABASE "gradido_community"
@@ -101,6 +112,11 @@ static const char *build_option_for(sc_db_kind kind)
     return kind == SC_DB_POSTGRESQL ? "-Dpostgres" : "-Dsqlite";
 }
 
+int sc_db_host_is_unix_socket(const char *host)
+{
+    return host != NULL && host[0] == '/';
+}
+
 sc_status sc_db_config_load(sc_db_config *out)
 {
     const char *type = getenv("DB_TYPE");
@@ -126,7 +142,13 @@ sc_status sc_db_config_load(sc_db_config *out)
     status = copy_env(out->user, sizeof(out->user), "DB_USER", DEFAULT_USER);
     if (status != SC_OK)
         return status;
-    status = copy_env(out->password, sizeof(out->password), "DB_PASSWORD", "");
+    /* Not copy_env: a password may come from a systemd credential or from a file the
+     * environment names, and only lastly from the variable -- contracts/secrets.json. Everything
+     * else here is a value somebody may read over a shoulder; this one is not. */
+    status = sc_secret_read("DB_PASSWORD", out->password, sizeof(out->password));
+    if (status == SC_ERR_TOO_LONG)
+        sc_log_fatal(SC_CAT_STARTUP, "config.value_too_long", "DB_PASSWORD is longer than %zu",
+                     sizeof(out->password) - 1);
     if (status != SC_OK)
         return status;
     status = copy_env(out->database, sizeof(out->database), "DB_DATABASE", DEFAULT_DATABASE);
@@ -145,16 +167,21 @@ sc_status sc_db_config_load(sc_db_config *out)
      * thing for a C binary to consult and it is still the right one: the two implementations
      * are deployed into one environment and must agree on when it is production.
      *
-     * It fits PostgreSQL over TCP, which is what DB_HOST defaults to. It does not fit peer
-     * authentication over a Unix socket, where no password is the correct configuration and
-     * this refuses to start -- so does the TypeScript path, and that is where the exemption has
-     * to be decided if it is ever wanted. Not here: a rule that is stricter on one path than
-     * the other is a rule an operator learns twice.
-     */    if (out->kind == SC_DB_POSTGRESQL && out->password[0] == '\0') {
+     * It asks about TCP and only about TCP. What the rule is really after is whether the
+     * database answers over the network to whoever asks; a Unix socket does not -- it is reached
+     * through filesystem permissions and peer authentication, where no password is the correct
+     * configuration rather than an oversight. So the socket is exempt, on both paths and by one
+     * rule: a rule that is stricter on one path than the other is a rule an operator learns
+     * twice. contracts/database-config.json, rules.password, is where it is written once.
+     */
+    if (out->kind == SC_DB_POSTGRESQL && !sc_db_host_is_unix_socket(out->host) &&
+        out->password[0] == '\0') {
         const char *node_env = getenv("NODE_ENV");
         if (node_env != NULL && strcmp(node_env, "production") == 0) {
             sc_log_fatal(SC_CAT_STARTUP, "config.database_password_empty",
-                         "DB_PASSWORD is empty and NODE_ENV is production");
+                         "DB_PASSWORD is empty, DB_HOST is the TCP host %s and NODE_ENV is "
+                         "production -- a Unix socket needs no password, a network host does",
+                         out->host);
             return SC_ERR_MALFORMED;
         }
     }

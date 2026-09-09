@@ -41,6 +41,7 @@
 #include "federation/federation.h"
 #include "service_core/config.h"
 #include "service_core/db.h"
+#include "service_core/env.h"
 #include "service_core/http.h"
 #include "service_core/jwt.h"
 #include "service_core/log/log.h"
@@ -152,9 +153,18 @@ static void print_usage(FILE *out)
     fprintf(out, "\noptions:\n");
     fprintf(out, "  %-14s this text\n", "-h, --help");
     fprintf(out, "  %-14s version and build features\n", "-v, --version");
-    fprintf(out, "\nconfiguration is read from the environment: LISTEN_HOST, BACKEND_PORT,\n");
-    fprintf(out,
-            "FEDERATION_PORT, DHT_PORT, FEDERATION_DHT_TOPIC, FEDERATION_DHT_SEED, LOG_LEVEL\n");
+    fprintf(out, "\nconfiguration is the environment, and a .env beside the binary fills what\n");
+    fprintf(out, "nobody exported -- an exported variable always wins.\n\n");
+    fprintf(out, "  %-14s LISTEN_HOST, BACKEND_PORT, FEDERATION_PORT, DHT_PORT,\n", "server");
+    fprintf(out, "  %-14s FEDERATION_DHT_TOPIC, FEDERATION_DHT_SEED, SERVER_THREADS\n", "");
+    fprintf(out, "  %-14s DB_TYPE (sqlite or postgresql), DB_FILE, and for postgresql\n",
+            "database");
+    fprintf(out, "  %-14s DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE\n", "");
+    fprintf(out, "  %-14s a DB_HOST beginning with / is a unix socket directory\n", "");
+    fprintf(out, "  %-14s LOG_LEVEL, NODE_ENV\n", "other");
+    fprintf(out, "\nDB_PASSWORD is a secret and has three sources, best first: the systemd\n");
+    fprintf(out, "credential DB_PASSWORD, then the file DB_PASSWORD_FILE names, then the\n");
+    fprintf(out, "variable. See contracts/secrets.json.\n");
 }
 
 static void print_version(void)
@@ -238,6 +248,17 @@ int main(int argc, char **argv)
     }
     if (!any_selected)
         selected[0] = 1; /* --backend, the default */
+
+    /*
+     * A `.env` beside the binary, before anything reads a variable. It only fills what is unset,
+     * so an exported variable always wins -- the same rule bun applies for the reference path,
+     * and the two have to agree or one file configures one of the two binaries. Its absence is
+     * the ordinary case and says nothing; a line that is not KEY=VALUE has already named itself
+     * by the time this returns, and is worth stopping for, because a configuration nobody can
+     * read is not one to guess at.
+     */
+    if (sc_env_load_file(".env") == SC_ERR_MALFORMED)
+        return 2;
 
     /*
      * The logger before the configuration, and its level straight out of the environment rather

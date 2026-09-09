@@ -1315,6 +1315,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "test_mail", .dir = "service-core/tests", .src = "test_mail.cpp", .lib = service_core },
             .{ .name = "test_db", .dir = "service-core/tests", .src = "test_db.cpp", .lib = service_core },
             .{ .name = "test_jwt", .dir = "service-core/tests", .src = "test_jwt.cpp", .lib = service_core },
+            .{ .name = "test_env", .dir = "service-core/tests", .src = "test_env.cpp", .lib = service_core },
             .{ .name = "test_log", .dir = "service-core/tests", .src = "test_log.cpp", .lib = service_core },
             // The one test that reaches into a component's src/: the two calls it holds together
             // are not on service-core's surface and should not be. See the file's own comment,
