@@ -176,7 +176,7 @@ function logStreams(env: RuntimeConfig): pino.StreamEntry[] {
  * A buffered write reaches the fd when the buffer fills, which for a log going into a pipe or
  * a file is exactly right and costs nothing: nobody is comparing the moment a line arrives
  * with anything else. On a terminal somebody is, because the process also writes there
- * *directly* -- `setup/askForHomeCommunity.ts` prints a prompt and waits for an answer -- and
+ * *directly* -- `setup/prompt.ts` prints a question and waits for an answer -- and
  * a direct write is not buffered. The two then arrive in the wrong order: the first start of a
  * server showed its question, and the migration line that came before it afterwards.
  *

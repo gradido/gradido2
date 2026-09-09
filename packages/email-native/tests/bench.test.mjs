@@ -1,7 +1,12 @@
 /*
- * The send benchmark as a test: a short run over TLS, so `npm test` says both clients still
- * deliver everything and roughly how they compare. The numbers to quote come from
- * tests/mail-bench.mjs, which runs longer and does plain SMTP as well.
+ * The send benchmark as a test: a short run over TLS that says both clients still deliver
+ * everything and roughly how they compare. The numbers to quote come from tests/mail-bench.mjs,
+ * which runs longer and does plain SMTP as well.
+ *
+ * **Off unless BENCH is set**, which is what `bun run bench` does. It sends 200 mails over TLS
+ * and prints a table, and neither belongs in the run somebody makes after changing a template.
+ * It skips rather than disappears, so the suite reports that it was not run and how to run it --
+ * the same bargain SC_MAIL_TEST_URL makes in fast-servers' test_mail.
  *
  * Both clients now open a connection per mail -- the addon since it moved onto
  * napi_create_async_work, nodemailer here only because `pool` is on. So this no longer
@@ -9,7 +14,7 @@
  * what must hold is that every mail arrives, over a verified TLS connection, from both.
  * A benchmark that fails the suite because a machine was busy is worse than no benchmark.
  *
- *   N=2000 node --test tests/bench.test.mjs
+ *   N=2000 BENCH=1 node --test tests/bench.test.mjs
  */
 import test from 'node:test'
 import assert from 'node:assert'
@@ -18,8 +23,12 @@ import { compare, formatRow, haveOpenssl, makeCert, renderOne } from './lib/mail
 const N = Number(process.env.N ?? 200)
 const CONNECTIONS = Number(process.env.CONNECTIONS ?? 4)
 
+const why =
+  (process.env.BENCH !== '1' && 'set BENCH=1, or run `bun run bench`') ||
+  (!haveOpenssl && 'no openssl to make a certificate with')
+
 test('smtps: the addon and nodemailer both deliver every mail', {
-  skip: !haveOpenssl && 'no openssl to make a certificate with',
+  skip: why,
   timeout: 180_000,
 }, async () => {
   const mail = renderOne()

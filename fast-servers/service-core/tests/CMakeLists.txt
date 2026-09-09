@@ -28,6 +28,14 @@ target_link_libraries(test_db PRIVATE service_core GTest::gtest)
 # refusal, and SQLite, which is a file.
 add_test(NAME service_core.db COMMAND test_db)
 
+add_executable(test_env_file test_env_file.cpp)
+target_include_directories(test_env_file PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_link_libraries(test_env_file PRIVATE service_core GTest::gtest)
+
+# Writes and reads one file in the working directory. What it decides is the agreement with
+# dotenv, which packages/backend/src/setup/envFile.test.ts measures from the other side.
+add_test(NAME service_core.env_file COMMAND test_env_file)
+
 add_executable(test_jwt test_jwt.cpp)
 target_include_directories(test_jwt PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 target_link_libraries(test_jwt PRIVATE service_core GTest::gtest)
@@ -37,14 +45,14 @@ target_link_libraries(test_jwt PRIVATE service_core GTest::gtest)
 # behaviour and lives in contracts/test-vectors/jwt.json, run by ../../tests/contract.
 add_test(NAME service_core.jwt COMMAND test_jwt)
 
-add_executable(test_env test_env.cpp)
-target_include_directories(test_env PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
-target_link_libraries(test_env PRIVATE service_core GTest::gtest)
+add_executable(test_secret test_secret.cpp)
+target_include_directories(test_secret PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_link_libraries(test_secret PRIVATE service_core GTest::gtest)
 
 # Where a secret comes from and in which order -- contracts/secrets.json -- plus the `.env`
 # reader that fills what nobody exported. The reference path asserts the same cases in
 # packages/service-core/src/config/secret.test.ts.
-add_test(NAME service_core.env COMMAND test_env)
+add_test(NAME service_core.secret COMMAND test_secret)
 
 add_executable(test_log test_log.cpp)
 target_include_directories(test_log PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)

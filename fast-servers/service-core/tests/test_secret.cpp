@@ -1,10 +1,13 @@
 /*
- * A `.env` into the environment, and a secret out of the best source that has it.
+ * A secret out of the best source that has it.
  *
  * The resolution order is `contracts/secrets.json`, and the reference path asserts the same
  * cases in `packages/service-core/src/config/secret.test.ts`. When one of these moves the other
  * has to move with it: an operator who has learned the mechanism on one binary has learned it on
  * both, or the mechanism is not one.
+ *
+ * The `.env` file is a different question and is tested in test_env_file.cpp -- what it provides
+ * is the last of the three sources here and never overrides a real environment entry.
  *
  * C++ because googletest is; see the note at the top of test_cache.cpp.
  */
@@ -15,7 +18,7 @@
 #include <string>
 
 extern "C" {
-#include "service_core/env.h"
+#include "service_core/secret.h"
 }
 
 #if defined(_WIN32)
@@ -39,10 +42,11 @@ extern "C" {
 namespace
 {
 
-constexpr const char *kVariables[] = {"DB_PASSWORD", "DB_PASSWORD_FILE", "CREDENTIALS_DIRECTORY",
-                                      "SC_ENV_TEST_A", "SC_ENV_TEST_B", "SC_ENV_TEST_QUOTED"};
+constexpr const char *kVariables[] = {"DB_PASSWORD",     "DB_PASSWORD_FILE",
+                                      "EMAIL_PASSWORD",  "EMAIL_PASSWORD_FILE",
+                                      "CREDENTIALS_DIRECTORY", "SC_SECRET_TEST"};
 
-class EnvTest : public ::testing::Test
+class SecretTest : public ::testing::Test
 {
   protected:
     void SetUp() override
@@ -94,20 +98,20 @@ class EnvTest : public ::testing::Test
 
 /* ------------------------------------------------------------------ The order */
 
-TEST_F(EnvTest, TakesTheVariableWhenNothingElseNamesASource)
+TEST_F(SecretTest, TakesTheVariableWhenNothingElseNamesASource)
 {
     sc_test_putenv("DB_PASSWORD", "from-env");
     EXPECT_EQ(secret(), "from-env");
 }
 
-TEST_F(EnvTest, AFileTheEnvironmentNamesBeatsTheVariable)
+TEST_F(SecretTest, AFileTheEnvironmentNamesBeatsTheVariable)
 {
     sc_test_putenv("DB_PASSWORD", "from-env");
     sc_test_putenv("DB_PASSWORD_FILE", write("pw", "from-file").c_str());
     EXPECT_EQ(secret(), "from-file");
 }
 
-TEST_F(EnvTest, ASystemdCredentialBeatsBoth)
+TEST_F(SecretTest, ASystemdCredentialBeatsBoth)
 {
     write("DB_PASSWORD", "from-credential");
     sc_test_putenv("DB_PASSWORD", "from-env");
@@ -116,7 +120,7 @@ TEST_F(EnvTest, ASystemdCredentialBeatsBoth)
     EXPECT_EQ(secret(), "from-credential");
 }
 
-TEST_F(EnvTest, ACredentialsDirectoryWithoutThisCredentialFallsThrough)
+TEST_F(SecretTest, ACredentialsDirectoryWithoutThisCredentialFallsThrough)
 {
     /* A unit loads the credentials it needs and no others, so an absent file is ordinary. */
     sc_test_putenv("DB_PASSWORD", "from-env");
@@ -124,7 +128,69 @@ TEST_F(EnvTest, ACredentialsDirectoryWithoutThisCredentialFallsThrough)
     EXPECT_EQ(secret(), "from-env");
 }
 
-TEST_F(EnvTest, ACredentialThatIsThereButUnreadableIsFatal)
+TEST_F(SecretTest, EveryDeclaredSecretResolvesTheSameWay)
+{
+    /* The mechanism is one mechanism or it is not one: an operator who has learned it on
+     * DB_PASSWORD has learned it on EMAIL_PASSWORD. contracts/secrets.json lists both, and this
+     * walks the same three sources for each of them rather than trusting that a second caller
+     * was wired the same way as the first. */
+    for (const char *name : {"DB_PASSWORD", "EMAIL_PASSWORD"}) {
+        const std::string file_variable = std::string(name) + "_FILE";
+
+        sc_test_putenv(name, "from-env");
+        EXPECT_EQ(secret(name), "from-env") << name;
+
+        sc_test_putenv(file_variable.c_str(),
+                       write(std::string(name) + ".pw", "from-file").c_str());
+        EXPECT_EQ(secret(name), "from-file") << name;
+
+        write(name, "from-credential");
+        sc_test_putenv("CREDENTIALS_DIRECTORY", dir_.c_str());
+        EXPECT_EQ(secret(name), "from-credential") << name;
+
+        sc_test_unsetenv("CREDENTIALS_DIRECTORY");
+        sc_test_unsetenv(file_variable.c_str());
+        sc_test_unsetenv(name);
+    }
+}
+
+TEST_F(SecretTest, SaysWhichSourceAnsweredWithoutReadingIt)
+{
+    /* `setup` writes the answers it collects into the `.env`. For a secret that comes from
+     * anywhere but the environment that would be wrong twice: the prompt has no value to offer,
+     * and the empty line it writes becomes the password once the credential is taken away. So
+     * setup asks this first and leaves the stronger two alone. */
+    EXPECT_EQ(sc_secret_source_of("DB_PASSWORD"), SC_SECRET_NOWHERE);
+
+    sc_test_putenv("DB_PASSWORD", "x");
+    EXPECT_EQ(sc_secret_source_of("DB_PASSWORD"), SC_SECRET_ENVIRONMENT);
+
+    /* A named file that is not there is still the file source: it is a configured source that
+     * is broken, and sc_secret_read is the one to complain about it. */
+    sc_test_putenv("DB_PASSWORD_FILE", (dir_ + "/not-there").c_str());
+    EXPECT_EQ(sc_secret_source_of("DB_PASSWORD"), SC_SECRET_FILE);
+
+    write("DB_PASSWORD", "from-credential");
+    sc_test_putenv("CREDENTIALS_DIRECTORY", dir_.c_str());
+    EXPECT_EQ(sc_secret_source_of("DB_PASSWORD"), SC_SECRET_CREDENTIAL);
+
+    /* A credentials directory without this credential is not a credential source. */
+    EXPECT_EQ(sc_secret_source_of("EMAIL_PASSWORD"), SC_SECRET_NOWHERE);
+}
+
+TEST_F(SecretTest, TheSourceItReportsIsTheSourceItReadsFrom)
+{
+    /* The two walks must not drift: whichever one says wins has to be the one that answered. */
+    write("DB_PASSWORD", "from-credential");
+    sc_test_putenv("DB_PASSWORD", "from-env");
+    sc_test_putenv("DB_PASSWORD_FILE", write("pw", "from-file").c_str());
+    sc_test_putenv("CREDENTIALS_DIRECTORY", dir_.c_str());
+
+    EXPECT_EQ(sc_secret_source_of("DB_PASSWORD"), SC_SECRET_CREDENTIAL);
+    EXPECT_EQ(secret(), "from-credential");
+}
+
+TEST_F(SecretTest, ACredentialThatIsThereButUnreadableIsFatal)
 {
     /* The half of the rule that is easy to miss: fopen reports "no such file" and "not allowed
      * to read it" the same way, so an implementation that only checks for NULL falls silently
@@ -142,7 +208,7 @@ TEST_F(EnvTest, ACredentialThatIsThereButUnreadableIsFatal)
     EXPECT_EQ(status, SC_ERR_UNAVAILABLE);
 }
 
-TEST_F(EnvTest, OneTrailingLineEndingGoesAndNothingElse)
+TEST_F(SecretTest, OneTrailingLineEndingGoesAndNothingElse)
 {
     sc_test_putenv("DB_PASSWORD_FILE", write("a", "secret\n").c_str());
     EXPECT_EQ(secret(), "secret");
@@ -156,14 +222,14 @@ TEST_F(EnvTest, OneTrailingLineEndingGoesAndNothingElse)
     EXPECT_EQ(secret(), " secret ");
 }
 
-TEST_F(EnvTest, AnEmptyFileIsAnAnswerNotAnAbsence)
+TEST_F(SecretTest, AnEmptyFileIsAnAnswerNotAnAbsence)
 {
     sc_test_putenv("DB_PASSWORD", "from-env");
     sc_test_putenv("DB_PASSWORD_FILE", write("e", "").c_str());
     EXPECT_EQ(secret(), "");
 }
 
-TEST_F(EnvTest, ANamedFileThatCannotBeReadIsFatalRatherThanAFallback)
+TEST_F(SecretTest, ANamedFileThatCannotBeReadIsFatalRatherThanAFallback)
 {
     /* The rule the whole order stands on: a silent fallback turns an unreadable secret into an
      * empty one, and an empty password is how a process connects as somebody else. */
@@ -173,53 +239,18 @@ TEST_F(EnvTest, ANamedFileThatCannotBeReadIsFatalRatherThanAFallback)
     EXPECT_EQ(sc_secret_read("DB_PASSWORD", out, sizeof(out)), SC_ERR_UNAVAILABLE);
 }
 
-TEST_F(EnvTest, ASecretNobodyConfiguredIsEmptyAndNotAnError)
+TEST_F(SecretTest, ASecretNobodyConfiguredIsEmptyAndNotAnError)
 {
     char out[256] = {'x', '\0'};
     EXPECT_EQ(sc_secret_read("DB_PASSWORD", out, sizeof(out)), SC_OK);
     EXPECT_STREQ(out, "");
 }
 
-TEST_F(EnvTest, AValueThatDoesNotFitIsRefusedRatherThanCut)
+TEST_F(SecretTest, AValueThatDoesNotFitIsRefusedRatherThanCut)
 {
     char out[8] = {0};
     sc_test_putenv("DB_PASSWORD", "much longer than eight");
     EXPECT_EQ(sc_secret_read("DB_PASSWORD", out, sizeof(out)), SC_ERR_TOO_LONG);
-}
-
-/* ------------------------------------------------------------------ The .env file */
-
-TEST_F(EnvTest, ReadsKeyValueLinesWithoutOverridingWhatIsSet)
-{
-    /* Not overriding is the whole behaviour, and the same rule bun applies: an exported
-     * variable beats a stale line in a checkout. */
-    sc_test_putenv("SC_ENV_TEST_A", "from-environment");
-    const std::string path = write("dotenv", "SC_ENV_TEST_A=from-file\nSC_ENV_TEST_B=b\n");
-
-    EXPECT_EQ(sc_env_load_file(path.c_str()), SC_OK);
-    EXPECT_STREQ(getenv("SC_ENV_TEST_A"), "from-environment");
-    EXPECT_STREQ(getenv("SC_ENV_TEST_B"), "b");
-}
-
-TEST_F(EnvTest, SkipsBlanksAndCommentsAndUnwrapsQuotes)
-{
-    const std::string path = write("dotenv2",
-                                   "\n"
-                                   "  # a comment\n"
-                                   "export SC_ENV_TEST_A = spaced\n"
-                                   "SC_ENV_TEST_QUOTED=\"quoted # not a comment\"\n");
-
-    EXPECT_EQ(sc_env_load_file(path.c_str()), SC_OK);
-    EXPECT_STREQ(getenv("SC_ENV_TEST_A"), "spaced");
-    /* A '#' inside a value is a character: this is a list of values, not a shell. */
-    EXPECT_STREQ(getenv("SC_ENV_TEST_QUOTED"), "quoted # not a comment");
-}
-
-TEST_F(EnvTest, AnAbsentFileIsOrdinaryAndAMalformedLineIsNot)
-{
-    EXPECT_EQ(sc_env_load_file((dir_ + "/no-such-file").c_str()), SC_ERR_UNAVAILABLE);
-    EXPECT_EQ(sc_env_load_file(write("bad", "this is not an assignment\n").c_str()),
-              SC_ERR_MALFORMED);
 }
 
 } // namespace

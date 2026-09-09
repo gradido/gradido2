@@ -1,12 +1,10 @@
 /*
- * The setup command's questions: ask the admin who this community is.
- *
- * Reached from backend_setup() and from nowhere else. A serving start does not come here --
- * backend/backend.h, backend_setup, holds why the conversation is a command of its own.
+ * The setup command's conversation. setup.h is the specification and
+ * packages/backend/src/setup/askForSetup.ts is the reference this is held to.
  *
  * Legacy reads COMMUNITY_NAME and COMMUNITY_DESCRIPTION out of the environment at every start.
- * gradido2 asks once and writes a row, because these are not settings -- they are the identity of
- * a community, written once and then referred to. An environment variable that has silently
+ * gradido2 asks once and writes a row, because these are not settings -- they are the identity
+ * of a community, written once and then referred to. An environment variable that has silently
  * drifted from the row it created is a confusion that does not need to exist, and the key pair
  * that goes with the row could never have come from an env file anyway.
  *
@@ -15,40 +13,55 @@
  *
  * Each answer is checked against the same rules an admin route will later check a rename
  * against, and a rejected answer is asked again rather than ending the setup -- somebody is
- * standing at the terminal, and losing two correct answers because the third had a typo would be
- * gratuitous.
+ * standing at the terminal, and losing eleven correct answers because the twelfth had a typo
+ * would be gratuitous.
+ *
+ * The first question decides how many of the others are asked. A development installation is a
+ * known thing -- this machine, one SQLite file, the MailDev container of the repository's
+ * docker-compose.yml -- so it is proposed as a block and taken with one Enter.
  */
 #include "setup.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#if defined(_WIN32)
-#include <io.h>
-#define bk_isatty(stream) _isatty(_fileno(stream))
-#else
-#include <unistd.h>
-#define bk_isatty(stream) isatty(fileno(stream))
-#endif
-
 #include "field_rules.h"
+#include "service_core/secret.h"
+#include "prompt.h"
+#include "service_core/email/transport.h"
 
-/** One line of an answer. Longer than any column here, so that a value that is too long is
- *  refused by the rule that says so rather than by the buffer. */
-#define ANSWER_MAX 2048
+/** What the development proposal is, and what `.env.dist` calls the same fields. */
+#define DEVELOPMENT_COMMUNITY_NAME "Gradido Dev Community"
+#define DEVELOPMENT_COMMUNITY_URL "http://localhost"
+/** The relay of the repository's docker-compose.yml -- MAILDEV_SMTP_PORT, one above maildev's
+ *  own 1025 so that a checkout of legacy can be up at the same time. */
+#define MAILDEV_SMTP_PORT "1026"
+/** And the web interface that shows what arrived -- MAILDEV_WEB_PORT. */
+#define MAILDEV_WEB_PORT "1081"
 
-/** The rules of packages/shared/src/schemas/community.ts, in the order those pipes apply them. */
-typedef enum answer_kind { ANSWER_NAME, ANSWER_DESCRIPTION, ANSWER_URL } answer_kind;
+/** The rules of packages/shared/src/schemas/community.ts and of the mail configuration, in the
+ *  order the pipes that define them apply. */
+typedef enum answer_kind {
+    ANSWER_NAME,
+    ANSWER_DESCRIPTION,
+    ANSWER_URL,
+    ANSWER_REQUIRED,
+    ANSWER_OPTIONAL,
+    ANSWER_PORT,
+    ANSWER_EMAIL
+} answer_kind;
 
 /**
  * Whether @p text is a URL by the rule `v.url()` applies, which is whether `new URL(text)`
  * parses.
  *
- * Approximated rather than reproduced: the WHATWG parser is a specification, not a predicate, and
- * carrying it here to accept `mailto:x` -- which that rule does accept -- would buy nothing this
- * prompt wants. What is checked is a scheme, a colon, and, for the schemes that must have one, a
- * host. The difference is a value the reference path would take and this one asks again about,
- * on an interactive prompt, and it is written down here rather than left to be discovered.
+ * Approximated rather than reproduced: the WHATWG parser is a specification, not a predicate,
+ * and carrying it here to accept `mailto:x` -- which that rule does accept -- would buy nothing
+ * this prompt wants. What is checked is a scheme, a colon, and, for the schemes that must have
+ * one, a host. The difference is a value the reference path would take and this one asks again
+ * about, on an interactive prompt, and it is written down here rather than left to be
+ * discovered.
  */
 static int is_url(const char *text, size_t length)
 {
@@ -105,92 +118,457 @@ static int is_url(const char *text, size_t length)
     return 1;
 }
 
-/**
- * Reads one answer and checks it. Returns 1 when @p out holds an acceptable value, and 0 at the
- * end of input -- which is a terminal that went away mid-setup, not an answer.
- */
-static int ask(const char *label, answer_kind kind, char *out, size_t out_size, int *has_value)
+/** The message the rule for @p kind refuses @p text with, or NULL when it takes it. */
+static const char *refusal_for(answer_kind kind, const char *text)
 {
-    char line[ANSWER_MAX];
+    size_t length = strlen(text);
+    size_t units = bk_utf16_length(text, length);
 
-    for (;;) {
-        const char *refusal = NULL;
-        size_t begin = 0;
-        size_t trimmed = 0;
-        size_t units;
-        size_t length;
+    switch (kind) {
+    case ANSWER_NAME:
+        /* nonEmpty before maxLength, which is the order communityNameSchema pipes them. */
+        if (length == 0)
+            return "This field is required";
+        return units > 40 ? "This name is too long" : NULL;
+    case ANSWER_DESCRIPTION:
+        return units > 255 ? "This description is too long" : NULL;
+    case ANSWER_URL:
+        if (length == 0)
+            return "This field is required";
+        if (units > 255)
+            return "This URL is too long";
+        return is_url(text, length) ? NULL : "Please enter a valid URL, including https://";
+    case ANSWER_PORT: {
+        char *end;
+        unsigned long parsed = strtoul(text, &end, 10);
 
-        (void)fprintf(stdout, "%s: ", label);
-        (void)fflush(stdout);
-        if (fgets(line, sizeof(line), stdin) == NULL)
-            return 0;
-        length = strlen(line);
-        while (length != 0 && (line[length - 1] == '\n' || line[length - 1] == '\r'))
-            line[--length] = '\0';
-
-        bk_trim(line, length, &begin, &trimmed);
-        units = bk_utf16_length(line + begin, trimmed);
-
-        switch (kind) {
-        case ANSWER_NAME:
-            /* nonEmpty before maxLength, which is the order communityNameSchema pipes them. */
-            if (trimmed == 0)
-                refusal = "This field is required";
-            else if (units > 40)
-                refusal = "This name is too long";
-            break;
-        case ANSWER_DESCRIPTION:
-            if (units > 255)
-                refusal = "This description is too long";
-            break;
-        case ANSWER_URL:
-        default:
-            if (trimmed == 0)
-                refusal = "This field is required";
-            else if (units > 255)
-                refusal = "This URL is too long";
-            else if (!is_url(line + begin, trimmed))
-                refusal = "Please enter a valid URL, including https://";
-            break;
-        }
-        if (refusal == NULL && trimmed + 1 > out_size)
-            refusal = "This value is too long";
-        if (refusal != NULL) {
-            /* The schema's own message, which is the one the admin frontend will show for the
-             * same field later. Written to stderr so a piped stdout stays clean. */
-            (void)fprintf(stderr, "  %s\n", refusal);
-            continue;
-        }
-        memcpy(out, line + begin, trimmed);
-        out[trimmed] = '\0';
-        /* Empty means absent rather than an empty string: the column is nullable and "" in it
-         * would be a third state that every reader has to remember to handle. */
-        if (has_value != NULL)
-            *has_value = trimmed != 0;
-        return 1;
+        if (length == 0 || *end != '\0' || parsed == 0 || parsed > 65535)
+            return "This must be a port between 1 and 65535";
+        return NULL;
+    }
+    case ANSWER_EMAIL:
+        if (length == 0)
+            return "This field is required";
+        if (units > 255)
+            return "This email address is too long";
+        return bk_is_email(text, length) ? NULL : "Please enter a valid email address";
+    case ANSWER_REQUIRED:
+        return length == 0 ? "This field is required" : NULL;
+    case ANSWER_OPTIONAL:
+    default:
+        return NULL;
     }
 }
 
-int backend_ask_for_home_community(bc_home_community_setup *setup)
+/**
+ * Asks until the answer passes the rule, and copies it into @p out.
+ *
+ * The rule before the buffer, and that order is the whole reason this is not just
+ * bk_prompt_text: a name of forty-five characters is refused with "This name is too long",
+ * which is what the reference path says and what the admin frontend will say about the same
+ * field later. Only a value the rule takes and the column cannot hold falls through to the
+ * second message.
+ *
+ * Answers 0 at the end of input -- a terminal that went away mid-setup, which is not an answer.
+ */
+static int ask(const char *label, const char *fallback, answer_kind kind, char *out,
+               size_t out_size)
 {
+    char answer[BK_ANSWER_MAX];
+
+    for (;;) {
+        const char *refusal;
+        size_t begin = 0;
+        size_t trimmed = 0;
+
+        if (!bk_prompt_text(label, fallback, answer, sizeof(answer)))
+            return 0;
+        /* Trimmed the way JavaScript trims, which removes rather more than the ASCII
+         * whitespace the prompt itself took off -- U+00A0 and U+FEFF are in that set, and a
+         * value pasted out of a web page carries them. */
+        bk_trim(answer, strlen(answer), &begin, &trimmed);
+        memmove(answer, answer + begin, trimmed);
+        answer[trimmed] = '\0';
+
+        refusal = refusal_for(kind, answer);
+        if (refusal == NULL && trimmed + 1 > out_size)
+            refusal = "This value is too long";
+        if (refusal == NULL) {
+            memcpy(out, answer, trimmed + 1);
+            return 1;
+        }
+        /* The schema's own message, which is the one the admin frontend will show for the same
+         * field later. Written to stderr so a piped stdout stays clean. */
+        (void)fprintf(stderr, "  %s\n", refusal);
+    }
+}
+
+/** Adds one variable to what will be written. */
+/*
+ * Whether this secret comes from somewhere `setup` must not touch, saying so if it does.
+ *
+ * What this command does with an answer is why the question exists: it writes it into the
+ * `.env`. For a secret that lives in the environment that is the whole point. For one systemd
+ * keeps on a tmpfs, or one in a file with permissions of its own, it is wrong twice over --
+ * the prompt has no value to offer, so an operator is asked for something already configured,
+ * and the empty line that results becomes the password on the day the credential is taken
+ * away. See contracts/secrets.json.
+ */
+static int keeps_its_own_secret(const char *name)
+{
+    const sc_secret_source source = sc_secret_source_of(name);
+
+    if (source != SC_SECRET_CREDENTIAL && source != SC_SECRET_FILE)
+        return 0;
+    (void)fprintf(stdout, "  %s comes from %s -- leaving it alone\n", name,
+                  source == SC_SECRET_CREDENTIAL ? "a systemd credential"
+                                                 : "the file its _FILE variable names");
+    return 1;
+}
+
+static void add(backend_setup_answers *setup, const char *name, const char *value)
+{
+    if (setup->entry_count >= BACKEND_SETUP_ENTRY_MAX)
+        return;
+    setup->entries[setup->entry_count].name = name;
+    setup->entries[setup->entry_count].value = value;
+    ++setup->entry_count;
+}
+
+/** Copies @p value into @p dst, which is always large enough for what this file puts there. */
+static void set(char *dst, size_t dst_size, const char *value)
+{
+    size_t length = strlen(value);
+
+    if (length + 1 > dst_size)
+        length = dst_size - 1;
+    memcpy(dst, value, length);
+    dst[length] = '\0';
+}
+
+/**
+ * Opens a session to the relay the answers name and says whether it answered.
+ *
+ * The same probe the backend runs at every start, run once here while the person who typed the
+ * address is still standing at the terminal -- a wrong port found now is a correction, found at
+ * the next start it is a search. @p maildev adds the one sentence that is only ever true of a
+ * development setup: the container is part of this repository and starting it is one command.
+ */
+static void report_relay(const backend_setup_answers *setup, int maildev)
+{
+    sc_mail_env env;
+    sc_mail_relay relay;
+    sc_mail_session *session;
+    char error[SC_MAIL_ERROR_MAX];
+    sc_status status;
+
+    if (strcmp(setup->email, "true") != 0)
+        return;
+
+    /* Built here rather than read from the environment: the answers have not been written
+     * anywhere yet, and this is the moment they are worth checking. */
+    memset(&env, 0, sizeof(env));
+    env.enabled = 1;
+    set(env.host, sizeof(env.host), setup->email_host);
+    env.port = (uint16_t)strtoul(setup->email_port, NULL, 10);
+    env.tls = SC_MAIL_TLS_NONE;
+    if (strcmp(setup->email_tls, "starttls") == 0)
+        env.tls = SC_MAIL_TLS_STARTTLS;
+    else if (strcmp(setup->email_tls, "require") == 0)
+        env.tls = SC_MAIL_TLS_REQUIRE;
+    else if (strcmp(setup->email_tls, "implicit") == 0)
+        env.tls = SC_MAIL_TLS_IMPLICIT;
+    set(env.user, sizeof(env.user), setup->email_user);
+    set(env.pass, sizeof(env.pass), setup->email_pass);
+    set(env.sender, sizeof(env.sender), setup->email_sender);
+    (void)snprintf(env.url, sizeof(env.url), "%s://%s:%s",
+                   env.tls == SC_MAIL_TLS_IMPLICIT ? "smtps" : "smtp", env.host, setup->email_port);
+    sc_mail_env_relay(&env, &relay);
+
+    bk_say("\nAsking %s:%s whether it takes mail \xe2\x80\xa6", env.host, setup->email_port);
+    (void)sc_mail_global_init();
+    session = sc_mail_session_open();
+    if (session == NULL) {
+        bk_say("  it could not be asked: no session to open");
+        return;
+    }
+    status = sc_mail_session_probe(session, &relay, error, sizeof(error));
+    sc_mail_session_close(session);
+
+    if (status == SC_OK) {
+        bk_say("  it does.");
+        if (maildev)
+            bk_say("  What it receives is readable at http://localhost:%s.", MAILDEV_WEB_PORT);
+        return;
+    }
+    bk_say("  it did not answer: %s", error);
+    if (maildev) {
+        bk_say("  That is the MailDev container of this repository, and it is not running.");
+        bk_say("  Start it with: docker compose up -d maildev");
+        bk_say("  The setup can be finished either way \xe2\x80\x94 nothing here needs it.");
+    }
+}
+
+/**
+ * What a developer's machine is, without asking.
+ *
+ * `http://localhost` and SQLite because that is what a checkout runs as, and the MailDev
+ * container because it is the mail sink this repository ships: nothing is delivered, every mail
+ * is readable at http://localhost:1081, and there are no credentials because the container is
+ * started without any.
+ */
+static void development_setup(backend_setup_answers *setup)
+{
+    const char *db_file = getenv("DB_FILE");
+
+    set(setup->community.name, sizeof(setup->community.name), DEVELOPMENT_COMMUNITY_NAME);
+    setup->community.has_description = 0;
+    set(setup->community.url, sizeof(setup->community.url), DEVELOPMENT_COMMUNITY_URL);
+
+    set(setup->node_env, sizeof(setup->node_env), "development");
+    set(setup->db_type, sizeof(setup->db_type), "sqlite");
+    set(setup->db_file, sizeof(setup->db_file),
+        db_file != NULL && db_file[0] != '\0' ? db_file : "./gradido_community.sqlite");
+    set(setup->email, sizeof(setup->email), "true");
+    set(setup->email_host, sizeof(setup->email_host), "localhost");
+    set(setup->email_port, sizeof(setup->email_port), MAILDEV_SMTP_PORT);
+    /* MailDev speaks no TLS and asks for no password. Anything else here would be a handshake
+     * it answers with a refusal. */
+    set(setup->email_tls, sizeof(setup->email_tls), "none");
+    set(setup->email_user, sizeof(setup->email_user), "");
+    set(setup->email_pass, sizeof(setup->email_pass), "");
+    set(setup->email_sender, sizeof(setup->email_sender), "dev@gradido.localhost");
+    set(setup->email_sender_name, sizeof(setup->email_sender_name), DEVELOPMENT_COMMUNITY_NAME);
+
+    add(setup, "NODE_ENV", setup->node_env);
+    add(setup, "DB_TYPE", setup->db_type);
+    add(setup, "DB_FILE", setup->db_file);
+    add(setup, "EMAIL", setup->email);
+    add(setup, "EMAIL_SMTP_HOST", setup->email_host);
+    add(setup, "EMAIL_SMTP_PORT", setup->email_port);
+    add(setup, "EMAIL_SMTP_TLS", setup->email_tls);
+    add(setup, "EMAIL_USERNAME", setup->email_user);
+    if (!keeps_its_own_secret("EMAIL_PASSWORD"))
+        add(setup, "EMAIL_PASSWORD", setup->email_pass);
+    add(setup, "EMAIL_SENDER", setup->email_sender);
+    add(setup, "EMAIL_SENDER_NAME", setup->email_sender_name);
+}
+
+static void describe(const backend_setup_answers *setup)
+{
+    bk_say("\nThese are the development settings:\n");
+    bk_say("  community name  %s", setup->community.name);
+    bk_say("  public URL      %s", setup->community.url);
+    bk_say("  database        %s in %s", setup->db_type, setup->db_file);
+    bk_say("  mail relay      %s:%s, no TLS, no login", setup->email_host, setup->email_port);
+    bk_say("  sender          %s <%s>", setup->email_sender_name, setup->email_sender);
+}
+
+/** The value of @p name, or @p fallback when it is unset or empty. What a rerun of setup
+ *  offers in the parentheses after a label. */
+static const char *current(const char *name, const char *fallback)
+{
+    const char *value = getenv(name);
+
+    return value != NULL && value[0] != '\0' ? value : fallback;
+}
+
+static int ask_for_database(backend_setup_answers *setup, int production)
+{
+    static const char *const kLabels[] = {"sqlite", "postgresql"};
+    static const char *const kHints[] = {"one file, no service to run",
+                                         "the reference, for a community with an administrator"};
+    const char *type = current("DB_TYPE", "sqlite");
+    int chosen = bk_prompt_choose("Which database?", kLabels, kHints, 2,
+                                  strcmp(type, "postgresql") == 0 ? 1 : 0);
+
+    if (chosen < 0)
+        return 0;
+    set(setup->db_type, sizeof(setup->db_type), kLabels[chosen]);
+    add(setup, "DB_TYPE", setup->db_type);
+
+    if (chosen == 0) {
+        if (!ask("Database file", current("DB_FILE", "./gradido_community.sqlite"), ANSWER_REQUIRED,
+                 setup->db_file, sizeof(setup->db_file)))
+            return 0;
+        add(setup, "DB_FILE", setup->db_file);
+        return 1;
+    }
+
+    if (!ask("Database host", current("DB_HOST", "localhost"), ANSWER_REQUIRED, setup->db_host,
+             sizeof(setup->db_host)))
+        return 0;
+    if (!ask("Database port", current("DB_PORT", "5432"), ANSWER_PORT, setup->db_port,
+             sizeof(setup->db_port)))
+        return 0;
+    if (!ask("Database name", current("DB_DATABASE", "gradido_community"), ANSWER_REQUIRED,
+             setup->db_database, sizeof(setup->db_database)))
+        return 0;
+    if (!ask("Database user", current("DB_USER", "gradido"), ANSWER_REQUIRED, setup->db_user,
+             sizeof(setup->db_user)))
+        return 0;
+    while (!keeps_its_own_secret("DB_PASSWORD")) {
+        if (!bk_prompt_secret("Database password", current("DB_PASSWORD", ""), setup->db_password,
+                              sizeof(setup->db_password)))
+            return 0;
+        /* The rule sc_db_config_load applies at every start, applied here instead -- a password
+         * refused now costs one more question, and refused at the next start it costs a server
+         * that will not come up. */
+        if (!production || setup->db_password[0] != '\0')
+            break;
+        (void)fprintf(stderr, "  an empty database password is not acceptable in production\n");
+    }
+    add(setup, "DB_HOST", setup->db_host);
+    add(setup, "DB_PORT", setup->db_port);
+    add(setup, "DB_DATABASE", setup->db_database);
+    add(setup, "DB_USER", setup->db_user);
+    /* Only where the environment is the source. Writing an empty line for a secret that comes
+     * from elsewhere would put a password nobody chose into the file. */
+    if (!keeps_its_own_secret("DB_PASSWORD"))
+        add(setup, "DB_PASSWORD", setup->db_password);
+    return 1;
+}
+
+static int ask_for_email(backend_setup_answers *setup)
+{
+    static const char *const kLabels[] = {"require", "starttls", "implicit", "none"};
+    static const char *const kHints[] = {
+        "STARTTLS, and refuse the relay without it", "STARTTLS where offered, plain where not",
+        "TLS from the first byte, which is port 465", "plain, for a relay on this machine"};
+    const char *configured = current("EMAIL_SMTP_TLS", "starttls");
+    int sends = bk_prompt_yes_no("Does this instance send mail?",
+                                 strcmp(current("EMAIL", "false"), "true") == 0);
+    int chosen;
+    int i;
+
+    if (sends < 0)
+        return 0;
+    set(setup->email, sizeof(setup->email), sends ? "true" : "false");
+    add(setup, "EMAIL", setup->email);
+    if (!sends)
+        return 1;
+
+    if (!ask("SMTP host", current("EMAIL_SMTP_HOST", "localhost"), ANSWER_REQUIRED,
+             setup->email_host, sizeof(setup->email_host)))
+        return 0;
+    if (!ask("SMTP port", current("EMAIL_SMTP_PORT", "587"), ANSWER_PORT, setup->email_port,
+             sizeof(setup->email_port)))
+        return 0;
+
+    chosen = 1;
+    for (i = 0; i != 4; ++i) {
+        if (strcmp(configured, kLabels[i]) == 0)
+            chosen = i;
+    }
+    chosen =
+        bk_prompt_choose("How is the session to the relay encrypted?", kLabels, kHints, 4, chosen);
+    if (chosen < 0)
+        return 0;
+    set(setup->email_tls, sizeof(setup->email_tls), kLabels[chosen]);
+
+    if (!ask("SMTP user, empty for a relay that wants none", current("EMAIL_USERNAME", ""),
+             ANSWER_OPTIONAL, setup->email_user, sizeof(setup->email_user)))
+        return 0;
+    /* Not asked when there is no user to go with it: SMTP AUTH is a pair, and a password on its
+     * own authenticates as nobody. */
+    if (setup->email_user[0] == '\0')
+        setup->email_pass[0] = '\0';
+    else if (!keeps_its_own_secret("EMAIL_PASSWORD") &&
+             !bk_prompt_secret("SMTP password", current("EMAIL_PASSWORD", ""), setup->email_pass,
+                               sizeof(setup->email_pass)))
+        return 0;
+    if (!ask("Sender address", current("EMAIL_SENDER", ""), ANSWER_EMAIL, setup->email_sender,
+             sizeof(setup->email_sender)))
+        return 0;
+    if (!ask("Sender name", current("EMAIL_SENDER_NAME", setup->community.name), ANSWER_OPTIONAL,
+             setup->email_sender_name, sizeof(setup->email_sender_name)))
+        return 0;
+
+    add(setup, "EMAIL_SMTP_HOST", setup->email_host);
+    add(setup, "EMAIL_SMTP_PORT", setup->email_port);
+    add(setup, "EMAIL_SMTP_TLS", setup->email_tls);
+    add(setup, "EMAIL_USERNAME", setup->email_user);
+    if (!keeps_its_own_secret("EMAIL_PASSWORD"))
+        add(setup, "EMAIL_PASSWORD", setup->email_pass);
+    add(setup, "EMAIL_SENDER", setup->email_sender);
+    add(setup, "EMAIL_SENDER_NAME", setup->email_sender_name);
+    return 1;
+}
+
+static int ask_every_field(backend_setup_answers *setup, int production)
+{
+    size_t description_length;
+
+    bk_say("\nEvery question shows what it would take in parentheses; Enter takes it,");
+    bk_say("anything else replaces it.\n");
+
+    if (!ask("Community name", DEVELOPMENT_COMMUNITY_NAME, ANSWER_NAME, setup->community.name,
+             sizeof(setup->community.name)))
+        return 0;
+    if (!ask("Description (optional)", "", ANSWER_DESCRIPTION, setup->community.description,
+             sizeof(setup->community.description)))
+        return 0;
+    /* Empty means absent rather than an empty string: the column is nullable and "" in it would
+     * be a third state that every reader has to remember to handle. */
+    description_length = strlen(setup->community.description);
+    setup->community.has_description = description_length != 0;
+    if (!ask("Public URL, e.g. https://gdd.example.org", "", ANSWER_URL, setup->community.url,
+             sizeof(setup->community.url)))
+        return 0;
+
+    set(setup->node_env, sizeof(setup->node_env), production ? "production" : "development");
+    add(setup, "NODE_ENV", setup->node_env);
+    if (!ask_for_database(setup, production))
+        return 0;
+    if (!ask_for_email(setup))
+        return 0;
+
+    report_relay(setup, 0);
+    return 1;
+}
+
+int backend_ask_for_setup(backend_setup_answers *setup)
+{
+    static const char *const kLabels[] = {"development", "production"};
+    static const char *const kHints[] = {"localhost, SQLite, mail into the MailDev container",
+                                         "every value is asked for"};
+    const char *node_env = getenv("NODE_ENV");
+    int production;
+
+    if (setup == NULL)
+        return 0;
+    memset(setup, 0, sizeof(*setup));
+
     /* Without a terminal there is nobody to answer, and a command that blocked on a prompt
      * nobody can see would look like a hang rather than an unfinished setup. The caller turns
      * this into a line that says what to do instead. */
-    if (!bk_isatty(stdin) || !bk_isatty(stdout))
+    if (!bk_prompt_is_terminal())
         return 0;
 
-    (void)fprintf(
-        stdout, "\nThis database has no community yet.\n\n"
-                "What follows is written once and becomes this instance's identity: other\n"
-                "communities will know it by these answers and by a key pair generated here.\n\n");
+    bk_say("\nThis database has no community yet.\n");
+    bk_say("What follows is written once and becomes this instance's identity: other");
+    bk_say("communities will know it by these answers and by a key pair generated here.");
+    bk_say("The database and the mail relay are written to .env beside it.");
 
-    if (!ask("Community name", ANSWER_NAME, setup->name, sizeof(setup->name), NULL))
+    production = bk_prompt_choose("What kind of installation is this?", kLabels, kHints, 2,
+                                  node_env != NULL && strcmp(node_env, "production") == 0 ? 1 : 0);
+    if (production < 0)
         return 0;
-    if (!ask("Description (optional)", ANSWER_DESCRIPTION, setup->description,
-             sizeof(setup->description), &setup->has_description))
-        return 0;
-    if (!ask("Public URL, e.g. https://gdd.example.org", ANSWER_URL, setup->url, sizeof(setup->url),
-             NULL))
-        return 0;
-    return 1;
+
+    if (!production) {
+        int take;
+
+        development_setup(setup);
+        describe(setup);
+        report_relay(setup, 1);
+        take = bk_prompt_yes_no("Take them?", 1);
+        if (take < 0)
+            return 0;
+        if (take)
+            return 1;
+        /* Asked again, one field at a time, so the proposal leaves nothing behind. */
+        memset(setup, 0, sizeof(*setup));
+    }
+
+    return ask_every_field(setup, production);
 }

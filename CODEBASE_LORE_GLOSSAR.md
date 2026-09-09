@@ -66,3 +66,17 @@ Map lore abstractions to their real code concepts.
 | The scribe who reads both hands | legacy's `dlt-connector`, translating into blockchain format |
 | Writing in the register's hand from the start | intended for gradido2: one transaction shape, signed once, no second format to reconcile |
 | Making and confirming stop being two crafts | one path to create and confirm a transaction instead of two |
+| The one question turned out to be eleven | the setup conversation now covers the community, the database and the mail relay |
+| A city on a bench | a development installation — the proposal answered with one Enter |
+| Holding the sheet up | the development block shown whole and taken or refused as one, not asked field by field |
+| The box in the corner | the MailDev container of `docker-compose.yml`, port 1026, no TLS and no login |
+| The sensible answer in the margin | every prompt's default, in parentheses; Enter takes it |
+| The note nailed inside the gate | `.env` in the working directory, written by `setup` and read by both implementations |
+| What the magistrate shouted stands | a variable already in the environment is never overridden by the file |
+| Both cities read the same note | one dotenv form, `packages/service-core` and `service-core/src/env_file.c` |
+| The letter-carrier | the SMTP relay named by the `EMAIL_*` variables |
+| The word for the bag | `EMAIL_PASSWORD` — a credential, so env and never the settings table |
+| The runner who hands over no letter | the startup probe: greeting, EHLO, the TLS upgrade, AUTH, and no message |
+| The runner takes the carrier's own road | both paths probe through the same libcurl — `Mailer.verify()` and `sc_mail_session_probe` |
+| One line on the board | `mail.relay.connected` at info, `mail.relay.failed` at warn — never fatal |
+| A city that was never given a carrier | `EMAIL=false`, reported as `mail.relay.disabled` |

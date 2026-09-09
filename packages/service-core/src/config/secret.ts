@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 /**
@@ -23,11 +23,22 @@ import { join } from 'node:path'
  * implementation is added to `contracts/secrets.json` first: an operator who has learned
  * `DB_PASSWORD_FILE` has learned the mechanism, and a second secret that resolved differently
  * would make that knowledge wrong. The mail relay's password and the JWT signing key are the
- * two this was written in anticipation of.
+ * one this was written in anticipation of, and the JWT signing key is the one still to come.
  */
-export const SECRET_VARIABLES = ['DB_PASSWORD'] as const
+export const SECRET_VARIABLES = ['DB_PASSWORD', 'EMAIL_PASSWORD'] as const
 
 export type SecretVariable = (typeof SECRET_VARIABLES)[number]
+
+/**
+ * Which of the three sources a secret came from.
+ *
+ * `setup` is the caller this exists for. It offers the current value as the default for its
+ * question and writes the answer into `.env` — which is right for a value that was in the
+ * environment and wrong for one that was not: pressing Enter on a secret that systemd keeps on
+ * a tmpfs would copy it into a file in the working directory, and a mechanism that can be
+ * downgraded by answering a prompt is not one.
+ */
+export type SecretSource = 'credential' | 'file' | 'environment'
 
 /** One trailing line ending and nothing else — see contracts/secrets.json, resolution.rules. */
 function stripOneLineEnding(content: string): string {
@@ -35,6 +46,27 @@ function stripOneLineEnding(content: string): string {
     return content.slice(0, -2)
   }
   return content.endsWith('\n') ? content.slice(0, -1) : content
+}
+
+/**
+ * Where the secret @p name would come from, or undefined when no source has it.
+ *
+ * The same walk `resolveSecret` makes, reporting the source instead of the value — the two can
+ * never disagree about which one wins, because they are the same three checks in the same order.
+ */
+export function secretSource(
+  name: string,
+  env: Record<string, string | undefined> = process.env,
+): SecretSource | undefined {
+  const credentials = env.CREDENTIALS_DIRECTORY
+  if (credentials !== undefined && credentials !== '' && existsSync(join(credentials, name))) {
+    return 'credential'
+  }
+  const path = env[`${name}_FILE`]
+  if (path !== undefined && path !== '') {
+    return 'file'
+  }
+  return env[name] === undefined ? undefined : 'environment'
 }
 
 /**

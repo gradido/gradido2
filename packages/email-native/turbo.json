@@ -1,6 +1,13 @@
 {
   "extends": ["//"],
   "tasks": {
+    "build": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "../../fast-servers/service-core/src/email/**",
+        "../../fast-servers/service-core/include/service_core/email/**"
+      ]
+    },
     "test": {
       "dependsOn": ["build"]
     }

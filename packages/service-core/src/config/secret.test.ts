@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolveSecrets } from './secret'
+import { resolveSecrets, SECRET_VARIABLES, secretSource } from './secret'
 
 /**
  * The resolution order of `contracts/secrets.json`, which the C path asserts case for case in
@@ -83,6 +83,56 @@ describe('resolveSecrets', () => {
     expect(() =>
       resolveSecrets({ DB_PASSWORD: 'from-env', DB_PASSWORD_FILE: join(dir, 'nope') }),
     ).toThrow(/refusing to fall back/)
+  })
+
+  test('every declared secret resolves the same way', () => {
+    /* The mechanism is one mechanism or it is not one: an operator who has learned it on
+       DB_PASSWORD has learned it on EMAIL_PASSWORD. This walks SECRET_VARIABLES rather than
+       naming them, so a secret added to the list without being wired fails here. */
+    for (const name of SECRET_VARIABLES) {
+      expect(resolveSecrets({ [name]: 'from-env' })[name]).toBe('from-env')
+      expect(
+        resolveSecrets({
+          [name]: 'from-env',
+          [`${name}_FILE`]: write(`${name}.pw`, 'from-file'),
+        })[name],
+      ).toBe('from-file')
+      writeFileSync(join(dir, name), 'from-credential')
+      expect(
+        resolveSecrets({
+          [name]: 'from-env',
+          [`${name}_FILE`]: write(`${name}.pw`, 'from-file'),
+          CREDENTIALS_DIRECTORY: dir,
+        })[name],
+      ).toBe('from-credential')
+    }
+  })
+
+  test('says which source answered, so a caller can decline to write it down', () => {
+    /* `setup` offers the current value as a default and writes the answer into .env. For a
+       secret systemd keeps on a tmpfs that would be a downgrade, so setup asks where the value
+       came from first and leaves the stronger two alone. */
+    writeFileSync(join(dir, 'DB_PASSWORD'), 'x')
+    expect(secretSource('DB_PASSWORD', { CREDENTIALS_DIRECTORY: dir })).toBe('credential')
+    expect(secretSource('DB_PASSWORD', { DB_PASSWORD_FILE: '/anywhere' })).toBe('file')
+    expect(secretSource('DB_PASSWORD', { DB_PASSWORD: 'x' })).toBe('environment')
+    expect(secretSource('DB_PASSWORD', {})).toBeUndefined()
+    /* A credentials directory without this credential is not a credential source. */
+    expect(
+      secretSource('EMAIL_PASSWORD', { CREDENTIALS_DIRECTORY: dir, EMAIL_PASSWORD: 'x' }),
+    ).toBe('environment')
+  })
+
+  test('the source it reports is the source it reads from', () => {
+    /* The two walks must not drift: whichever one says wins has to be the one that answered. */
+    writeFileSync(join(dir, 'DB_PASSWORD'), 'from-credential')
+    const env = {
+      DB_PASSWORD: 'from-env',
+      DB_PASSWORD_FILE: write('pw', 'from-file'),
+      CREDENTIALS_DIRECTORY: dir,
+    }
+    expect(secretSource('DB_PASSWORD', env)).toBe('credential')
+    expect(resolveSecrets(env).DB_PASSWORD).toBe('from-credential')
   })
 
   test('leaves everything that is not a secret alone', () => {

@@ -41,7 +41,8 @@
 #include "federation/federation.h"
 #include "service_core/config.h"
 #include "service_core/db.h"
-#include "service_core/env.h"
+#include "service_core/email/transport.h"
+#include "service_core/env_file.h"
 #include "service_core/http.h"
 #include "service_core/jwt.h"
 #include "service_core/log/log.h"
@@ -153,18 +154,22 @@ static void print_usage(FILE *out)
     fprintf(out, "\noptions:\n");
     fprintf(out, "  %-14s this text\n", "-h, --help");
     fprintf(out, "  %-14s version and build features\n", "-v, --version");
-    fprintf(out, "\nconfiguration is the environment, and a .env beside the binary fills what\n");
-    fprintf(out, "nobody exported -- an exported variable always wins.\n\n");
+    fprintf(out, "\nconfiguration is the environment, and a %s beside the binary fills what\n",
+            SC_ENV_FILE_NAME);
+    fprintf(out, "nobody exported -- what is already set wins. `setup` writes that file.\n\n");
     fprintf(out, "  %-14s LISTEN_HOST, BACKEND_PORT, FEDERATION_PORT, DHT_PORT,\n", "server");
     fprintf(out, "  %-14s FEDERATION_DHT_TOPIC, FEDERATION_DHT_SEED, SERVER_THREADS\n", "");
     fprintf(out, "  %-14s DB_TYPE (sqlite or postgresql), DB_FILE, and for postgresql\n",
             "database");
     fprintf(out, "  %-14s DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE\n", "");
     fprintf(out, "  %-14s a DB_HOST beginning with / is a unix socket directory\n", "");
+    fprintf(out, "  %-14s EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, EMAIL_SMTP_TLS,\n", "email");
+    fprintf(out, "  %-14s EMAIL_USERNAME, EMAIL_PASSWORD, EMAIL_SENDER,\n", "");
+    fprintf(out, "  %-14s EMAIL_SENDER_NAME, EMAIL_CHANGE_SUPPORT\n", "");
     fprintf(out, "  %-14s LOG_LEVEL, NODE_ENV\n", "other");
-    fprintf(out, "\nDB_PASSWORD is a secret and has three sources, best first: the systemd\n");
-    fprintf(out, "credential DB_PASSWORD, then the file DB_PASSWORD_FILE names, then the\n");
-    fprintf(out, "variable. See contracts/secrets.json.\n");
+    fprintf(out, "\nDB_PASSWORD and EMAIL_PASSWORD are secrets: before either variable is\n");
+    fprintf(out, "read, the systemd credential of that name and then the file <NAME>_FILE\n");
+    fprintf(out, "names are looked at. See contracts/secrets.json.\n");
 }
 
 static void print_version(void)
@@ -187,6 +192,8 @@ int main(int argc, char **argv)
     fs_role_thread threads[FS_ROLE_COUNT];
     sc_config cfg;
     sc_log_config log_cfg;
+    char env_error[256];
+    sc_status env_status;
     sc_status status;
     int any_selected = 0;
     const fs_command *command = NULL;
@@ -250,15 +257,17 @@ int main(int argc, char **argv)
         selected[0] = 1; /* --backend, the default */
 
     /*
-     * A `.env` beside the binary, before anything reads a variable. It only fills what is unset,
-     * so an exported variable always wins -- the same rule bun applies for the reference path,
-     * and the two have to agree or one file configures one of the two binaries. Its absence is
-     * the ordinary case and says nothing; a line that is not KEY=VALUE has already named itself
-     * by the time this returns, and is worth stopping for, because a configuration nobody can
-     * read is not one to guess at.
+     * The `.env` before anything reads a variable, LOG_LEVEL included, and before any thread
+     * exists: setenv is not thread safe against a concurrent getenv. What is already in the
+     * environment wins, so a file in the working directory never overrides what systemd or
+     * docker set. It is the same file the reference path reads with dotenv, which is what lets
+     * an operator switch between the two implementations without reconfiguring anything.
+     *
+     * A file that cannot be parsed is reported once the logger exists, a few lines down: this
+     * process has no way to say anything yet, and a configuration read to the middle is worse
+     * than one not read at all.
      */
-    if (sc_env_load_file(".env") == SC_ERR_MALFORMED)
-        return 2;
+    env_status = sc_env_file_load(SC_ENV_FILE_NAME, env_error, sizeof(env_error));
 
     /*
      * The logger before the configuration, and its level straight out of the environment rather
@@ -283,6 +292,13 @@ int main(int argc, char **argv)
     (void)sc_log_init(&log_cfg);
     (void)sc_log_thread_join();
 
+    if (env_status != SC_OK) {
+        sc_log_fatal(SC_CAT_STARTUP, "config.env_file_invalid", "%s", env_error);
+        sc_log_thread_leave();
+        sc_log_shutdown();
+        return 1;
+    }
+
     status = sc_config_load(&cfg);
     if (status != SC_OK) {
         sc_log_fatal(SC_CAT_STARTUP, "config.failed", "configuration is unusable: %s",
@@ -296,8 +312,11 @@ int main(int argc, char **argv)
                 sc_http_backend_name());
 
     /* libsodium wants to be initialised once, from one thread, before anything asks it for a
-     * digest. Here is that thread and this is that moment: no role has started yet. */
+     * digest. Here is that thread and this is that moment: no role has started yet. And curl
+     * wants the same, for the same reason -- curl_easy_init() would do it on its own, and its
+     * own documentation says doing it that way is not thread safe. */
     sc_jwt_init();
+    (void)sc_mail_global_init();
     sc_runtime_install_signal_handlers(&g_quit);
 
     /* The command, and then the process is over: nothing listens, no role starts, and the flag

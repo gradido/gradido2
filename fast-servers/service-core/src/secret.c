@@ -1,9 +1,12 @@
 /*
- * A `.env` file into the environment, and a secret out of the best source that has it.
+ * A secret out of the best source that has it. contracts/secrets.json is normative; this file is
+ * its C reading.
  *
- * contracts/secrets.json is normative for the second half; this file is its C reading.
+ * The `.env` half of this used to live here too and does not any more: service_core/env_file.h
+ * reads that file, writes it for `setup`, and knows dotenv's quoting rules -- one reader for one
+ * format, and the reference path reads the same file with dotenv itself.
  */
-#include "service_core/env.h"
+#include "service_core/secret.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -11,14 +14,6 @@
 #include <string.h>
 
 #include "service_core/log/log.h"
-
-#if defined(_WIN32)
-#include <windows.h>
-#define sc_setenv(name, value) (_putenv_s((name), (value)) == 0 ? 0 : -1)
-#else
-#include <stdlib.h>
-#define sc_setenv(name, value) setenv((name), (value), 0)
-#endif
 
 /*
  * Reads a whole file into @p out.
@@ -62,93 +57,43 @@ static sc_status read_whole_file(const char *path, char *out, size_t out_size, i
     return SC_OK;
 }
 
-/* Everything after the first '=' , with one matching pair of quotes removed. */
-static void unquote(char *value)
+sc_secret_source sc_secret_source_of(const char *name)
 {
-    size_t len = strlen(value);
-    char quote;
+    const char *credentials;
+    char file_variable[128];
 
-    if (len < 2)
-        return;
-    quote = value[0];
-    if ((quote != '"' && quote != '\'') || value[len - 1] != quote)
-        return;
-    memmove(value, value + 1, len - 2);
-    value[len - 2] = '\0';
-}
+    if (name == NULL)
+        return SC_SECRET_NOWHERE;
 
-static char *skip_blanks(char *at)
-{
-    while (*at == ' ' || *at == '\t')
-        ++at;
-    return at;
-}
-
-/* Trailing blanks off a key, so `KEY = value` names KEY and not "KEY ". */
-static void trim_end(char *text)
-{
-    size_t len = strlen(text);
-    while (len != 0 && (text[len - 1] == ' ' || text[len - 1] == '\t'))
-        text[--len] = '\0';
-}
-
-sc_status sc_env_load_file(const char *path)
-{
-    char line[SC_ENV_LINE_MAX];
-    FILE *file;
-    unsigned number = 0;
-
-    if (path == NULL)
-        return SC_ERR_INVALID_ARGUMENT;
-    file = fopen(path, "r");
-    if (file == NULL)
-        return SC_ERR_UNAVAILABLE;
-
-    while (fgets(line, (int)sizeof(line), file) != NULL) {
-        char *key;
-        char *equals;
-        char *value;
-
-        ++number;
-        line[strcspn(line, "\r\n")] = '\0';
-        key = skip_blanks(line);
-        if (*key == '\0' || *key == '#')
-            continue;
-        /* `export KEY=value` is what a file people also `source` looks like. */
-        if (strncmp(key, "export ", 7) == 0)
-            key = skip_blanks(key + 7);
-
-        equals = strchr(key, '=');
-        if (equals == NULL) {
-            fclose(file);
-            /* Before the logger is started, so this goes out synchronously -- which is what a
-             * line about an unreadable configuration wants anyway. */
-            sc_log_fatal(SC_CAT_STARTUP, "config.env_malformed",
-                         "%s line %u is neither blank, a comment, nor KEY=VALUE", path, number);
-            return SC_ERR_MALFORMED;
+    credentials = getenv("CREDENTIALS_DIRECTORY");
+    if (credentials != NULL && credentials[0] != '\0') {
+        char path[SC_SECRET_PATH_MAX];
+        int written = snprintf(path, sizeof(path), "%s/%s", credentials, name);
+        if (written > 0 && (size_t)written < sizeof(path)) {
+            /* Opened and closed rather than stat'ed: whether this process can read it is the
+             * question, and a mode nobody may read is not a source in force. */
+            FILE *file = fopen(path, "rb");
+            if (file != NULL) {
+                fclose(file);
+                return SC_SECRET_CREDENTIAL;
+            }
         }
-        *equals = '\0';
-        trim_end(key);
-        value = skip_blanks(equals + 1);
-        unquote(value);
-        if (*key == '\0') {
-            fclose(file);
-            sc_log_fatal(SC_CAT_STARTUP, "config.env_malformed", "%s line %u has no name",
-                         path, number);
-            return SC_ERR_MALFORMED;
-        }
-        /* The 0 in sc_setenv is the whole point: a real environment entry wins. */
-        (void)sc_setenv(key, value);
     }
-    fclose(file);
-    return SC_OK;
+
+    if (snprintf(file_variable, sizeof(file_variable), "%s_FILE", name) > 0) {
+        const char *named = getenv(file_variable);
+        if (named != NULL && named[0] != '\0')
+            return SC_SECRET_FILE;
+    }
+
+    return getenv(name) != NULL ? SC_SECRET_ENVIRONMENT : SC_SECRET_NOWHERE;
 }
 
 sc_status sc_secret_read(const char *name, char *out, size_t out_size)
 {
     const char *credentials;
     const char *from_env;
-    char path[SC_ENV_LINE_MAX];
+    char path[SC_SECRET_PATH_MAX];
     char file_variable[128];
     sc_status status;
 

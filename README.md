@@ -97,6 +97,54 @@ Both are named after the product rather than after their directory: `gradido2` i
 and `-fast` says which of the two implementations answered when somebody reads `--version` off
 a machine six months from now.
 
+## First run
+
+```sh
+./build/gradido2 setup            # or: turbo @gradido/backend#start -- setup
+```
+
+`setup` is the one command that asks questions, and it asks them once. The first is what kind
+of installation this is:
+
+```text
+What kind of installation is this?
+❯ development  — localhost, SQLite, mail into the MailDev container
+  production   — every value is asked for
+```
+
+**Development is a proposal, not a mode.** It puts the whole block on screen — `Gradido Dev
+Community` at `http://localhost`, SQLite in a file, the MailDev container of
+`docker-compose.yml` as the relay — asks that relay whether it is running, and says how to
+start it if it is not. Then it asks whether to take it. Answering *no*, or choosing
+*production*, asks for every field one at a time, each with what is configured now in
+parentheses; Enter takes that, anything else replaces it.
+
+The answers go two places, and the split is the point. The community's name, description and
+URL are its **identity** and become a row, together with the key pair generated for it — they
+are not settings and there is no environment variable for them. The database and the relay are
+**configuration** and are written to `.env`, which is what both implementations read at
+startup and what `docker compose` reads too. So `setup` is safe to run again: it rewrites the
+file, sees the community that is already there and says so.
+
+Arrow keys and Enter drive the choices where the terminal allows it; where it does not — a
+pipe, a CI job, a Windows console — the same question arrives as a numbered list. Both
+implementations ask the same questions and write the same file, so an instance set up by one
+is an instance the other can serve.
+
+**A serving start never asks.** A database with no community stops the start with a line
+naming this command, because a process that answers requests and reads an answer off a
+terminal is two things at once. It is the split `initdb`, `vault operator init` and
+`createsuperuser` all make.
+
+The backend opens a session to the configured relay while it starts — greeting, `EHLO`, the
+TLS upgrade that was asked for, `AUTH` if there are credentials — and logs the outcome as
+`mail.relay.connected` at info or `mail.relay.failed` at warn. Both implementations ask
+through the same libcurl, so what the check accepts is what the sends can reach: the
+TypeScript path goes through `Mailer.verify()` in `packages/email-native`, the C path through
+`sc_mail_session_probe`. Never fatal: a server whose
+mail is misconfigured still serves every route that sends none. `EMAIL=false` is a working
+configuration and says so as `mail.relay.disabled`.
+
 ## Development containers
 
 `docker-compose.yml` starts the three services a developer needs and nothing else: the
@@ -159,9 +207,12 @@ different things.
 `DB_PASSWORD`, `DB_DATABASE`, `ADMINER_PORT`, `MAILDEV_WEB_PORT` and `MAILDEV_SMTP_PORT`
 work the same way.
 
-The mail sink takes no configuration on the server side yet — the mail tests are pointed at a
-relay through their own variables, for example `SC_MAIL_TEST_URL=smtp://127.0.0.1:1026` for
-`fast-servers`' `test_mail`.
+The mail sink is what a development setup is pointed at: answer *development* to the first
+question of `setup` and it writes `EMAIL_SMTP_HOST=localhost`, `EMAIL_SMTP_PORT=1026` and
+`EMAIL_SMTP_TLS=none` — no TLS and no login, because the container is started with neither.
+Every mail then lands at <http://localhost:1081> instead of at a person. The mail *tests* are
+pointed at a relay through their own variable, `SC_MAIL_TEST_URL=smtp://127.0.0.1:1026` for
+`fast-servers`' `test_mail`, and skip without it.
 
 **No default here collides with `../gradido`.** That repository publishes phpMyAdmin on 8074
 and the same maildev image on 1080/1025, so a checkout of legacy and a checkout of gradido2

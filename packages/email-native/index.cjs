@@ -106,6 +106,19 @@ class Mailer {
     return this.#withSlot(() => native.sendMail(this.#handle, mail))
   }
 
+  /**
+   * Opens a session, goes as far as a mail would, and hangs up without sending one.
+   *
+   * The greeting, EHLO, the TLS upgrade this mailer is configured for and AUTH where it has
+   * credentials. Resolves when the relay took the session and rejects with the relay's own
+   * words when it did not -- which is what a server asks once, at startup.
+   *
+   * Through the same gate as a send, because it holds a pool thread for the same reason.
+   */
+  verify() {
+    return this.#withSlot(() => native.verify(this.#handle))
+  }
+
   get stats() {
     /* `pending` is what the pool has, `waiting` is what this gate holds back. */
     return { ...native.stats(this.#handle), waiting: this.#waiting.length, limit: this.#limit }

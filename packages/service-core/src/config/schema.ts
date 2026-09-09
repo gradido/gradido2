@@ -13,6 +13,18 @@ export const portSchema = v.pipe(
 )
 
 /**
+ * A yes or a no from the environment.
+ *
+ * Only the two spellings, because an environment variable that is read leniently is one
+ * that can be switched off by a typo: `EMAIL=1` or `EMAIL=yes` would silently become
+ * false, and the mail that never arrives is discovered days later.
+ */
+export const flagSchema = v.pipe(
+  v.picklist(['true', 'false'] as const, 'This must be true or false'),
+  v.transform((input: 'true' | 'false'): boolean => input === 'true'),
+)
+
+/**
  * The variables every service reads, whatever else it reads. Spread into a service's own
  * schema: `v.object({ ...serviceSchema.entries, BACKEND_PORT: envPort('4000') })`.
  */

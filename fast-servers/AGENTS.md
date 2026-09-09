@@ -320,7 +320,7 @@ Three rules follow, and the first is the one that keeps the seam worth having:
 
 ---
 
-## 3c. E-mail: five files, three layers, and two of them are copies
+## 3c. E-mail: six files, four layers, and two of them are copies
 
 Everything about mail lives in `service-core/{include/service_core,src}/email/`, and the split
 is what lets the Node addon in `packages/email-native` send the identical message without any
@@ -332,10 +332,14 @@ message.{h,c}    the bytes of one mail: the headers, and a MIME document --
                  the inline images, quoted-printable and base64 for the parts.
                  No clock, no allocation, no I/O
 transport.{h,c}  one SMTP session over curl: connect, authenticate, hand over one
-                 message. No threads, no logging, no queue. <curl/curl.h> reaches
-                 no further than this file
+                 message -- or, for the startup probe, hand over nothing. No
+                 threads, no logging, no queue. <curl/curl.h> reaches no further
+                 than this file
 mailer.{h,c}     the bounded queue, the retry and the growing worker pool. The only
                  one with libuv in it -- and the only one the addon does not compile
+config.{h,c}     the EMAIL_* variables, once, into the sc_mail_relay the two above
+                 take. The only one that reads an environment variable; the addon
+                 is handed its configuration by JavaScript and does not compile it
 render.{h,c}     the template renderer's runtime: ops, escaping, the arena
 templates.{h,c}  generated from the pug templates -- 560 KB, and not a review task
 ```
@@ -346,7 +350,7 @@ outputs of its build.
 **Do not edit those two in this tree.** Change the template or `src/render.c` in
 `packages/email-native`, run `turbo @gradido/email-native#build`, and commit what it wrote. An
 edit made here is lost at the next build of that package and, worse, silently makes the two
-implementations send different mails in the meantime. `message`, `transport` and `mailer` are
+implementations send different mails in the meantime. `message`, `transport`, `mailer` and `config` are
 this repository's own and are edited here -- but a change to the first two reaches the addon,
 which compiles them, so build that package afterwards.
 
@@ -366,9 +370,11 @@ and they cost the binary nothing until the first caller.
 part, a line ending -- is `message.c`, and fixing it there fixes the addon too. What that file
 answers to is the RFCs, not this repository: 5322 for the headers, 2045/2046 for the parts,
 2047 for the subject, 2387 for the related bundle, 5321 for what SMTP does to it. Something about the
-relay -- TLS, auth, timeouts -- is `transport.c`, same reach. Only what is about *load* --
-how many sessions, how long a mail waits, what happens after a failure -- belongs in
-`mailer.c`, and that one is this path's alone.
+relay -- TLS, auth, timeouts -- is `transport.c`, same reach. Which variable says where the
+relay is, and what it defaults to, is `config.c`, and its original is
+`packages/service-core/src/email/schema.ts`. Only what is about *load* -- how many sessions,
+how long a mail waits, what happens after a failure -- belongs in `mailer.c`, and that one is
+this path's alone.
 
 ---
 

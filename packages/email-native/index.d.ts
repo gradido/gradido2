@@ -129,6 +129,14 @@ export class Mailer {
    * six `cid:` images.
    */
   sendMail(mail: Mail): Promise<string>
+  /**
+   * Opens a session, goes as far as a mail would, and hangs up without sending one --
+   * greeting, EHLO, the configured TLS upgrade, AUTH where there are credentials.
+   *
+   * The same libcurl and the same TLS stack a send uses, so a relay this accepts is a relay
+   * the sends can reach. Rejects with the relay's own words. What a server asks at startup.
+   */
+  verify(): Promise<void>
   readonly stats: MailerStats
   /** Refuses further sends. Mails already out settle their promises first. */
   close(): void

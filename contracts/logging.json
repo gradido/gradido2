@@ -246,10 +246,10 @@
           {
             "name": "reason",
             "type": "string",
-            "description": "closed vocabulary: no-terminal, not-set-up"
+            "description": "closed vocabulary: no-terminal, not-set-up, config-unwritable"
           }
         ],
-        "note": "The process exits with 1 after this line. Distinct from startup.database.failed on purpose: the database answered, what is missing is a setup step nobody has taken. not-set-up is a serving start against a database with no community — serving never asks, it names the `setup` command and stops. no-terminal is that command itself, run where there is nobody to answer it. See db/communities.json."
+        "note": "The process exits with 1 after this line. Distinct from startup.database.failed on purpose: the database answered, what is missing is a setup step nobody has taken. not-set-up is a serving start against a database with no community — serving never asks, it names the `setup` command and stops. no-terminal is that command itself, run where there is nobody to answer it. config-unwritable is that command again, with the answers given and the .env they belong in refused by the file system \u2014 nothing was written and nothing was migrated. See db/communities.json."
       },
       {
         "event": "auth.login.succeeded",
@@ -523,6 +523,67 @@
           }
         ],
         "note": "A registration that was answered as if it had succeeded. Carries usr with the id of the member who already holds the address — not of anybody new, because none was created. The answer to the caller says nothing about this; the log is the only place it is visible, which is the point."
+      },
+      {
+        "event": "mail.relay.connected",
+        "cat": "mail",
+        "level": "info",
+        "data": [
+          {
+            "name": "host",
+            "type": "string",
+            "description": "EMAIL_SMTP_HOST. The relay, never the sender \u2014 see redaction."
+          },
+          {
+            "name": "port",
+            "type": "uint32"
+          },
+          {
+            "name": "tls",
+            "type": "string",
+            "description": "closed vocabulary: none, starttls, require, implicit \u2014 EMAIL_SMTP_TLS"
+          },
+          {
+            "name": "auth",
+            "type": "bool",
+            "description": "Whether credentials were offered. Which ones is not logged."
+          }
+        ],
+        "note": "The backend opened a session to the relay at startup, went as far as a mail would \u2014 EHLO, the configured TLS upgrade, AUTH where there are credentials \u2014 and hung up without sending one. One line per start, and only the backend emits it: it is the role that sends mail."
+      },
+      {
+        "event": "mail.relay.failed",
+        "cat": "mail",
+        "level": "warn",
+        "data": [
+          {
+            "name": "host",
+            "type": "string",
+            "description": "EMAIL_SMTP_HOST. The relay, never the sender \u2014 see redaction."
+          },
+          {
+            "name": "port",
+            "type": "uint32"
+          },
+          {
+            "name": "tls",
+            "type": "string",
+            "description": "closed vocabulary: none, starttls, require, implicit \u2014 EMAIL_SMTP_TLS"
+          },
+          {
+            "name": "auth",
+            "type": "bool",
+            "description": "Whether credentials were offered. Which ones is not logged."
+          }
+        ],
+        "note": "The same probe, refused. warn and never fatal: a server whose mail is misconfigured still answers every route that sends none, and the alternative to this line is discovering it on the first registration. The relay's own words go in msg; they are not a contracted error code, and they must never carry the credentials."
+      },
+      {
+        "event": "mail.relay.disabled",
+        "cat": "mail",
+        "level": "info",
+        "data": [],
+        "note": "EMAIL is false, so nothing was probed and nothing will be sent. Said rather than left silent, because an operator asking why no mail arrives needs one line that answers it."
       }
     ]
   },

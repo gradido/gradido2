@@ -139,6 +139,8 @@ function fakeRelay() {
   const received = new Promise((r) => {
     resolveMail = r
   })
+  /* Every verb the relay was asked, in order. What tells a probe from a send. */
+  const verbs = []
   const server = net.createServer((socket) => {
     let inData = false
     let body = ''
@@ -155,6 +157,7 @@ function fakeRelay() {
       }
       for (const line of chunk.toString('utf8').split('\r\n').filter(Boolean)) {
         const verb = line.slice(0, 4).toUpperCase()
+        verbs.push(verb)
         if (verb === 'EHLO') {
           socket.write('250-fake\r\n250 8BITMIME\r\n')
         } else if (verb === 'HELO' || verb === 'MAIL' || verb === 'RCPT') {
@@ -174,7 +177,7 @@ function fakeRelay() {
       /* a client that drops mid-session is the test's business, not the relay's */
     })
   })
-  return { server, received }
+  return { server, received, verbs }
 }
 
 /* Runs on both runtimes, and the promise is the whole point: it settles when the relay has
@@ -296,6 +299,53 @@ test('a send settles its promise when the relay has the mail', async (t) => {
   assert.equal(s.sent, 1)
   assert.equal(s.failed, 0)
   assert.equal(s.pending, 0, 'nothing left in flight once the promise settled')
+})
+
+/*
+ * verify() is a send that stops before the mail: the greeting, EHLO, the configured TLS upgrade
+ * and AUTH, and then nothing. It exists so a server can find a wrong port or a rotated password
+ * at startup rather than at the first registration, and what it must not do is deliver anything
+ * while it looks.
+ */
+test('verify() reaches the relay and leaves no mail behind', async (t) => {
+  const { server, verbs } = fakeRelay()
+  await new Promise((r) => server.listen(0, '127.0.0.1', r))
+  const port = server.address().port
+  t.after(() => server.close())
+
+  const mailer = new email.Mailer({
+    url: `smtp://127.0.0.1:${port}`,
+    from: 'noreply@gradido.net',
+    starttls: 0, // the fake relay offers none
+  })
+  t.after(() => mailer.close())
+
+  await mailer.verify()
+
+  assert.ok(verbs.includes('EHLO'), 'greeted the relay')
+  assert.ok(verbs.includes('NOOP'), 'asked the one command that changes nothing')
+  assert.ok(!verbs.includes('MAIL'), 'no envelope was opened')
+  assert.ok(!verbs.includes('DATA'), 'no message was handed over')
+  /* The counters count mails, and this was not one. */
+  assert.equal(mailer.stats.sent, 0)
+  assert.equal(mailer.stats.failed, 0)
+  assert.equal(mailer.stats.pending, 0, 'nothing left in flight once the promise settled')
+})
+
+test("verify() rejects with the relay's own words when there is none", async (t) => {
+  /* Port 1 needs privileges nothing in a test has, so nothing is ever listening on it. */
+  const mailer = new email.Mailer({ url: 'smtp://127.0.0.1:1', from: 'noreply@gradido.net' })
+  t.after(() => mailer.close())
+
+  await assert.rejects(() => mailer.verify(), /connect|refused|Couldn|Could not/i)
+  assert.equal(mailer.stats.failed, 0, 'a refused session is not a failed mail')
+})
+
+test('verify() on a closed mailer is refused', async (t) => {
+  const mailer = new email.Mailer({ url: 'smtp://127.0.0.1:1', from: 'noreply@gradido.net' })
+  mailer.close()
+
+  await assert.rejects(() => mailer.verify(), /closed/)
 })
 
 /*

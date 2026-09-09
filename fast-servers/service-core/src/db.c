@@ -13,7 +13,7 @@
 #include <string.h>
 
 #include "db_internal.h"
-#include "service_core/env.h"
+#include "service_core/secret.h"
 #include "service_core/log/log.h"
 #include "service_core/runtime.h"
 
