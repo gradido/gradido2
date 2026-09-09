@@ -1,7 +1,7 @@
 import { runBackend } from './main'
 
 /**
- * The backend as its own process: `bun src/index.ts [serve|migrate-down]`.
+ * The backend as its own process: `bun src/index.ts [serve|setup|migrate-down]`.
  *
  * Everything it does is in `main.ts`, because the single binary starts the same backend
  * without being this file — it names `runBackend` among the services it can start, and a

@@ -27,28 +27,13 @@ export const userRoutes = (context: AppContext) =>
     '/create',
     async ({ body }) => {
       await registerAccount(context, body)
-      /* 204, with no body at all. There is nothing a caller can do with a new account: it
-         does not exist to them until the address is confirmed, and the page's whole job
-         afterwards is to point at an inbox. Legacy answers with a `User` here and its own
-         frontend asks for `{ id }` and then discards the result — so the one field it
-         selects is a faked one.
-
-         Answering with nothing also makes the silence rule structural rather than
-         maintained. When the address is already taken there is no row to describe, so an
-         earlier version of this route invented a gradido id and echoed the names back; two
-         paths producing an indistinguishable answer is a property somebody has to keep
-         true. An empty body is the same bytes either way, and there is no fabricated
-         identifier for a client to mistake for a real one. */
+      // return always ok, because we don't want attackers to scan or user emails and getting something out of that
       return status(204)
     },
     {
       body: userCreateRequestSchema,
-      /* Declared per status, so Eden Treaty gives the caller a discriminated union rather
-         than an `unknown` it has to guess at. The bodies are the contracted ones. */
       response: {
         204: v.undefined(),
-        400: errorBodySchema,
-        500: errorBodySchema,
       },
     },
   )

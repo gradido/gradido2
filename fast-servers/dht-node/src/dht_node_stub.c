@@ -15,7 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "service_core/log.h"
+#include "service_core/log/log.h"
 
 struct dht_node {
     /* Kept so shutdown can say what it is stopping, and so the struct is not empty -- a zero

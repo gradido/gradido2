@@ -30,7 +30,8 @@
 #include <vector>
 
 extern "C" {
-#include "service_core/log.h"
+#include "service_core/log/log.h"
+#include "service_core/log/logger.h"
 #include "service_core/email/mailer.h"
 
 /* sc_mail_encode_subject() arrives with email/message.h, which mailer.h includes. It used to be
@@ -1033,7 +1034,20 @@ int main(int argc, char **argv)
     /* Quiet: the failure paths below log a line each, and a hundred of them would bury the one
      * line that says which assertion failed. SC_MAIL_TEST_LOG turns them back on when a test is
      * being worked on. */
-    sc_log_init(std::getenv("SC_MAIL_TEST_LOG") != nullptr ? SC_LOG_DEBUG : SC_LOG_FATAL);
+    sc_log_config log_cfg;
+    int result;
+
+    sc_log_default_config(&log_cfg);
+    log_cfg.min_level = std::getenv("SC_MAIL_TEST_LOG") != nullptr ? SC_LOG_DEBUG : SC_LOG_FATAL;
+    sc_log_init(&log_cfg);
+    sc_log_thread_join();
+
     ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+    result = RUN_ALL_TESTS();
+
+    /* The logger is a thread now: without the shutdown the lines still in the ring are never
+     * written, and a failing test would be reported without the lines that explain it. */
+    sc_log_thread_leave();
+    sc_log_shutdown();
+    return result;
 }

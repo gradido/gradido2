@@ -41,8 +41,3 @@ export interface AddressOwner {
   readonly lastName: string
   readonly language: string
 }
-
-/** The one normalization every lookup and every write agrees on. */
-export function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase()
-}

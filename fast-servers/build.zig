@@ -559,6 +559,19 @@ const UnitTest = struct {
     /// rule forbids is the other four components' headers, which is what a shared test tree
     /// would hand out for free.
     includes: []const []const u8 = &.{},
+    /// Puts arnm's headers on the path.
+    ///
+    /// Same rule as `includes` and not an exception to it: service-core is written against arnm
+    /// -- the logger's encoders are arnm's JSON writer and its byte buffer -- so a test of that
+    /// part sees what the component itself sees. It is off by default because most tests reach
+    /// only the component's own surface, where arnm does not appear.
+    arnm: bool = false,
+    /// Set where the target must keep assert().
+    ///
+    /// zig defines NDEBUG for ReleaseFast and ReleaseSmall, which would switch off exactly the
+    /// assertions a test was built to run -- arnm's unchecked appends check their preconditions
+    /// only where the calling translation unit leaves them on.
+    keep_assertions: bool = false,
 };
 
 const Context = struct {
@@ -1302,6 +1315,11 @@ pub fn build(b: *std.Build) void {
             .{ .name = "test_mail", .dir = "service-core/tests", .src = "test_mail.cpp", .lib = service_core },
             .{ .name = "test_db", .dir = "service-core/tests", .src = "test_db.cpp", .lib = service_core },
             .{ .name = "test_jwt", .dir = "service-core/tests", .src = "test_jwt.cpp", .lib = service_core },
+            .{ .name = "test_log", .dir = "service-core/tests", .src = "test_log.cpp", .lib = service_core },
+            // The one test that reaches into a component's src/: the two calls it holds together
+            // are not on service-core's surface and should not be. See the file's own comment,
+            // and UnitTest.keep_assertions for why this one is not built the way the others are.
+            .{ .name = "test_log_pretty", .dir = "service-core/tests", .src = "test_log_pretty.cpp", .lib = service_core, .includes = &.{"service-core/src/log"}, .arnm = true, .keep_assertions = true },
             .{ .name = "test_migrations", .dir = "backend-core/tests", .src = "test_migrations.cpp", .lib = backend_core, .deps = &.{service_core}, .includes = &.{"service-core/include"} },
             .{ .name = "test_user", .dir = "backend-core/tests", .src = "test_user.cpp", .lib = backend_core, .deps = &.{service_core}, .includes = &.{"service-core/include"} },
             .{ .name = "test_field_rules", .dir = "backend/tests", .src = "test_field_rules.cpp", .sources = &.{"backend/src/field_rules.c"}, .includes = &.{"backend/src"} },
@@ -1309,11 +1327,18 @@ pub fn build(b: *std.Build) void {
         };
 
         for (unit_tests) |unit_test| {
+            const test_optimize: std.builtin.OptimizeMode = if (unit_test.keep_assertions)
+                switch (optimize) {
+                    .ReleaseFast, .ReleaseSmall => .ReleaseSafe,
+                    else => optimize,
+                }
+            else
+                optimize;
             const test_exe = b.addExecutable(.{
                 .name = unit_test.name,
                 .root_module = b.createModule(.{
                     .target = target,
-                    .optimize = optimize,
+                    .optimize = test_optimize,
                     .link_libc = true,
                     .link_libcpp = true,
                 }),
@@ -1324,6 +1349,7 @@ pub fn build(b: *std.Build) void {
             // component itself is written against. That is the point -- see UnitTest.includes.
             test_exe.addIncludePath(b.path(b.fmt("{s}/include", .{std.fs.path.dirname(unit_test.dir).?})));
             for (unit_test.includes) |dir| test_exe.addIncludePath(b.path(dir));
+            if (unit_test.arnm) test_exe.addIncludePath(arnm_dep.path("include"));
             test_exe.addCSourceFiles(.{
                 .files = &.{b.fmt("{s}/{s}", .{ unit_test.dir, unit_test.src })},
                 // The googletest macros do not compile clean under our flags and are not ours

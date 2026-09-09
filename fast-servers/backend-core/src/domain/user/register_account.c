@@ -26,7 +26,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "service_core/log.h"
+#include "service_core/log/log.h"
 
 /** What the gradido id ladder asks the database, carried through as its user_data. */
 typedef struct gradido_id_probe {

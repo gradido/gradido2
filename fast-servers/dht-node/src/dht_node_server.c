@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "dht_node/dht_node.h"
-#include "service_core/log.h"
+#include "service_core/log/log.h"
 
 /* dht-node/Architecture.md: the sweep runs every 20 seconds. */
 #define DHT_DRAIN_INTERVAL_MS 20000

@@ -3,7 +3,6 @@ import type { BackendContext } from '../../../BackendContext'
 import { newGradidoId } from '../logic/gradidoId.logic'
 import { newEmailVerificationCode } from '../logic/verificationCode.logic'
 import { UserRepository } from '../repositories'
-import { normalizeEmail } from '../user.data'
 
 /**
  * Somebody signs up.
@@ -37,10 +36,9 @@ export async function registerAccount(
   context: BackendContext,
   request: UserCreateRequest,
 ): Promise<void> {
-  const email = normalizeEmail(request.email)
   const users = new UserRepository(context.db)
 
-  const owner = await users.findAddressOwner(email)
+  const owner = await users.findAddressOwner(request.email)
   if (owner !== undefined) {
     context.logger
       .child({ usr: owner.id })
@@ -59,7 +57,7 @@ export async function registerAccount(
   }
 
   const userId = await users.createAccount({
-    email,
+    email: request.email,
     firstName: request.firstName,
     lastName: request.lastName,
     language: request.language,

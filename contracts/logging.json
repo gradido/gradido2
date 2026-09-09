@@ -246,10 +246,10 @@
           {
             "name": "reason",
             "type": "string",
-            "description": "closed vocabulary: no-terminal"
+            "description": "closed vocabulary: no-terminal, not-set-up"
           }
         ],
-        "note": "The process exits with 1 after this line. Distinct from startup.database.failed on purpose: the database answered, what is missing is a setup step nobody has taken — this instance has no community yet and there was no way to ask for one. See db/communities.json."
+        "note": "The process exits with 1 after this line. Distinct from startup.database.failed on purpose: the database answered, what is missing is a setup step nobody has taken. not-set-up is a serving start against a database with no community — serving never asks, it names the `setup` command and stops. no-terminal is that command itself, run where there is nobody to answer it. See db/communities.json."
       },
       {
         "event": "auth.login.succeeded",

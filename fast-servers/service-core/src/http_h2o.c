@@ -32,7 +32,8 @@
 #include "h2o/http1.h"
 
 #include "http_defer.h"
-#include "service_core/log.h"
+#include "service_core/log/log.h"
+#include "service_core/log/logger.h"
 
 /*
  * h2o allocates the handler and hands it back on every request, so the registration data rides
@@ -64,6 +65,10 @@ typedef struct sc_http_loop {
     sc_defer_table defer;
     struct sc_http_server *server;
     uv_thread_t thread;
+    /* The h2o socket wrapping listen_fd. Kept because closing it is how this loop stops
+     * accepting -- and because h2o closes the descriptor with it, which is why listen_fd is set
+     * to -1 at the same moment. */
+    h2o_socket_t *accept_sock;
     int listen_fd;
     int context_started;
     int thread_started;
@@ -207,6 +212,9 @@ void sc_http_server_destroy(sc_http_server *server)
             h2o_context_dispose(&loop->context);
             h2o_evloop_destroy(evloop);
         }
+        /* Still open only for a loop that never ran -- one whose thread would not start, or one
+         * bound after another had already failed. A loop that served gave this up in
+         * drain_loop(), where h2o closed it along with the accept socket. */
         if (loop->listen_fd != -1)
             (void)close(loop->listen_fd);
     }
@@ -363,6 +371,7 @@ sc_status sc_http_listen(sc_http_server *server)
         if (sock == NULL)
             return SC_ERR_NETWORK;
         sock->data = loop;
+        loop->accept_sock = sock;
         h2o_socket_read_start(sock, on_accept);
     }
 
@@ -370,6 +379,59 @@ sc_status sc_http_listen(sc_http_server *server)
                 server->role, server->host, (unsigned)server->port, (unsigned)server->thread_count,
                 server->thread_count == 1 ? "" : "s");
     return SC_OK;
+}
+
+/** Connections this loop is still holding, in any state. */
+static size_t connections_open(const h2o_context_t *context)
+{
+    return context->_conns.num_conns.idle + context->_conns.num_conns.active +
+           context->_conns.num_conns.shutdown;
+}
+
+/*
+ * Stop accepting, ask every connection to close, and keep the loop turning until they have.
+ *
+ * Without this the loop is destroyed while its connections still exist, and each of those still
+ * has a timer on the wheel -- which h2o refuses: `h2o_evloop_destroy` asserts the wheel is
+ * empty, so a server that had ever carried load aborted on the way out instead of exiting. The
+ * assertion is compiled out of a release build, which does not make destroying a loop out from
+ * under its own timers any better an idea.
+ *
+ * It runs here, on the loop's own thread, because an h2o loop is not something two threads may
+ * touch. h2o_socket_close() on the accept socket closes listen_fd with it, so that descriptor is
+ * given up here and sc_http_server_destroy leaves it alone.
+ *
+ * The wait has a bound: a client that never closes must not keep the process alive, and the
+ * alternative to a bound is a shutdown that hangs. What the bound costs when it is reached is
+ * the loop being destroyed with connections still on it -- exactly the state this exists to
+ * avoid -- so it is said out loud rather than passed over.
+ */
+static void drain_loop(sc_http_loop *loop)
+{
+    const int64_t deadline = sc_now_ms() + SC_HTTP_DRAIN_MS;
+
+    if (loop->accept_sock != NULL) {
+        /* First, and before the shutdown is requested: a connection accepted after that request
+         * is one nobody has asked to close. */
+        h2o_socket_close(loop->accept_sock);
+        loop->accept_sock = NULL;
+        loop->listen_fd = -1;
+    }
+    h2o_context_request_shutdown(&loop->context);
+
+    while (connections_open(&loop->context) != 0) {
+        if (sc_now_ms() >= deadline) {
+            sc_log_warn(SC_CAT_STARTUP, "server.drain.timeout",
+                        "%s gave up waiting for %zu connection%s to close after %d ms",
+                        loop->server->role, connections_open(&loop->context),
+                        connections_open(&loop->context) == 1 ? "" : "s", SC_HTTP_DRAIN_MS);
+            return;
+        }
+        if (h2o_evloop_run(loop->context.loop, SC_RUNTIME_TICK_MS) != 0) {
+            loop->status = SC_ERR_NETWORK;
+            return;
+        }
+    }
 }
 
 static void run_loop(void *arg)
@@ -382,6 +444,23 @@ static void run_loop(void *arg)
             return;
         }
     }
+    /* The quit flag, not an error: the loop is coming down on purpose and its connections have
+     * to be let go of before anything is disposed. An error above skips this deliberately --
+     * there is no reason to think a loop that failed will run again. */
+    drain_loop(loop);
+}
+
+/*
+ * The same loop, on a thread of this function's own making, with the logger registration around
+ * it. Loop 0 does not come through here: it runs on the role's thread, which main already
+ * registered, and a second registration there would hand the role's arena pool back at the end
+ * of the loop rather than at the end of the role.
+ */
+static void run_loop_thread(void *arg)
+{
+    (void)sc_log_thread_join();
+    run_loop(arg);
+    sc_log_thread_leave();
 }
 
 sc_status sc_http_run(sc_http_server *server, const sc_quit_flag *quit)
@@ -396,7 +475,7 @@ sc_status sc_http_run(sc_http_server *server, const sc_quit_flag *quit)
     /* Loop 0 runs on the calling thread. A role therefore still owns exactly the one thread
      * main gave it, and the others are this function's own business from start to join. */
     for (i = 1; i != server->thread_count; ++i) {
-        if (uv_thread_create(&server->loops[i].thread, run_loop, &server->loops[i]) != 0) {
+        if (uv_thread_create(&server->loops[i].thread, run_loop_thread, &server->loops[i]) != 0) {
             sc_log_error(SC_CAT_STARTUP, "server.thread.failed", "%s could not start loop %u of %u",
                          server->role, (unsigned)i, (unsigned)server->thread_count);
             /* The threads that did start are joined below; raising the flag is what brings

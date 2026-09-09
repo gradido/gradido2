@@ -14,7 +14,7 @@
 
 #include <stdint.h>
 
-#include "service_core/log.h"
+#include "service_core/log/log.h"
 #include "service_core/status.h"
 
 #define SC_CONFIG_HOST_MAX 64

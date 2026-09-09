@@ -123,6 +123,11 @@ endif()
 # it resolves to today. It is v0.20.0, which lives on the map_complete_transaction_json branch
 # rather than on master -- master is still v0.17.1, and this build wants the JSON mapping that
 # was written against arnm 0.7.5.
+#
+# **That pin is also this build's arnm**, and service-core/src/log is written against 0.8.0 --
+# the graded arena pool, the byte buffer and the JSON writer that carries a key's length. So
+# this file cannot raise arnm on its own: the core is where it comes from, and moving it means
+# moving the commit above. build.zig.zon says the same thing from the other side.
 set(USE_SODIUM ON CACHE BOOL "" FORCE)
 FetchContent_Declare(blockchain_core
   GIT_REPOSITORY https://github.com/gradido/gradido-blockchain-core.git
@@ -240,7 +245,7 @@ endif()
 # The two HTTP backends live beside each other in service-core/src; exactly one is compiled.
 # The email half sits one level down, in service-core/src/email; build.zig walks the tree,
 # this build has to name it.
-file(GLOB SERVICE_CORE_SRC "service-core/src/*.c" "service-core/src/email/*.c")
+file(GLOB SERVICE_CORE_SRC "service-core/src/*.c" "service-core/src/email/*.c" "service-core/src/log/*.c")
 if(FS_ENABLE_H2O)
   list(REMOVE_ITEM SERVICE_CORE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/service-core/src/http_fallback.c")
 else()

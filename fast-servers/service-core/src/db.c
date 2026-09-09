@@ -13,7 +13,7 @@
 #include <string.h>
 
 #include "db_internal.h"
-#include "service_core/log.h"
+#include "service_core/log/log.h"
 #include "service_core/runtime.h"
 
 /* The TypeScript path's defaults, from packages/backend-core/src/database/schema.ts. They are

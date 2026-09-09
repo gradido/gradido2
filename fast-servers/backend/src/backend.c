@@ -11,7 +11,7 @@
 #include "routes.h"
 #include "service_core/db.h"
 #include "service_core/http.h"
-#include "service_core/log.h"
+#include "service_core/log/log.h"
 #include "setup.h"
 
 sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit)
@@ -45,10 +45,11 @@ sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit)
     sc_db_config_log(&db_config);
 
     /* Everything that has to be true before a request can be served: the database answers, its
-     * schema is current, and this instance knows which community it is. Each failure is already
-     * a line of its own by the time this returns -- see bc_context_open -- so the role only has
-     * to stop. */
-    status = bc_context_open(&db_config, quit, backend_ask_for_home_community, &context);
+     * schema is current, and this instance knows which community it is. Nothing here asks
+     * anybody anything -- a database with no community stops the start and names the setup
+     * command. Each failure is already a line of its own by the time this returns -- see
+     * bc_context_open -- so the role only has to stop. */
+    status = bc_context_open(&db_config, quit, &context);
     if (status != SC_OK) {
         backend_core_shutdown();
         return status;
@@ -119,6 +120,88 @@ sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit)
 
 /** What DB_MIGRATE_DOWN is set to when the step to undo is the first one. */
 #define EMPTY_DATABASE BC_MIGRATE_DOWN_EMPTY_TARGET
+
+sc_status backend_setup(const sc_config *cfg, const sc_quit_flag *quit)
+{
+    sc_db_config db_config;
+    sc_db *db = NULL;
+    bc_home_community existing;
+    bc_home_community created;
+    bc_home_community_setup setup;
+    char error[BC_SQL_ERROR_MAX];
+    sc_log_value db_field[1];
+    sc_log_context log = {0};
+    int found = 0;
+    sc_status status;
+
+    if (cfg == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+
+    status = sc_db_config_load(&db_config);
+    if (status != SC_OK)
+        return status;
+    sc_db_config_log(&db_config);
+    db_field[0] = (sc_log_value)SC_LOG_STR("db", sc_db_kind_name(db_config.kind));
+    log.data = db_field;
+    log.data_count = 1;
+
+    status = sc_db_open_waiting(&db_config, quit, &db);
+    if (status != SC_OK) {
+        sc_log_event(SC_LOG_FATAL, SC_CAT_STARTUP, "startup.database.failed", &log,
+                     "cannot reach the database");
+        return status;
+    }
+
+    /* The migrations are not optional here: the row cannot be written into a schema that is not
+     * there yet. Running them is idempotent, so nothing is decided here that a serving start
+     * would decide differently. */
+    status = bc_migrations_run(db, NULL);
+    if (status != SC_OK) {
+        if (status != SC_ERR_MALFORMED)
+            sc_log_event(SC_LOG_FATAL, SC_CAT_STARTUP, "startup.database.failed", &log,
+                         "the database could not be migrated");
+        sc_db_close(db);
+        return status;
+    }
+
+    status = bc_community_find_home(db, &existing, &found, error, sizeof(error));
+    if (status != SC_OK) {
+        sc_log_event(SC_LOG_FATAL, SC_CAT_STARTUP, "startup.database.failed", &log,
+                     "cannot read the home community: %s", error);
+        sc_db_close(db);
+        return status;
+    }
+    if (found) {
+        /* Not a log line: it reports what this invocation found, not something that happened to
+         * the instance, and the contracted stream has nothing to say about a command that did
+         * nothing. The community that is already there was logged the day it was written. */
+        (void)fprintf(stderr, "this instance is already set up as \"%s\"\n", existing.name);
+        sc_db_close(db);
+        return SC_OK;
+    }
+
+    memset(&setup, 0, sizeof(setup));
+    if (!backend_ask_for_home_community(&setup)) {
+        sc_log_value reason[1] = {SC_LOG_STR("reason", "no-terminal")};
+        sc_log_context setup_log = {0};
+
+        setup_log.data = reason;
+        setup_log.data_count = 1;
+        sc_log_event(SC_LOG_FATAL, SC_CAT_STARTUP, "startup.setup.failed", &setup_log,
+                     "setup needs a terminal to ask on, and there is none. Run it with one "
+                     "attached -- under docker compose that is: docker compose run --rm backend "
+                     "setup");
+        sc_db_close(db);
+        return SC_ERR_UNAVAILABLE;
+    }
+
+    status = bc_create_home_community(db, &setup, &created, error, sizeof(error));
+    if (status != SC_OK)
+        sc_log_event(SC_LOG_FATAL, SC_CAT_STARTUP, "startup.database.failed", &log,
+                     "the home community could not be written: %s", error);
+    sc_db_close(db);
+    return status;
+}
 
 sc_status backend_migrate_down(const sc_config *cfg, const sc_quit_flag *quit)
 {

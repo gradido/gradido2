@@ -294,8 +294,8 @@ inline void VectorFile::read_envelope(const std::string &path, arnm_json_value *
         throw std::runtime_error(path + ": a subject with no vectors passes by saying nothing");
     vectors_.assign(static_cast<size_t>(declared), nullptr);
     uint32_t actual = 0;
-    if (arnm_json_read_array(array, vectors_.data(), static_cast<uint32_t>(declared), &actual) !=
-        ARNM_SUCCESS)
+    if (arnm_json_read_array(array, ARNM_JSON_FIELD_TYPE_VALUE, vectors_.data(),
+                             static_cast<uint32_t>(declared), &actual) != ARNM_SUCCESS)
         throw std::runtime_error(path + ": vectors is no array, or is longer than the declared " +
                                  std::to_string(declared));
     if (actual != static_cast<uint32_t>(declared))

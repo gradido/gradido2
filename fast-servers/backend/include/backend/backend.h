@@ -21,6 +21,26 @@
 sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit);
 
 /**
+ * `setup`: opens the database, brings the schema up, asks who this community is, stops.
+ *
+ * The conversation a first start used to hold itself. It is a command because it asks
+ * questions, and a process that both answers requests and reads an answer off a terminal is two
+ * things at once: it cannot be started unattended, its log and its prompts share a terminal, and
+ * under `docker compose up` rather than `run` the questions go where nobody is looking. So a
+ * serving start against a database with no community stops and names this instead -- see
+ * bc_context_open. It is the split postgres makes with `initdb`, vault with `operator init` and
+ * django with `createsuperuser`.
+ *
+ * **Safe to run twice.** A database that already has a community says so and answers SC_OK:
+ * setting up an instance that is set up is a no-op, not a failure, and an operator running this
+ * from a script should not have to check first.
+ *
+ * Deliberately not backend_run's path either: that one requires the community rather than
+ * writing it, which is the whole difference between the two.
+ */
+sc_status backend_setup(const sc_config *cfg, const sc_quit_flag *quit);
+
+/**
  * `migrate-down`: opens the database, takes it down by one migration, stops.
  *
  * **In development it runs. On a release it runs only when DB_MIGRATE_DOWN names the migration
@@ -38,7 +58,7 @@ sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit);
  * step and immediately re-apply it. Going down means the next thing started is a different build.
  *
  * Deliberately not backend_run's path: that one migrates up on the way, which is the
- * contradiction above, and it asks for a home community, which a schema operation has no
+ * contradiction above, and it requires a home community, which a schema operation has no
  * business needing.
  */
 sc_status backend_migrate_down(const sc_config *cfg, const sc_quit_flag *quit);

@@ -14,7 +14,7 @@
 #include "arnm/json_reader.h"
 
 #include "backend_core/database/contract_files.h"
-#include "service_core/log.h"
+#include "service_core/log/log.h"
 
 #if defined(SC_DB_WITH_SQLITE)
 #include <sqlite3.h>
@@ -329,8 +329,8 @@ sc_status bc_migrations_load(sc_db_kind kind, bc_migration_set *out, char *error
         }
     }
 
-    if (arnm_json_read_array(migrations_value, entries, BC_MIGRATIONS_MAX, &entry_count) !=
-        ARNM_SUCCESS) {
+    if (arnm_json_read_array(migrations_value, ARNM_JSON_FIELD_TYPE_VALUE, entries,
+                             BC_MIGRATIONS_MAX, &entry_count) != ARNM_SUCCESS) {
         bc_sql_set_error(error, error_size,
                          "index.json lists more migrations than this build can hold");
         goto done;

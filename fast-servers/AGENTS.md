@@ -67,10 +67,18 @@ mistaken for the rule:
 http_fallback.c   one calloc per connection, 80 KiB of buffers. Affordable
                   only because that backend is the one not carrying load —
                   do not carry the shape over to the h2o path.
-log.c             a line that would not fit is truncated. The one place
+src/log/          a sentence that would not fit is truncated. The one place
                   truncating beats failing: the alternative is losing the
                   event entirely, and the structure around it is never
-                  truncated, only the human sentence.
+                  truncated, only the human sentence — a half-written object
+                  is not JSON and the tests parse this stream.
+                  The module's allocation is the rule and not an exception to
+                  it: the record goes into an arena out of the submitting
+                  thread's own graded pool, and the pool is prefilled at
+                  startup so a steady state never reaches the host. What can
+                  reach it is a burst deep enough to empty the stock, which
+                  `sc_log_stats.host_allocs` counts and `spare_per_grade`
+                  is the knob for.
 ```
 
 Anything else that wants to allocate per request is a design change, not a patch.
@@ -152,7 +160,13 @@ libsodium          HS256, for the JWT. Same pin and the same options the
                    core requests, or the build gets two instances of it.
 arnm               the arena, the containers, the conversions and the JSON
                    the core is written against — arnm_result is what a grd*
-                   call answers with. Same pin and options as the core.
+                   call answers with. Since 0.8.0 also the graded arena pool,
+                   the byte buffer and the JSON writer the logger is built on.
+                   Same pin and options as the core, and that is a hard
+                   requirement rather than tidiness: the core is what *links*
+                   the artifact, this build only puts the headers on the path.
+                   Two pins is two packages, and the headers of one against
+                   the objects of the other.
 h2o         lazy   the fast HTTP backend. Lazy is not about the download:
                    the checkout carries symlinks under deps/, which a Windows
                    host cannot unpack, and the Windows build does not compile

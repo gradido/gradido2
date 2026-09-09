@@ -2,7 +2,7 @@
 
 #include "backend_core/backend_core.h"
 #include "service_core/http.h"
-#include "service_core/log.h"
+#include "service_core/log/log.h"
 
 sc_status federation_run(const sc_config *cfg, const sc_quit_flag *quit)
 {

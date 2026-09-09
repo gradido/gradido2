@@ -324,6 +324,12 @@ src/main.c        role selection, the quit flag, one thread per role
 service-core/     logging, config, the HTTP surface and its two backends,
                   the cache table, JWT, the database connection and its two
                   drivers. Threads and locks come from libuv
+service-core/log/ the logger, asynchronous: a submitting thread packs the
+                  record into an arena out of its own pool and hands it to an
+                  MPSC ring, one logger thread encodes the contracted JSON
+                  (and optionally a pino-pretty style line beside it) and
+                  writes it. log/logger.h holds the arrangement, log/log.h
+                  the five calls that write a line
 service-core/email/
                   the mail half, in three layers: message (the bytes),
                   transport (one SMTP session) and mailer (queue, retry,

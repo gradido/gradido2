@@ -36,3 +36,30 @@ target_link_libraries(test_jwt PRIVATE service_core GTest::gtest)
 # at their bounds, the sign-then-verify round trip. Which payloads are refused is shared
 # behaviour and lives in contracts/test-vectors/jwt.json, run by ../../tests/contract.
 add_test(NAME service_core.jwt COMMAND test_jwt)
+
+add_executable(test_log test_log.cpp)
+target_include_directories(test_log PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_link_libraries(test_log PRIVATE service_core GTest::gtest)
+
+# The logger from the outside: the contracted line byte for byte, the escaping, the level
+# filter, and the three things only a running ring can be wrong about -- backpressure that
+# drops, arenas that do not come back, lines torn between eight threads.
+add_test(NAME service_core.log COMMAND test_log)
+
+# The one test that sees a component's src/: the two calls it holds together are not on
+# service-core's surface, and it needs arnm's header because they take an arnm_byte_buffer.
+# arnm_SOURCE_DIR is where the core populated it -- see the top of ../../CMakeLists.txt.
+add_executable(test_log_pretty test_log_pretty.cpp)
+target_include_directories(test_log_pretty PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../src/log
+  ${arnm_SOURCE_DIR}/include)
+target_link_libraries(test_log_pretty PRIVATE service_core GTest::gtest)
+# Built with assertions on whatever the build type is: arnm's unchecked appends check their
+# preconditions only where NDEBUG is off, and those checks are half of what this test is for.
+target_compile_options(test_log_pretty PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/UNDEBUG>
+                                               $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-UNDEBUG>)
+
+# The measured length of a pretty line against the length its encoder writes, over every level,
+# category, value kind, count, number boundary and clock reading.
+add_test(NAME service_core.log_pretty COMMAND test_log_pretty)

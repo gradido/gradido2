@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "service_core/log.h"
+#include "service_core/log/log.h"
 
 #if defined(SC_DB_WITH_SQLITE)
 #include <sqlite3.h>

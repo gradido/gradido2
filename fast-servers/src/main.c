@@ -10,18 +10,28 @@
  *   gradido2-fast                          the backend
  *   gradido2-fast --federation             federation only
  *   gradido2-fast --backend --dht-node     both, in one process
+ *   gradido2-fast setup                    say who this community is, then stop
  *   gradido2-fast migrate-down             take the database down one migration, then stop
  *
- * `migrate-down` is a command rather than a role and serves nothing: a serving start migrates
- * *up* to the version its code needs, so taking the database to N-1 and then serving a build
- * that needs N would undo the step and re-apply it in the same breath. Going down means the next
- * thing started is a different build, and that is a separate act. See backend/backend.h.
+ * The last two are commands rather than roles and serve nothing, for two different reasons.
+ *
+ * `migrate-down`: a serving start migrates *up* to the version its code needs, so taking the
+ * database to N-1 and then serving a build that needs N would undo the step and re-apply it in
+ * the same breath. Going down means the next thing started is a different build, and that is a
+ * separate act.
+ *
+ * `setup` asks questions. A process that both answers requests and reads an answer off a
+ * terminal is two things at once: it cannot be started unattended, its log and its prompts share
+ * a terminal, and under `docker compose up` the questions go where nobody is looking. So a
+ * serving start against a database with no community stops and names this command instead. See
+ * backend/backend.h for both.
  *
  * Shutdown is one flag. SIGINT or SIGTERM raises it, every run loop notices within
  * SC_RUNTIME_TICK_MS and returns, and main joins the threads. Nothing is cancelled from the
  * outside: a thread stopped mid-request is a thread that leaked whatever it was holding.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <uv.h>
@@ -33,7 +43,8 @@
 #include "service_core/db.h"
 #include "service_core/http.h"
 #include "service_core/jwt.h"
-#include "service_core/log.h"
+#include "service_core/log/log.h"
+#include "service_core/log/logger.h"
 #include "service_core/runtime.h"
 #include "service_core/status.h"
 
@@ -65,6 +76,32 @@ static const fs_role kRoles[] = {
 
 #define FS_ROLE_COUNT ((int)(sizeof(kRoles) / sizeof(kRoles[0])))
 
+/**
+ * A command: the whole process, doing one thing that is not serving.
+ *
+ * Two of them, and a third would be a line here -- the shape is the one the role registry above
+ * has, for the same reason. `quit` is passed on because both of them wait for a database and a
+ * Ctrl-C during that wait has to be noticed the way it is everywhere else.
+ */
+typedef sc_status (*fs_command_fn)(const sc_config *cfg, const sc_quit_flag *quit);
+
+typedef struct fs_command {
+    const char *name;
+    fs_command_fn run;
+    const char *summary;
+    /** The second line of the usage entry, where one sentence does not carry it. */
+    const char *detail;
+} fs_command;
+
+static const fs_command kCommands[] = {
+    {"setup", backend_setup, "say who this community is and stop",
+     "run it once, with a terminal attached, before the first start"},
+    {"migrate-down", backend_migrate_down, "take the database down one migration and stop",
+     "on a release only, with DB_MIGRATE_DOWN naming the migration one lower"},
+};
+
+#define FS_COMMAND_COUNT ((int)(sizeof(kCommands) / sizeof(kCommands[0])))
+
 static sc_quit_flag g_quit;
 
 typedef struct fs_role_thread {
@@ -81,6 +118,11 @@ static void run_role(void *arg)
 {
     fs_role_thread *slot = (fs_role_thread *)arg;
 
+    /* Its own arena pool and its own return queue, for as long as the role runs -- the logger
+     * hands arenas back to the thread that took them and to no one else. Leaving is what
+     * releases the pool again, and it has to happen while the logger is still running, which
+     * is why it is here and not after the join below. */
+    (void)sc_log_thread_join();
     slot->status = slot->role->run(slot->cfg, &g_quit);
     if (slot->status != SC_OK) {
         /* One role that cannot start takes the process down. A half-started server that keeps
@@ -89,6 +131,7 @@ static void run_role(void *arg)
                      sc_status_name(slot->status));
         sc_runtime_request_quit();
     }
+    sc_log_thread_leave();
 }
 
 static void print_usage(FILE *out)
@@ -102,9 +145,10 @@ static void print_usage(FILE *out)
     for (i = 0; i < FS_ROLE_COUNT; ++i)
         fprintf(out, "  %-14s %s\n", kRoles[i].flag, kRoles[i].summary);
     fprintf(out, "\ncommands (instead of a role):\n");
-    fprintf(out, "  %-14s take the database down one migration and stop. On a release only\n",
-            "migrate-down");
-    fprintf(out, "  %-14s with DB_MIGRATE_DOWN naming the migration one lower\n", "");
+    for (i = 0; i < FS_COMMAND_COUNT; ++i) {
+        fprintf(out, "  %-14s %s\n", kCommands[i].name, kCommands[i].summary);
+        fprintf(out, "  %-14s %s\n", "", kCommands[i].detail);
+    }
     fprintf(out, "\noptions:\n");
     fprintf(out, "  %-14s this text\n", "-h, --help");
     fprintf(out, "  %-14s version and build features\n", "-v, --version");
@@ -132,9 +176,10 @@ int main(int argc, char **argv)
     int selected[FS_ROLE_COUNT];
     fs_role_thread threads[FS_ROLE_COUNT];
     sc_config cfg;
+    sc_log_config log_cfg;
     sc_status status;
     int any_selected = 0;
-    int migrate_down = 0;
+    const fs_command *command = NULL;
     int exit_code = 0;
     int i;
 
@@ -154,10 +199,22 @@ int main(int argc, char **argv)
             print_version();
             return 0;
         }
-        if (strcmp(arg, "migrate-down") == 0) {
-            migrate_down = 1;
-            continue;
+        for (r = 0; r < FS_COMMAND_COUNT; ++r) {
+            if (strcmp(arg, kCommands[r].name) == 0) {
+                if (command != NULL && command != &kCommands[r]) {
+                    fprintf(stderr, "gradido2-fast: %s and %s are both commands; the process "
+                                    "does one thing or the other\n\n",
+                            command->name, kCommands[r].name);
+                    print_usage(stderr);
+                    return 2;
+                }
+                command = &kCommands[r];
+                matched = 1;
+                break;
+            }
         }
+        if (matched)
+            continue;
         for (r = 0; r < FS_ROLE_COUNT; ++r) {
             if (strcmp(arg, kRoles[r].flag) == 0) {
                 selected[r] = 1;
@@ -172,26 +229,47 @@ int main(int argc, char **argv)
             return 2;
         }
     }
-    if (migrate_down && any_selected) {
-        fprintf(stderr, "gradido2-fast: migrate-down is a command, not a role; it serves nothing "
-                        "and cannot be combined with one\n\n");
+    if (command != NULL && any_selected) {
+        fprintf(stderr, "gradido2-fast: %s is a command, not a role; it serves nothing and "
+                        "cannot be combined with one\n\n",
+                command->name);
         print_usage(stderr);
         return 2;
     }
     if (!any_selected)
         selected[0] = 1; /* --backend, the default */
 
+    /*
+     * The logger before the configuration, and its level straight out of the environment rather
+     * than out of `cfg`: sc_config_load() logs about what it cannot read, and it would be a poor
+     * arrangement in which the variable that says how loud to be is only honoured once the whole
+     * environment has parsed. sc_config_load() reads the same variable into cfg.log_level, which
+     * is what config.loaded reports back.
+     *
+     * A failure here is not fatal and is not reported: without a logger thread every line takes
+     * the synchronous path instead, which is the shape this whole process had until the ring
+     * existed. Losing the throughput is worth a great deal less than losing the lines.
+     *
+     * **A command gets that synchronous path on purpose.** The ring exists to keep a request
+     * from waiting on a write, and a command serves no requests: `setup` reads an answer off the
+     * terminal it is logging to, where a line still sitting in a 64 KiB buffer would surface
+     * between two questions, and `migrate-down` writes a handful of lines and stops. It is the
+     * same call the reference path makes with pino's `sync` when stdout is a terminal.
+     */
+    sc_log_default_config(&log_cfg);
+    log_cfg.min_level = sc_log_level_from_name(getenv("LOG_LEVEL"), SC_LOG_INFO);
+    log_cfg.synchronous = command != NULL;
+    (void)sc_log_init(&log_cfg);
+    (void)sc_log_thread_join();
+
     status = sc_config_load(&cfg);
-    /* The log is initialised after the config, which is why sc_config_load's own failures are
-     * logged at the default level -- a configuration that cannot be read cannot say how it
-     * wanted to be logged about. */
     if (status != SC_OK) {
-        sc_log_init(SC_LOG_INFO);
         sc_log_fatal(SC_CAT_STARTUP, "config.failed", "configuration is unusable: %s",
                      sc_status_name(status));
+        sc_log_thread_leave();
+        sc_log_shutdown();
         return 1;
     }
-    sc_log_init(cfg.log_level);
     sc_config_log(&cfg);
     sc_log_info(SC_CAT_STARTUP, "process.start", "gradido2-fast %s, http backend %s", FS_VERSION,
                 sc_http_backend_name());
@@ -204,8 +282,12 @@ int main(int argc, char **argv)
     /* The command, and then the process is over: nothing listens, no role starts, and the flag
      * is installed above only so that a Ctrl-C while the database is being waited for is noticed
      * the way it is everywhere else. */
-    if (migrate_down)
-        return backend_migrate_down(&cfg, &g_quit) == SC_OK ? 0 : 1;
+    if (command != NULL) {
+        exit_code = command->run(&cfg, &g_quit) == SC_OK ? 0 : 1;
+        sc_log_thread_leave();
+        sc_log_shutdown();
+        return exit_code;
+    }
 
     for (i = 0; i < FS_ROLE_COUNT; ++i) {
         if (!selected[i])
@@ -235,5 +317,12 @@ int main(int argc, char **argv)
         if (threads[i].status != SC_OK)
             exit_code = 1;
     }
+
+    /* Last, and in this order: every role thread has been joined, so nothing is still writing a
+     * line, and this thread gives its own pool back before the logger that holds the other end
+     * of it stops. Without the shutdown the lines still in the ring -- process.stopping among
+     * them -- would never be written at all. */
+    sc_log_thread_leave();
+    sc_log_shutdown();
     return exit_code;
 }

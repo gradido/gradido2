@@ -1,5 +1,8 @@
 /*
- * The first start against an empty database: ask the admin who this community is.
+ * The setup command's questions: ask the admin who this community is.
+ *
+ * Reached from backend_setup() and from nowhere else. A serving start does not come here --
+ * backend/backend.h, backend_setup, holds why the conversation is a command of its own.
  *
  * Legacy reads COMMUNITY_NAME and COMMUNITY_DESCRIPTION out of the environment at every start.
  * gradido2 asks once and writes a row, because these are not settings -- they are the identity of
@@ -170,9 +173,9 @@ static int ask(const char *label, answer_kind kind, char *out, size_t out_size, 
 
 int backend_ask_for_home_community(bc_home_community_setup *setup)
 {
-    /* Without a terminal there is nobody to answer, and a process that blocked on a prompt
-     * nobody can see would look like a hung start rather than an unfinished setup. The caller
-     * turns this into a line that says what to do instead. */
+    /* Without a terminal there is nobody to answer, and a command that blocked on a prompt
+     * nobody can see would look like a hang rather than an unfinished setup. The caller turns
+     * this into a line that says what to do instead. */
     if (!bk_isatty(stdin) || !bk_isatty(stdout))
         return 0;
 
