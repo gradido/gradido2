@@ -1,0 +1,76 @@
+{
+  "contractVersion": 1,
+  "kind": "config",
+  "description": "How both implementations reach the database: the environment variables, their defaults, and the two rules that are decided here rather than twice. The backend and the federation server talk to the same database and must name it the same way, so the variables live in one place and not in each service.",
+  "principle": "A variable means the same thing on both paths or it is not in this file. Where the two drivers spell one idea differently -- libpq takes a socket directory as `host`, bun's client takes it as `path` -- the difference belongs under the variable, never in it.",
+  "origin": "gradido2",
+  "readBy": ["packages/backend-core/src/database/schema.ts", "fast-servers/service-core/src/db.c"],
+  "variables": [
+    {
+      "name": "DB_TYPE",
+      "type": "string",
+      "default": "sqlite",
+      "enumeration": ["postgresql", "sqlite"],
+      "description": "PostgreSQL is the reference; SQLite is the default. Those are two different things -- the reference is the database the behaviour is defined against, the default is what an unconfigured start gets. See Architecture.md, DB."
+    },
+    {
+      "name": "DB_HOST",
+      "type": "string",
+      "default": "/var/run/postgresql",
+      "appliesTo": "postgresql",
+      "description": "A value beginning with '/' is a Unix socket directory; anything else is a host name or address and means TCP. The default is therefore a local socket -- see rules.connection below."
+    },
+    {
+      "name": "DB_PORT",
+      "type": "uint16",
+      "default": "5432",
+      "appliesTo": "postgresql",
+      "description": "Applies to both connection kinds: a socket connection reads it too, because the socket file is named '<DB_HOST>/.s.PGSQL.<DB_PORT>'."
+    },
+    {
+      "name": "DB_USER",
+      "type": "string",
+      "default": "gradido",
+      "appliesTo": "postgresql"
+    },
+    {
+      "name": "DB_PASSWORD",
+      "type": "string",
+      "default": "",
+      "appliesTo": "postgresql",
+      "description": "Empty is correct for a socket connection under peer authentication, and is refused over TCP in production -- see rules.password. Where the value comes *from* is a separate question and is answered once for every secret in secrets.json: a systemd credential, then DB_PASSWORD_FILE, then this variable.",
+      "secret": "See secrets.json. The environment is the last of its three sources, not the only one."
+    },
+    {
+      "name": "DB_DATABASE",
+      "type": "string",
+      "default": "gradido_community",
+      "appliesTo": "postgresql"
+    },
+    {
+      "name": "DB_FILE",
+      "type": "string",
+      "default": "./gradido_community.sqlite",
+      "appliesTo": "sqlite",
+      "description": "A relative path is resolved against the working directory."
+    }
+  ],
+  "rules": {
+    "connection": {
+      "name": "A leading slash means a Unix socket",
+      "statement": "DB_HOST beginning with '/' selects a Unix socket connection to that directory. Every other value selects TCP to that host. Nothing probes and nothing falls back: which kind of connection is made follows from the value alone, so an operator who reads the variable knows the answer.",
+      "why": "The socket is the default because it is the faster of the two and because it is what a database on the same machine deserves: measured on this project, one uncached request costs 83.4 us over TCP loopback and 48.1 us over the socket, for one connection string and nothing else. A deployment whose database is on another machine sets DB_HOST to that machine and gets TCP by saying so.",
+      "spelling": {
+        "libpq": "Passed through as `host`. libpq reads a leading '/' as a socket directory itself, so the C path needs no branch.",
+        "bun": "Passed as `path` when it begins with '/', as `host` otherwise. bun's client has two options where libpq has one, and it does not read `host` as a path."
+      },
+      "note": "The default names the directory Debian, Ubuntu, RHEL and the official postgres container use. A platform whose socket is elsewhere -- Homebrew's /tmp, for one -- sets DB_HOST to that directory."
+    },
+    "password": {
+      "name": "An empty password is refused over TCP in production",
+      "statement": "Refuse to start when DB_TYPE is 'postgresql' AND the connection is TCP (DB_HOST does not begin with '/') AND DB_PASSWORD is empty AND NODE_ENV is 'production'. Every other combination starts.",
+      "why": "A passwordless TCP connection means the database answers over the network to whoever asks. A Unix socket is reached through filesystem permissions and peer authentication, where no password is not an oversight but the correct configuration -- so the rule that protects the first case must not refuse the second. SQLite is a file and has no password at all.",
+      "note": "NODE_ENV is an odd variable for a C binary to consult and is still the right one: the two implementations are deployed into one environment and have to agree on when it is production. A rule that is stricter on one path than the other is a rule an operator learns twice."
+    }
+  }
+}

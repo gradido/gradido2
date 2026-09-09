@@ -27,6 +27,7 @@
 #include <string.h>
 
 #include "field_rules.h"
+#include "service_core/secret.h"
 #include "prompt.h"
 #include "service_core/email/transport.h"
 
@@ -203,6 +204,28 @@ static int ask(const char *label, const char *fallback, answer_kind kind, char *
 }
 
 /** Adds one variable to what will be written. */
+/*
+ * Whether this secret comes from somewhere `setup` must not touch, saying so if it does.
+ *
+ * What this command does with an answer is why the question exists: it writes it into the
+ * `.env`. For a secret that lives in the environment that is the whole point. For one systemd
+ * keeps on a tmpfs, or one in a file with permissions of its own, it is wrong twice over --
+ * the prompt has no value to offer, so an operator is asked for something already configured,
+ * and the empty line that results becomes the password on the day the credential is taken
+ * away. See contracts/secrets.json.
+ */
+static int keeps_its_own_secret(const char *name)
+{
+    const sc_secret_source source = sc_secret_source_of(name);
+
+    if (source != SC_SECRET_CREDENTIAL && source != SC_SECRET_FILE)
+        return 0;
+    (void)fprintf(stdout, "  %s comes from %s -- leaving it alone\n", name,
+                  source == SC_SECRET_CREDENTIAL ? "a systemd credential"
+                                                 : "the file its _FILE variable names");
+    return 1;
+}
+
 static void add(backend_setup_answers *setup, const char *name, const char *value)
 {
     if (setup->entry_count >= BACKEND_SETUP_ENTRY_MAX)
@@ -325,7 +348,8 @@ static void development_setup(backend_setup_answers *setup)
     add(setup, "EMAIL_SMTP_PORT", setup->email_port);
     add(setup, "EMAIL_SMTP_TLS", setup->email_tls);
     add(setup, "EMAIL_USERNAME", setup->email_user);
-    add(setup, "EMAIL_PASSWORD", setup->email_pass);
+    if (!keeps_its_own_secret("EMAIL_PASSWORD"))
+        add(setup, "EMAIL_PASSWORD", setup->email_pass);
     add(setup, "EMAIL_SENDER", setup->email_sender);
     add(setup, "EMAIL_SENDER_NAME", setup->email_sender_name);
 }
@@ -383,7 +407,7 @@ static int ask_for_database(backend_setup_answers *setup, int production)
     if (!ask("Database user", current("DB_USER", "gradido"), ANSWER_REQUIRED, setup->db_user,
              sizeof(setup->db_user)))
         return 0;
-    for (;;) {
+    while (!keeps_its_own_secret("DB_PASSWORD")) {
         if (!bk_prompt_secret("Database password", current("DB_PASSWORD", ""), setup->db_password,
                               sizeof(setup->db_password)))
             return 0;
@@ -398,7 +422,10 @@ static int ask_for_database(backend_setup_answers *setup, int production)
     add(setup, "DB_PORT", setup->db_port);
     add(setup, "DB_DATABASE", setup->db_database);
     add(setup, "DB_USER", setup->db_user);
-    add(setup, "DB_PASSWORD", setup->db_password);
+    /* Only where the environment is the source. Writing an empty line for a secret that comes
+     * from elsewhere would put a password nobody chose into the file. */
+    if (!keeps_its_own_secret("DB_PASSWORD"))
+        add(setup, "DB_PASSWORD", setup->db_password);
     return 1;
 }
 
@@ -446,7 +473,8 @@ static int ask_for_email(backend_setup_answers *setup)
      * own authenticates as nobody. */
     if (setup->email_user[0] == '\0')
         setup->email_pass[0] = '\0';
-    else if (!bk_prompt_secret("SMTP password", current("EMAIL_PASSWORD", ""), setup->email_pass,
+    else if (!keeps_its_own_secret("EMAIL_PASSWORD") &&
+             !bk_prompt_secret("SMTP password", current("EMAIL_PASSWORD", ""), setup->email_pass,
                                sizeof(setup->email_pass)))
         return 0;
     if (!ask("Sender address", current("EMAIL_SENDER", ""), ANSWER_EMAIL, setup->email_sender,
@@ -460,7 +488,8 @@ static int ask_for_email(backend_setup_answers *setup)
     add(setup, "EMAIL_SMTP_PORT", setup->email_port);
     add(setup, "EMAIL_SMTP_TLS", setup->email_tls);
     add(setup, "EMAIL_USERNAME", setup->email_user);
-    add(setup, "EMAIL_PASSWORD", setup->email_pass);
+    if (!keeps_its_own_secret("EMAIL_PASSWORD"))
+        add(setup, "EMAIL_PASSWORD", setup->email_pass);
     add(setup, "EMAIL_SENDER", setup->email_sender);
     add(setup, "EMAIL_SENDER_NAME", setup->email_sender_name);
     return 1;

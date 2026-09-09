@@ -1,4 +1,5 @@
 import * as v from 'valibot'
+import { resolveSecrets } from './secret'
 
 /**
  * Parses process.env against a schema and exits if it does not fit.
@@ -11,7 +12,12 @@ export function grabEnvAndCheckBySchema<
   const TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
 >(schema: TSchema): v.InferOutput<TSchema> {
   try {
-    return v.parse(schema, process.env)
+    /* The secrets first: a password may come from a systemd credential or from a file the
+       environment names, and only lastly from the variable itself -- contracts/secrets.json.
+       What the schema sees is therefore not what /proc/<pid>/environ says, which is the point
+       of the whole order. A source that is named and unreadable throws from here and is caught
+       below, with its own sentence rather than a schema issue. */
+    return v.parse(schema, resolveSecrets(process.env))
   } catch (error) {
     if (error instanceof v.ValiError) {
       const issue = error.issues[0]

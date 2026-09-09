@@ -135,6 +135,17 @@ const char *sc_db_drivers(void);
  */
 sc_status sc_db_config_load(sc_db_config *out);
 
+/**
+ * Whether @p host names a Unix socket directory rather than a host.
+ *
+ * A leading '/' and nothing else, which is the rule both implementations apply to the one
+ * variable -- contracts/database-config.json, rules.connection. libpq needs no branch of its
+ * own here, because it reads a leading '/' in `host` the same way; what needs this is the
+ * password rule, which is about reaching the database over a network and not about how it is
+ * spelled.
+ */
+int sc_db_host_is_unix_socket(const char *host);
+
 /** Logs the effective configuration at info, once. The password is reported as present or
  *  absent and never printed. */
 void sc_db_config_log(const sc_db_config *cfg);

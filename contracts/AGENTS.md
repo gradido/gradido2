@@ -116,8 +116,8 @@ Every file carries an envelope so a loader can check what it is reading:
 { "contractVersion": 1, "kind": "...", "...": "..." }
 ```
 
-`kind` is one of `const`, `enum`, `convention`, `errors`, `logging`, `settings`, `rights`,
-`table`, `route`, `migrations`, `test-vectors`.
+`kind` is one of `const`, `config`, `enum`, `convention`, `errors`, `logging`, `settings`,
+`rights`, `table`, `route`, `migrations`, `test-vectors`.
 
 `convention` is for cross-cutting behavior that is neither a value nor a shape — how time is
 represented, how strings are compared. It lives in `types/` beside the enums.
@@ -126,6 +126,22 @@ represented, how strings are compared. It lives in `types/` beside the enums.
 
 One flat map, keyed by name. `group` is for humans and for grouping test output; `source`
 records where the value came from so the legacy original stays findable.
+
+### database-config.json
+
+The environment both implementations open the database from: one entry per variable with its
+`type`, its `default` and, where it is only read for one of the two databases, `appliesTo`.
+
+It is the exception to what `settings.json` excludes — a value that must exist before the
+database is open stays in env, and this file is what keeps the two paths agreeing about those
+values anyway. So it contracts the *reading* of the environment, not a stored row: nothing here
+is in a table, and `default` means what an unset variable is, not what an absent row is.
+
+`rules` is what makes it worth a file rather than a comment in two places. Each rule carries a
+`statement` a reader can apply without the prose, a `why`, and — where the two drivers spell one
+idea differently — a `spelling` naming what each of them is handed. A driver difference belongs
+under a variable and never in it: an operator sets one value and both implementations reach the
+same database with it.
 
 ### settings.json
 

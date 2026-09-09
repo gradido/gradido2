@@ -2,7 +2,7 @@ import { Database as SqliteDatabase } from 'bun:sqlite'
 import { sql } from 'drizzle-orm'
 import { type BunSQLDatabase, drizzle as drizzlePostgres } from 'drizzle-orm/bun-sql'
 import { type BunSQLiteDatabase, drizzle as drizzleSqlite } from 'drizzle-orm/bun-sqlite'
-import type { DatabaseConfig } from './schema'
+import { type DatabaseConfig, isUnixSocketHost } from './schema'
 
 /**
  * The database, plus which one it is.
@@ -59,9 +59,18 @@ export function connectDatabase(env: DatabaseConfig): DatabaseConnection {
     }
   }
 
+  /*
+   * `path` or `host`, decided by the one variable. bun's client has two options where libpq has
+   * one: it does not read a leading '/' in `host` as a socket directory, so the branch that libpq
+   * makes for itself is made here. The port goes in either way -- a socket connection reads it
+   * too, because the socket file is named `<dir>/.s.PGSQL.<port>`.
+   *
+   * See contracts/database-config.json, rules.connection, which is where the two spellings of
+   * this one idea are written down.
+   */
   const postgres = drizzlePostgres({
     connection: {
-      host: env.DB_HOST,
+      ...(isUnixSocketHost(env.DB_HOST) ? { path: env.DB_HOST } : { host: env.DB_HOST }),
       port: env.DB_PORT,
       user: env.DB_USER,
       password: env.DB_PASSWORD,

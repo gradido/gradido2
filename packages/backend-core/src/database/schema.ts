@@ -22,8 +22,9 @@ import * as v from 'valibot'
  */
 export const databaseConfigSchema = v.object({
   DB_TYPE: v.optional(v.picklist(['postgresql', 'sqlite']), 'sqlite'),
-  /* PostgreSQL only. */
-  DB_HOST: v.optional(v.string(), 'localhost'),
+  /* PostgreSQL only. A leading '/' is a Unix socket directory, anything else is TCP --
+     see isUnixSocketHost and contracts/database-config.json, rules.connection. */
+  DB_HOST: v.optional(v.string(), '/var/run/postgresql'),
   DB_PORT: v.optional(portSchema, '5432'),
   DB_USER: v.optional(v.string(), 'gradido'),
   DB_PASSWORD: v.optional(v.string(), ''),
@@ -35,15 +36,29 @@ export const databaseConfigSchema = v.object({
 /** What connectDatabase needs from the environment. */
 export type DatabaseConfig = v.InferOutput<typeof databaseConfigSchema>
 
-/** What the rule below needs to see. A service's config carries all three by construction. */
+/**
+ * Whether `DB_HOST` names a Unix socket directory rather than a host.
+ *
+ * One variable and not two, because an operator sets one value and both implementations have to
+ * reach the same database with it. The drivers disagree about the spelling underneath —
+ * libpq reads a leading '/' as a socket directory itself, bun's client wants it as `path` — and
+ * that difference belongs under the variable, never in it. See
+ * contracts/database-config.json, rules.connection.
+ */
+export function isUnixSocketHost(host: string): boolean {
+  return host.startsWith('/')
+}
+
+/** What the rule below needs to see. A service's config carries all four by construction. */
 export type DatabaseCheckable = {
   DB_TYPE: DatabaseConfig['DB_TYPE']
+  DB_HOST: string
   DB_PASSWORD: string
   NODE_ENV: string
 }
 
 export const DATABASE_PASSWORD_MESSAGE =
-  'an empty database password is not acceptable in production'
+  'an empty database password is not acceptable in production over TCP; it is correct over a Unix socket, which is what a DB_HOST beginning with "/" selects'
 
 /**
  * Whether this configuration may open its database.
@@ -67,10 +82,17 @@ export const DATABASE_PASSWORD_MESSAGE =
  *
  * Reading the parsed config rather than `process.env` is what makes it right: `DB_TYPE` and
  * `NODE_ENV` arrive with their defaults already applied, so an unset `DB_TYPE` is the SQLite it
- * will actually be, not an `undefined` the rule has to guess about.
+ * will actually be, not an `undefined` the rule has to guess about. `DB_HOST` is read for the
+ * same reason and is the fourth variable rather than a fourth rule: what the check is really
+ * asking is whether the database answers over the network to whoever asks, and a socket does
+ * not — it is reached through filesystem permissions and peer authentication, where no password
+ * is the correct configuration and not an oversight.
  */
 export function isDatabasePasswordAcceptable(config: DatabaseCheckable): boolean {
   return (
-    config.DB_TYPE !== 'postgresql' || config.NODE_ENV !== 'production' || config.DB_PASSWORD !== ''
+    config.DB_TYPE !== 'postgresql' ||
+    isUnixSocketHost(config.DB_HOST) ||
+    config.NODE_ENV !== 'production' ||
+    config.DB_PASSWORD !== ''
   )
 }

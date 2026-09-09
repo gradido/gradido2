@@ -92,7 +92,10 @@ TEST_F(DbConfigTest, DefaultsAreTheTypeScriptDefaults)
      * PostgreSQL values below are still read and still have defaults; which of the two sets is
      * used is what DB_TYPE decides. */
     EXPECT_EQ(config.kind, SC_DB_SQLITE);
-    EXPECT_STREQ(config.host, "localhost");
+    /* A socket directory and not a host: contracts/database-config.json, rules.connection. The
+     * default reaches a database on this machine the faster of the two ways, and a deployment
+     * whose database is elsewhere gets TCP by naming it. */
+    EXPECT_STREQ(config.host, "/var/run/postgresql");
     EXPECT_EQ(config.port, 5432);
     EXPECT_STREQ(config.user, "gradido");
     EXPECT_STREQ(config.password, "");
@@ -172,15 +175,54 @@ TEST_F(DbConfigTest, AnEmptyPasswordIsRefusedInProduction)
     sc_db_config config{};
 
     /* The same rule, from the same variables, as the TypeScript path: "an empty database
-     * password is not acceptable in production". Two variables, because a password only means
-     * anything for PostgreSQL -- so DB_TYPE is set here rather than left to the default, which
-     * is SQLite and would make this test pass without ever reaching the rule. */
+     * password is not acceptable in production". Three variables, because a password only means
+     * anything for PostgreSQL and only matters over a network -- so DB_TYPE and DB_HOST are both
+     * set here rather than left to their defaults, which are SQLite and a Unix socket and would
+     * each make this test pass without ever reaching the rule. */
     set_env("DB_TYPE", "postgresql");
+    set_env("DB_HOST", "db.example.org");
     set_env("NODE_ENV", "production");
     EXPECT_EQ(sc_db_config_load(&config), SC_ERR_MALFORMED);
 
     set_env("DB_PASSWORD", "something");
     EXPECT_EQ(sc_db_config_load(&config), SC_OK);
+}
+
+TEST_F(DbConfigTest, AnEmptyPasswordIsFineOverAUnixSocket)
+{
+    sc_db_config config{};
+
+    /* The exemption, and the reason the rule needed a third variable: over a socket there is no
+     * network for the database to answer on, the reach is a filesystem permission, and no
+     * password is the correct configuration rather than an oversight. Everything else here is
+     * exactly what the test above refuses. */
+    set_env("DB_TYPE", "postgresql");
+    set_env("NODE_ENV", "production");
+
+    set_env("DB_HOST", "/var/run/postgresql");
+    EXPECT_EQ(sc_db_config_load(&config), SC_OK);
+
+    /* And the default is that socket, so an unset DB_HOST is exempt for the same reason. */
+    clear_env("DB_HOST");
+    EXPECT_EQ(sc_db_config_load(&config), SC_OK);
+
+    /* One character back to a host name and the rule is in force again -- it is the leading
+     * slash that decides and nothing else. */
+    set_env("DB_HOST", "localhost");
+    EXPECT_EQ(sc_db_config_load(&config), SC_ERR_MALFORMED);
+}
+
+TEST(DbHostTest, ALeadingSlashIsWhatSelectsASocket)
+{
+    EXPECT_TRUE(sc_db_host_is_unix_socket("/var/run/postgresql"));
+    EXPECT_TRUE(sc_db_host_is_unix_socket("/tmp"));
+    EXPECT_FALSE(sc_db_host_is_unix_socket("localhost"));
+    EXPECT_FALSE(sc_db_host_is_unix_socket("127.0.0.1"));
+    EXPECT_FALSE(sc_db_host_is_unix_socket("db.example.org"));
+    EXPECT_FALSE(sc_db_host_is_unix_socket(""));
+    /* NULL is not a socket rather than a crash: the rule is asked before anything has validated
+     * the string it is asked about. */
+    EXPECT_FALSE(sc_db_host_is_unix_socket(nullptr));
 }
 
 TEST_F(DbConfigTest, AnEmptyPasswordIsFineOutsideProductionAndForSqlite)

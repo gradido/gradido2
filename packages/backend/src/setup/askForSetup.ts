@@ -3,7 +3,9 @@ import {
   type EmailConfig,
   emailConfigSchema,
   portSchema,
+  type SecretVariable,
   type SmtpTlsMode,
+  secretSource,
   smtpRelay,
 } from '@gradido/service-core'
 import {
@@ -178,6 +180,9 @@ async function askForDatabase(env: Record<string, string>, production: boolean):
   env.DB_PORT = await askText('Database port', String(CONFIG.DB_PORT), portTextSchema)
   env.DB_DATABASE = await askText('Database name', CONFIG.DB_DATABASE, requiredTextSchema)
   env.DB_USER = await askText('Database user', CONFIG.DB_USER, requiredTextSchema)
+  if (keepsItsOwnSecret('DB_PASSWORD')) {
+    return
+  }
   for (;;) {
     env.DB_PASSWORD = await askSecret('Database password', CONFIG.DB_PASSWORD)
     /* The rule `config/schema.ts` applies at every start, applied here instead — a password
@@ -188,6 +193,27 @@ async function askForDatabase(env: Record<string, string>, production: boolean):
     }
     process.stderr.write('  an empty database password is not acceptable in production\n')
   }
+}
+
+/**
+ * Whether this secret comes from somewhere `setup` must not touch, and says so if it does.
+ *
+ * The question exists because of what this command does with an answer: it offers the current
+ * value as the default and writes what comes back into `.env`. That is right for a value that
+ * was in the environment and wrong for one that was not — pressing Enter on a password systemd
+ * keeps on a tmpfs, or one that lives in a file with its own permissions, would copy it into a
+ * file in the working directory. A mechanism that can be downgraded by answering a prompt is
+ * not one, so the prompt is not asked. See contracts/secrets.json.
+ */
+function keepsItsOwnSecret(name: SecretVariable): boolean {
+  const source = secretSource(name)
+  if (source !== 'credential' && source !== 'file') {
+    return false
+  }
+  say(
+    `  ${name} comes from ${source === 'credential' ? 'a systemd credential' : `the file ${name}_FILE names`} — leaving it alone`,
+  )
+  return true
 }
 
 async function askForEmail(
@@ -219,8 +245,11 @@ async function askForEmail(
   )
   /* Not asked when there is no user to go with it: SMTP AUTH is a pair, and a password on
      its own authenticates as nobody. */
-  env.EMAIL_PASSWORD =
-    env.EMAIL_USERNAME === '' ? '' : await askSecret('SMTP password', CONFIG.EMAIL_PASSWORD)
+  if (env.EMAIL_USERNAME === '') {
+    env.EMAIL_PASSWORD = ''
+  } else if (!keepsItsOwnSecret('EMAIL_PASSWORD')) {
+    env.EMAIL_PASSWORD = await askSecret('SMTP password', CONFIG.EMAIL_PASSWORD)
+  }
   env.EMAIL_SENDER = await askText('Sender address', CONFIG.EMAIL_SENDER, emailSchema)
   env.EMAIL_SENDER_NAME = await askText(
     'Sender name',

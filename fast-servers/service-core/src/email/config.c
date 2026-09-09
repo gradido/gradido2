@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "service_core/log/log.h"
+#include "service_core/secret.h"
 
 #define DEFAULT_HOST "localhost"
 #define DEFAULT_PORT 587
@@ -141,9 +142,17 @@ sc_status sc_mail_env_load(sc_mail_env *out)
     status = copy_env(out->user, sizeof(out->user), "EMAIL_USERNAME", "");
     if (status != SC_OK)
         return status;
-    status = copy_env(out->pass, sizeof(out->pass), "EMAIL_PASSWORD", "");
-    if (status != SC_OK)
+    /* Not copy_env: a relay password may come from a systemd credential or from a file the
+     * environment names, and only lastly from the variable -- contracts/secrets.json, the same
+     * order DB_PASSWORD resolves by. Everything else here is a value somebody may read over a
+     * shoulder; these two are not. */
+    status = sc_secret_read("EMAIL_PASSWORD", out->pass, sizeof(out->pass));
+    if (status != SC_OK) {
+        if (status == SC_ERR_TOO_LONG)
+            sc_log_fatal(SC_CAT_STARTUP, "config.value_too_long",
+                         "EMAIL_PASSWORD is %zu bytes at most", sizeof(out->pass) - 1);
         return status;
+    }
     status = copy_env(out->sender, sizeof(out->sender), "EMAIL_SENDER", "");
     if (status != SC_OK)
         return status;

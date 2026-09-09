@@ -63,6 +63,9 @@ export async function openTestDatabase(kind: DatabaseConnection['kind']): Promis
 
   const connection = connectDatabase({
     DB_TYPE: 'postgresql',
+    /* 'localhost' and not the schema's socket default: a test database is reached the way the
+       suite's own README asks for it, over a port somebody set, and a socket directory that
+       happens to hold an unrelated server is not a thing a test run should find by accident. */
     DB_HOST: process.env.DB_HOST ?? 'localhost',
     DB_PORT: Number(process.env.DB_PORT ?? 5432),
     DB_USER: process.env.DB_USER ?? 'gradido',

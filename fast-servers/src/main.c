@@ -154,12 +154,22 @@ static void print_usage(FILE *out)
     fprintf(out, "\noptions:\n");
     fprintf(out, "  %-14s this text\n", "-h, --help");
     fprintf(out, "  %-14s version and build features\n", "-v, --version");
-    fprintf(out, "\nconfiguration is read from the environment: LISTEN_HOST, BACKEND_PORT,\n");
-    fprintf(out,
-            "FEDERATION_PORT, DHT_PORT, FEDERATION_DHT_TOPIC, FEDERATION_DHT_SEED, LOG_LEVEL,\n");
-    fprintf(out, "the DB_* and the EMAIL_* -- and from a %s beside the binary, where what is\n",
+    fprintf(out, "\nconfiguration is the environment, and a %s beside the binary fills what\n",
             SC_ENV_FILE_NAME);
-    fprintf(out, "already set in the environment wins. `setup` writes that file.\n");
+    fprintf(out, "nobody exported -- what is already set wins. `setup` writes that file.\n\n");
+    fprintf(out, "  %-14s LISTEN_HOST, BACKEND_PORT, FEDERATION_PORT, DHT_PORT,\n", "server");
+    fprintf(out, "  %-14s FEDERATION_DHT_TOPIC, FEDERATION_DHT_SEED, SERVER_THREADS\n", "");
+    fprintf(out, "  %-14s DB_TYPE (sqlite or postgresql), DB_FILE, and for postgresql\n",
+            "database");
+    fprintf(out, "  %-14s DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE\n", "");
+    fprintf(out, "  %-14s a DB_HOST beginning with / is a unix socket directory\n", "");
+    fprintf(out, "  %-14s EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, EMAIL_SMTP_TLS,\n", "email");
+    fprintf(out, "  %-14s EMAIL_USERNAME, EMAIL_PASSWORD, EMAIL_SENDER,\n", "");
+    fprintf(out, "  %-14s EMAIL_SENDER_NAME, EMAIL_CHANGE_SUPPORT\n", "");
+    fprintf(out, "  %-14s LOG_LEVEL, NODE_ENV\n", "other");
+    fprintf(out, "\nDB_PASSWORD and EMAIL_PASSWORD are secrets: before either variable is\n");
+    fprintf(out, "read, the systemd credential of that name and then the file <NAME>_FILE\n");
+    fprintf(out, "names are looked at. See contracts/secrets.json.\n");
 }
 
 static void print_version(void)
