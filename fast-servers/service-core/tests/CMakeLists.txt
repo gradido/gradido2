@@ -28,6 +28,14 @@ target_link_libraries(test_db PRIVATE service_core GTest::gtest)
 # refusal, and SQLite, which is a file.
 add_test(NAME service_core.db COMMAND test_db)
 
+add_executable(test_env_file test_env_file.cpp)
+target_include_directories(test_env_file PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_link_libraries(test_env_file PRIVATE service_core GTest::gtest)
+
+# Writes and reads one file in the working directory. What it decides is the agreement with
+# dotenv, which packages/backend/src/setup/envFile.test.ts measures from the other side.
+add_test(NAME service_core.env_file COMMAND test_env_file)
+
 add_executable(test_jwt test_jwt.cpp)
 target_include_directories(test_jwt PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 target_link_libraries(test_jwt PRIVATE service_core GTest::gtest)

@@ -10,13 +10,71 @@
 #include "cors.h"
 #include "routes.h"
 #include "service_core/db.h"
+#include "service_core/email/config.h"
+#include "service_core/email/transport.h"
+#include "service_core/env_file.h"
 #include "service_core/http.h"
 #include "service_core/log/log.h"
 #include "setup.h"
 
+/**
+ * Opens a session to the configured relay once, at startup, and says how it went.
+ *
+ * Info when the relay took the session, warn when it did not -- and never fatal, because a
+ * server whose mail is misconfigured still serves every route that sends none. What it must not
+ * do is discover the problem on the first registration, hours later, in a log line about a
+ * member.
+ *
+ * The `data` deliberately stops at the relay. contracts/logging.json, *redaction*, never logs an
+ * email address, and the sender is one; whether there are credentials is a boolean, because that
+ * is the part an operator reading a refusal needs.
+ */
+static void report_mail_relay(const sc_mail_env *mail)
+{
+    sc_mail_relay relay;
+    sc_mail_session *session;
+    char error[SC_MAIL_ERROR_MAX];
+    sc_log_value data[4];
+    sc_log_context log = {0};
+    sc_status status;
+
+    if (!mail->enabled) {
+        sc_log_info(SC_CAT_MAIL, "mail.relay.disabled",
+                    "no mail is sent by this instance: EMAIL is false");
+        return;
+    }
+
+    data[0] = (sc_log_value)SC_LOG_STR("host", mail->host);
+    data[1] = (sc_log_value)SC_LOG_UINT("port", mail->port);
+    data[2] = (sc_log_value)SC_LOG_STR("tls", sc_mail_tls_name(mail->tls));
+    data[3] = (sc_log_value)SC_LOG_BOOL("auth", mail->user[0] != '\0');
+    log.data = data;
+    log.data_count = 4;
+
+    sc_mail_env_relay(mail, &relay);
+    session = sc_mail_session_open();
+    if (session == NULL) {
+        sc_log_event(SC_LOG_WARN, SC_CAT_MAIL, "mail.relay.failed", &log,
+                     "the mail relay at %s:%u could not be asked: no session to open", mail->host,
+                     (unsigned)mail->port);
+        return;
+    }
+    status = sc_mail_session_probe(session, &relay, error, sizeof(error));
+    sc_mail_session_close(session);
+
+    if (status == SC_OK)
+        sc_log_event(SC_LOG_INFO, SC_CAT_MAIL, "mail.relay.connected", &log,
+                     "the mail relay at %s:%u took a session", mail->host, (unsigned)mail->port);
+    else
+        sc_log_event(SC_LOG_WARN, SC_CAT_MAIL, "mail.relay.failed", &log,
+                     "the mail relay at %s:%u did not answer: %s", mail->host, (unsigned)mail->port,
+                     error);
+}
+
 sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit)
 {
     sc_db_config db_config;
+    sc_mail_env mail;
     bc_context context;
     sc_http_config http_config;
     sc_http_server *server;
@@ -43,6 +101,16 @@ sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit)
         return status;
     }
     sc_db_config_log(&db_config);
+
+    /* Refused here rather than at the first mail: an EMAIL_SMTP_TLS nobody spelled right is a
+     * configuration error, and a server that starts with one would only discover it the day
+     * somebody registers. Its own line has already been written by the time this returns. */
+    status = sc_mail_env_load(&mail);
+    if (status != SC_OK) {
+        backend_core_shutdown();
+        return status;
+    }
+    sc_mail_env_log(&mail);
 
     /* Everything that has to be true before a request can be served: the database answers, its
      * schema is current, and this instance knows which community it is. Nothing here asks
@@ -106,6 +174,9 @@ sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit)
         sc_log_event(SC_LOG_INFO, SC_CAT_STARTUP, "startup.server.started", &log,
                      "backend listening on http://%s:%u", cfg->listen_host,
                      (unsigned)cfg->backend_port);
+        /* After the socket is listening rather than before it: the relay is not something a
+         * request needs, so nothing waits on this but the log line it produces. */
+        report_mail_relay(&mail);
         status = sc_http_run(server, quit);
     } else {
         sc_log_fatal(SC_CAT_STARTUP, "server.start.failed", "backend did not start: %s",
@@ -121,21 +192,63 @@ sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit)
 /** What DB_MIGRATE_DOWN is set to when the step to undo is the first one. */
 #define EMPTY_DATABASE BC_MIGRATE_DOWN_EMPTY_TARGET
 
+/** startup.setup.failed with one of the reasons contracts/logging.json lists for it. */
+static void setup_failed(const char *reason, const char *message)
+{
+    sc_log_value data[1];
+    sc_log_context log = {0};
+
+    data[0] = (sc_log_value)SC_LOG_STR("reason", reason);
+    log.data = data;
+    log.data_count = 1;
+    sc_log_event(SC_LOG_FATAL, SC_CAT_STARTUP, "startup.setup.failed", &log, "%s", message);
+}
+
 sc_status backend_setup(const sc_config *cfg, const sc_quit_flag *quit)
 {
+    backend_setup_answers answers;
     sc_db_config db_config;
     sc_db *db = NULL;
     bc_home_community existing;
     bc_home_community created;
-    bc_home_community_setup setup;
     char error[BC_SQL_ERROR_MAX];
     sc_log_value db_field[1];
     sc_log_context log = {0};
+    size_t i;
     int found = 0;
     sc_status status;
 
     if (cfg == NULL)
         return SC_ERR_INVALID_ARGUMENT;
+
+    /*
+     * The questions come first, and that is the whole shape of it. They decide which database
+     * this opens -- an answer of postgresql where the environment said sqlite names a different
+     * server -- so nothing can be opened before they are answered. The `.env` is written next,
+     * because a conversation that ended without leaving anything behind would have to be held
+     * again; then the database the answers name is opened, migrated and given its community row.
+     */
+    if (!backend_ask_for_setup(&answers)) {
+        setup_failed("no-terminal",
+                     "setup needs a terminal to ask on, and there is none. Run it with one "
+                     "attached -- under docker compose that is: docker compose run --rm backend "
+                     "setup");
+        return SC_ERR_UNAVAILABLE;
+    }
+
+    status = sc_env_file_write(SC_ENV_FILE_NAME, answers.entries, answers.entry_count, error,
+                               sizeof(error));
+    if (status != SC_OK) {
+        setup_failed("config-unwritable", error);
+        return status;
+    }
+    (void)fprintf(stdout, "\nWritten to %s\n\n", SC_ENV_FILE_NAME);
+    (void)fflush(stdout);
+
+    /* Into this process's own environment as well, so that the ordinary loaders below read the
+     * answers rather than what the environment said before the conversation. */
+    for (i = 0; i != answers.entry_count; ++i)
+        (void)sc_env_set(answers.entries[i].name, answers.entries[i].value);
 
     status = sc_db_config_load(&db_config);
     if (status != SC_OK)
@@ -173,29 +286,15 @@ sc_status backend_setup(const sc_config *cfg, const sc_quit_flag *quit)
     }
     if (found) {
         /* Not a log line: it reports what this invocation found, not something that happened to
-         * the instance, and the contracted stream has nothing to say about a command that did
-         * nothing. The community that is already there was logged the day it was written. */
+         * the instance, and the contracted stream has nothing to say about a command that wrote
+         * no row. The `.env` written a moment ago is the point of a second run, and an operator
+         * changing a relay should not have to drop a row to do it. */
         (void)fprintf(stderr, "this instance is already set up as \"%s\"\n", existing.name);
         sc_db_close(db);
         return SC_OK;
     }
 
-    memset(&setup, 0, sizeof(setup));
-    if (!backend_ask_for_home_community(&setup)) {
-        sc_log_value reason[1] = {SC_LOG_STR("reason", "no-terminal")};
-        sc_log_context setup_log = {0};
-
-        setup_log.data = reason;
-        setup_log.data_count = 1;
-        sc_log_event(SC_LOG_FATAL, SC_CAT_STARTUP, "startup.setup.failed", &setup_log,
-                     "setup needs a terminal to ask on, and there is none. Run it with one "
-                     "attached -- under docker compose that is: docker compose run --rm backend "
-                     "setup");
-        sc_db_close(db);
-        return SC_ERR_UNAVAILABLE;
-    }
-
-    status = bc_create_home_community(db, &setup, &created, error, sizeof(error));
+    status = bc_create_home_community(db, &answers.community, &created, error, sizeof(error));
     if (status != SC_OK)
         sc_log_event(SC_LOG_FATAL, SC_CAT_STARTUP, "startup.database.failed", &log,
                      "the home community could not be written: %s", error);

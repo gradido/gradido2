@@ -176,9 +176,19 @@ test('smtps: an unknown CA is refused, not ignored', { skip: !haveOpenssl }, asy
   assert.equal(arrived, false, 'no message body may reach an unverified relay')
 })
 
+/**
+ * The relay's body, or a failure after fifteen seconds rather than a test that hangs.
+ *
+ * The timer is cleared when the race is over, and that is not tidiness: a pending timer keeps
+ * the event loop alive, so a watchdog left armed after the mail arrived held this file open for
+ * its full fifteen seconds after both tests had passed.
+ */
 function received(relay) {
+  let watchdog
   return Promise.race([
     relay.received,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('no mail arrived')), 15_000)),
-  ])
+    new Promise((_, reject) => {
+      watchdog = setTimeout(() => reject(new Error('no mail arrived')), 15_000)
+    }),
+  ]).finally(() => clearTimeout(watchdog))
 }

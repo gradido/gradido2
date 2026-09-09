@@ -135,8 +135,9 @@ The cache and mail tests are worth running under `-Dsanitize=thread`. A referenc
 structure under two locks does not fail a single-threaded test when it is wrong, and neither does
 a worker pool with a missing lock; both fail in production, under load, weeks later.
 
-Two of the mail tests need someone on the other end and skip without one, because a green test
-that sent nothing says nothing:
+Three of the mail tests need someone on the other end and skip without one, because a green
+test that sent nothing says nothing — two that send a mail, and the one that runs the startup
+probe against a relay that is really there:
 
 ```sh
 ../h20Test/smtp_client/sink.py --port 2525 &

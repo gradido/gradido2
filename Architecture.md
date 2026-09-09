@@ -708,7 +708,12 @@ Not carried over: the restriction to JPEG. The accepted content types are an ope
 
 ## Config
 
-- env for variables needed at startup (db, ports, etc.)
+- env for variables needed at startup (db, ports, the mail relay, etc.)
+- a `.env` in the working directory is how that env gets filled on a development machine and
+  on a small installation. Both implementations read it and both mean the same thing by it —
+  dotenv's form, and whatever is already in the environment wins, so systemd and docker are
+  never overridden by a file. The `setup` command writes it, editing the lines it has an
+  answer for and leaving the rest where they stand
 - secrets in production via OS-native secret stores (e.g. systemd credentials on Linux)
 - secrets in dev via env
 - fixed settings as constants in code, dynamic settings in a settings table, editable from the admin frontend; admin only, no separate rights are created for this

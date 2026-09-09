@@ -36,6 +36,10 @@
 #define SC_MAIL_ERROR_MAX 128
 /** Round trip a single attempt is given when the relay config names none. */
 #define SC_MAIL_TIMEOUT_DEFAULT_MS 10000L
+/** And what sc_mail_session_probe() takes when the relay config names none. Shorter, because
+ *  it runs while a server is starting and a relay that has not greeted in five seconds is one
+ *  to warn about rather than one to keep waiting for. */
+#define SC_MAIL_PROBE_TIMEOUT_DEFAULT_MS 5000L
 
 /** One session. Opaque: a curl easy handle underneath, owned by one thread. */
 typedef struct sc_mail_session sc_mail_session;
@@ -110,5 +114,23 @@ void sc_mail_session_close(sc_mail_session *session);
 sc_status sc_mail_session_send(sc_mail_session *session, const sc_mail_relay *relay,
                                const char *to, const char *message, size_t len, char *error,
                                size_t error_cap);
+
+/**
+ * Opens the session, goes as far as a mail would, and hangs up without sending one.
+ *
+ * The greeting, EHLO, the TLS upgrade @p relay asks for and AUTH where it carries credentials
+ * -- every step of a send except the message. It is what a server asks at startup so that a
+ * wrong port, a relay that cannot do STARTTLS or a password that has been rotated is a line in
+ * the log rather than a mail that quietly never arrives.
+ *
+ * Blocking, like the send, and given SC_MAIL_PROBE_TIMEOUT_DEFAULT_MS rather than the send's
+ * ten seconds when the relay names no timeout.
+ *
+ * SC_ERR_NETWORK when the relay refused or could not be reached; @p error then holds curl's
+ * own sentence, which belongs in the caller's log rather than in one written here. @p error
+ * may be NULL. The session is left connected and is closed by whoever opened it.
+ */
+sc_status sc_mail_session_probe(sc_mail_session *session, const sc_mail_relay *relay, char *error,
+                                size_t error_cap);
 
 #endif /* SERVICE_CORE_EMAIL_TRANSPORT_H */

@@ -1,4 +1,6 @@
-export * from './askForHomeCommunity'
+export * from './askForSetup'
+export * from './envFile'
 export * from './migrateDownCommand'
+export * from './prompt'
 export * from './requireHomeCommunity'
 export * from './setupCommand'

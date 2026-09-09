@@ -272,6 +272,21 @@ typedef struct {
     char            error[SC_MAIL_ERROR_MAX];
 } send_job;
 
+/*
+ * One probe in flight: the same session a send opens, taken to the point where a mail would go
+ * over and then hung up. It carries no message and no recipient, which is the whole difference.
+ *
+ * It shares `inflight` with the sends, because that counter is what keeps the box alive across
+ * a close(); it deliberately does not touch `sent` or `failed`, which count mails.
+ */
+typedef struct {
+    mailer_box     *box;
+    napi_deferred   deferred;
+    napi_async_work work;
+    sc_status       status;
+    char            error[SC_MAIL_ERROR_MAX];
+} probe_job;
+
 static void mailer_free(mailer_box *box)
 {
     free(box->url);
@@ -397,6 +412,80 @@ static void job_complete(napi_env env, napi_status status, void *data)
     free(job->message);
     free(job);
     if (--box->inflight == 0 && box->closed) mailer_free(box);
+}
+
+/* execute(): a pool thread, no napi_env, no napi_* call. */
+static void probe_execute(napi_env env, void *data)
+{
+    (void)env;
+    probe_job       *job = (probe_job *)data;
+    sc_mail_session *session = sc_mail_session_open();
+    if (!session) {
+        job->status = SC_ERR_NO_MEMORY;
+        snprintf(job->error, sizeof job->error, "no SMTP session");
+        return;
+    }
+    job->status = sc_mail_session_probe(session, &job->box->relay, job->error, sizeof job->error);
+    sc_mail_session_close(session);
+}
+
+/* complete(): back on the JS thread, so this is where the promise is settled. */
+static void probe_complete(napi_env env, napi_status status, void *data)
+{
+    probe_job  *job = (probe_job *)data;
+    mailer_box *box = job->box;
+    napi_value  value;
+
+    if (status == napi_ok && job->status == SC_OK) {
+        /* Nothing to resolve with: the answer is that the relay took the session. */
+        if (napi_get_undefined(env, &value) == napi_ok)
+            napi_resolve_deferred(env, job->deferred, value);
+    } else {
+        char message[SC_MAIL_ERROR_MAX + 32];
+        snprintf(message, sizeof message, "%s",
+                 job->error[0] != '\0' ? job->error : "the relay refused the session");
+        if (napi_create_string_utf8(env, message, NAPI_AUTO_LENGTH, &value) == napi_ok) {
+            napi_value error;
+            if (napi_create_error(env, NULL, value, &error) == napi_ok)
+                napi_reject_deferred(env, job->deferred, error);
+        }
+    }
+
+    napi_delete_async_work(env, job->work);
+    free(job);
+    if (--box->inflight == 0 && box->closed) mailer_free(box);
+}
+
+/**
+ * Opens a session, goes as far as a mail would, and hangs up without sending one.
+ *
+ * The greeting, EHLO, the TLS upgrade this mailer is configured for and AUTH where it carries
+ * credentials -- every step of a send except the message. What a server asks at startup, so that
+ * a wrong port, a relay that cannot do STARTTLS or a rotated password is a line in the log rather
+ * than a mail that quietly never arrives.
+ *
+ * It is the same libcurl, the same TLS stack and the same trust configuration the send uses,
+ * which is the point: a relay this accepts is a relay the sends can reach.
+ */
+static napi_value fn_verify(napi_env env, napi_callback_info info)
+{
+    size_t     argc = 1;
+    napi_value argv[1];
+    CHECK(napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
+    mailer_box *box = argc ? unwrap(env, argv[0]) : NULL;
+    if (!box || box->closed) return throw_msg(env, "mailer is closed");
+
+    probe_job *job = (probe_job *)calloc(1, sizeof *job);
+    if (!job) return throw_msg(env, "out of memory");
+    job->box = box;
+
+    napi_value promise, name;
+    CHECK(napi_create_promise(env, &job->deferred, &promise));
+    CHECK(napi_create_string_utf8(env, "email-native:verify", NAPI_AUTO_LENGTH, &name));
+    CHECK(napi_create_async_work(env, NULL, name, probe_execute, probe_complete, job, &job->work));
+    box->inflight++;
+    CHECK(napi_queue_async_work(env, job->work));
+    return promise;
 }
 
 /*
@@ -727,6 +816,7 @@ static napi_value Init(napi_env env, napi_value exports)
         { "closeMailer", fn_close_mailer },
         { "sendMail", fn_send_mail },
         { "sendTemplate", fn_send_template },
+        { "verify", fn_verify },
         { "stats", fn_stats },
 #endif
     };
