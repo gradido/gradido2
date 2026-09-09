@@ -333,11 +333,6 @@ nm -D --defined-only build/email_native.node | grep -cE ' (SSL_|EVP_|OPENSSL_|CR
 addon deliver through it, then points the mailer at a certificate the relay was not signed
 by and asserts that nothing is delivered. A build that only compiles would prove nothing.
 
-It is **not** in `bun run test`; `bun run test:tls` is what runs it, and the default suite
-reports it as skipped with that sentence. The handshakes themselves are 0,6 s — what is
-expensive is leaving: the file takes ~15 s to exit after the successful send, and where that
-goes is not yet known. Run it after touching `tls/gradido_mbedtls_config.h`, the curl trim in
-`build.zig`, or anything under `service-core/src/email/transport.c`.
 
 ### One exported symbol, and why it matters
 
@@ -536,10 +531,8 @@ tls/                          the mbedTLS trim (MBEDTLS_USER_CONFIG_FILE)
 scripts/                      the copy into fast-servers
 tests/                        node --test; the addon, its TLS, the snapshots, the
                               branch markers, the preview. `bun run test` walks the
-                              directory; the two files that cost minutes rather than
-                              seconds skip unless asked for -- the send benchmark
-                              needs BENCH=1 (`bun run bench`) and the TLS handshakes
-                              TLS=1 (`bun run test:tls`)
+                              directory; the send benchmark in it skips unless
+                              BENCH=1, which is what `bun run bench` sets
 ```
 
 `include/` and `src/` mirror the paths those two files have in `fast-servers/service-core`,

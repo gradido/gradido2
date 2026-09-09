@@ -34,7 +34,6 @@
     "snapshots:update": "bun run extract:mjml && node tools/snapshots.mjs",
     "info": "c-cpp-zig-build info",
     "test": "node --test tests/",
-    "test:tls": "TLS=1 node --test tests/tls.test.js",
     "bench": "BENCH=1 node --test tests/bench.test.mjs && bun tests/mail-bench.mjs && bun tests/render-bench.mjs",
     "lint": "biome check --error-on-warnings .",
     "lint:fix": "biome check --error-on-warnings . --write",
