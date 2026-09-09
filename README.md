@@ -10,6 +10,13 @@ arithmetic, decay, signing — exists once, in C, and is used by both.
 See [Architecture.md](Architecture.md) for the design and [AGENTS.md](AGENTS.md) for the
 working rules.
 
+[CODEBASE_LORE.md](CODEBASE_LORE.md) is the one written for people rather than for tools: the
+same decisions told as the story of three cities — why the rebuild happened, why the new one
+was built twice, why a clerk's desk is allowed to burn. It is the shortest way in for somebody
+new, and it is not authoritative: where it and the two documents above disagree, they are
+right. [CODEBASE_LORE_GLOSSAR.md](CODEBASE_LORE_GLOSSAR.md) maps every name in it back to the
+thing it stands for.
+
 ## What you need
 
 **[bun](https://bun.com), and optionally Docker.** Everything else is a dependency of the
