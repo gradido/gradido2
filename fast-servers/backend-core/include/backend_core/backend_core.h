@@ -26,7 +26,7 @@
  * What an interaction serving a request is allowed to reach.
  *
  * The counterpart of packages/backend-core's `BackendContext`, minus its logger -- the log here
- * is a process-wide stream reached through service_core/log.h, so there is nothing to carry.
+ * is a process-wide stream reached through service_core/log/log.h, so there is nothing to carry.
  *
  * It is passed down explicitly rather than being reachable from anywhere, so what a piece of code
  * touches is visible in its signature. Everything in it must be safe to lose: the database is the
@@ -74,17 +74,18 @@ typedef struct bc_context {
  * Everything that has to be true before a request can be served, in the order it becomes true:
  * the database answers, its schema is current, and this instance knows which community it is.
  *
- * @p ask is what turns an empty database into a short conversation with whoever started the
- * process -- it fills a bc_home_community_setup and answers 1, or answers 0 when there is nobody
- * to ask. NULL is the same as answering 0. It is a parameter rather than a call into a terminal
- * from here, because asking is the role's business and not the domain's, and because a test has
- * to be able to set an instance up without one.
+ * **Nothing here asks anybody anything.** A database with no community ends the start with
+ * `startup.setup.failed`, reason `not-set-up`, naming the `setup` command -- see
+ * backend/backend.h, backend_setup. It used to hold the conversation itself, through a callback
+ * the role passed in, and moving it out is what makes a serving start something an orchestrator
+ * can run: a process that may stop and wait for an answer cannot be started unattended, and one
+ * that reads an answer from the terminal it logs to has to keep the two apart forever after.
  *
  * Every failure is logged where it happens -- `startup.database.failed`, `db.migration.denied`,
  * `startup.setup.failed` -- so the caller decides what to do and does not describe it again.
  */
 sc_status bc_context_open(const sc_db_config *db_config, const sc_quit_flag *quit,
-                          int (*ask)(bc_home_community_setup *setup), bc_context *out);
+                          bc_context *out);
 
 /** Closes what bc_context_open opened. NULL is allowed and does nothing. */
 void bc_context_close(bc_context *context);

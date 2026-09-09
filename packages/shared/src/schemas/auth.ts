@@ -28,6 +28,7 @@ export const emailPrevalidateSchema = v.pipe(
 export const emailSchema = v.pipe(
   v.string(),
   v.trim(),
+  v.toLowerCase(),
   v.maxLength(EMAIL_MAX_LENGTH, 'This email address is too long'),
   v.nonEmpty('This field is required'),
   v.email('Please enter a valid email address'),

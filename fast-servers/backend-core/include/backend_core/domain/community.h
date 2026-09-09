@@ -110,9 +110,9 @@ sc_status bc_community_find_home(sc_db *db, bc_home_community *out, int *found, 
 /**
  * The instance becomes a community.
  *
- * Runs once, at the first start against an empty database, and everything that follows depends
- * on it: `users.community_id` is NOT NULL, so no member can exist before this row does, and the
- * backend refuses to serve without it.
+ * Runs once, from the `setup` command against an empty database, and everything that follows
+ * depends on it: `users.community_id` is NOT NULL, so no member can exist before this row does,
+ * and the backend refuses to serve without it.
  *
  * The caller supplies only what a person knows. The uuid, the key pair and the timestamps are
  * made here. The private key is written and then left alone -- it does not go into the

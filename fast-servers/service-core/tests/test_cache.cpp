@@ -21,7 +21,8 @@
 
 extern "C" {
 #include "service_core/cache.h"
-#include "service_core/log.h"
+#include "service_core/log/log.h"
+#include "service_core/log/logger.h"
 }
 
 namespace
@@ -264,7 +265,20 @@ TEST_F(CacheTest, ConcurrentReadersAndWriters)
 int main(int argc, char **argv)
 {
     /* The cache logs nothing today, but sc_now_ms is behind the same initialisation. */
-    sc_log_init(SC_LOG_ERROR);
+    sc_log_config log_cfg;
+    int result;
+
+    sc_log_default_config(&log_cfg);
+    log_cfg.min_level = SC_LOG_ERROR;
+    sc_log_init(&log_cfg);
+    sc_log_thread_join();
+
     ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+    result = RUN_ALL_TESTS();
+
+    /* The logger is a thread now: without the shutdown the lines still in the ring are never
+     * written, and a failing test would be reported without the lines that explain it. */
+    sc_log_thread_leave();
+    sc_log_shutdown();
+    return result;
 }

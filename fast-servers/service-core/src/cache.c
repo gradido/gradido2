@@ -15,7 +15,7 @@
 #include <uv.h>
 
 #include "service_core/atomic.h"
-#include "service_core/log.h"
+#include "service_core/log/log.h"
 
 struct sc_cache_entry {
     /* Table pointer plus every request currently using it. Freed at zero, never anywhere

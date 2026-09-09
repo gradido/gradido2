@@ -12,7 +12,7 @@
 /* For SC_HTTP_THREADS_MAX. The ceiling belongs to the server rather than to the environment,
  * so it is read from there and not repeated here. */
 #include "service_core/http.h"
-#include "service_core/log.h"
+#include "service_core/log/log.h"
 
 #define DEFAULT_LISTEN_HOST "127.0.0.1"
 #define DEFAULT_BACKEND_PORT 4000

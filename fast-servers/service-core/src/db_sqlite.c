@@ -32,7 +32,7 @@
 
 #include <sqlite3.h>
 
-#include "service_core/log.h"
+#include "service_core/log/log.h"
 
 /*
  * How long a statement waits for another thread's write before it gives up.

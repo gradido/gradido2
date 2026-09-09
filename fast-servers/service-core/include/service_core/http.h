@@ -292,4 +292,18 @@ int sc_http_health(sc_http_req *req, void *user_data);
 
 #define SC_HTTP_HEALTH_PATH "/_health"
 
+/**
+ * How long a stopping server waits for its open connections to close before going down anyway.
+ *
+ * A server that has been asked to stop first stops accepting and asks every connection it holds
+ * to close, because an event loop may not be destroyed while its connections still have timers
+ * on it. This is the bound on that wait: a client that never closes must not be able to keep the
+ * process alive, and a shutdown without a bound is a shutdown that hangs.
+ *
+ * Five seconds, which is longer than any request this server answers and short enough that an
+ * orchestrator's own kill timer -- 10 s for `docker stop`, 30 s for Kubernetes by default --
+ * does not run out first. Reaching it is logged.
+ */
+#define SC_HTTP_DRAIN_MS 5000
+
 #endif /* SERVICE_CORE_HTTP_H */

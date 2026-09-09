@@ -29,7 +29,8 @@
 
 extern "C" {
 #include "service_core/db.h"
-#include "service_core/log.h"
+#include "service_core/log/log.h"
+#include "service_core/log/logger.h"
 }
 
 namespace
@@ -461,7 +462,20 @@ int main(int argc, char **argv)
      * fatal and still appear -- they are refusals of a startup, and this is the level at which
      * that is not allowed to be silent. SC_DB_TEST_LOG turns the rest back on.
      */
-    sc_log_init(std::getenv("SC_DB_TEST_LOG") != nullptr ? SC_LOG_DEBUG : SC_LOG_FATAL);
+    sc_log_config log_cfg;
+    int result;
+
+    sc_log_default_config(&log_cfg);
+    log_cfg.min_level = std::getenv("SC_DB_TEST_LOG") != nullptr ? SC_LOG_DEBUG : SC_LOG_FATAL;
+    sc_log_init(&log_cfg);
+    sc_log_thread_join();
+
     ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+    result = RUN_ALL_TESTS();
+
+    /* The logger is a thread now: without the shutdown the lines still in the ring are never
+     * written, and a failing test would be reported without the lines that explain it. */
+    sc_log_thread_leave();
+    sc_log_shutdown();
+    return result;
 }

@@ -12,8 +12,8 @@
         // backend-core will be written against. Same commit packages/shared-native pins, so the
         // two builds in this repository compile against one layout of the same structs.
         .blockchain_core = .{
-            .url = "git+https://github.com/gradido/gradido-blockchain-core.git#ca061e76d1a11804866630c196324602c9b6c4ea",
-            .hash = "blockchain_core-0.20.0-r94upuObEQCUnFKzKD-B3AigIijkjh_H7l-DJByNjgn4",
+            .url = "git+https://github.com/gradido/gradido-blockchain-core.git#a8730082e7efcbfffc51bb8e23ec415b09d298ca",
+            .hash = "blockchain_core-0.21.0-r94uptXaEQA5jJVvig0obJggKf81G2N6Yg2tT6BYOlNA",
         },
         // libsodium, and the same pin the core carries: the two must be one package in the
         // build graph, or service-core would compile against one copy of sodium.h and link the
@@ -23,13 +23,22 @@
             .url = "git+https://github.com/jedisct1/libsodium#77e1ce5d6dee871c49ef211222ba18ef0c486bda",
             .hash = "N-V-__8AAGV3jgBL34nv4uUihxaCgroWLfj966-SVjBHn9RE",
         },
-        // arnm: the arena, the containers and the conversions the core is written against, and
-        // the JSON jwt.c parses a token with. Same pin and the same options the core requests,
-        // for the same reason libsodium is here -- and do not pin its vendored yyjson
-        // separately, which would be a second definition of every yyjson_* symbol.
+        // arnm: the arena, the containers and the conversions the core is written against, the
+        // JSON jwt.c parses a token with, and -- since 0.8.0 -- the graded arena pool, the byte
+        // buffer and the JSON writer service-core/src/log is built on. Do not pin its vendored
+        // yyjson separately, which would be a second definition of every yyjson_* symbol.
+        //
+        // **This entry has to be character for character the one in gradido-blockchain-core's
+        // build.zig.zon**, URL and hash both. That package pins arnm itself and is the one that
+        // *links* the artifact -- this build only puts the headers on the path. Anything else is
+        // two arnm packages in the graph: the headers of one against the objects of the other,
+        // which is an undefined symbol for everything the newer one added and a silent ABI
+        // mismatch for what it changed. A tarball URL and a git+ URL of the same tree hash
+        // differently, so "the same version" is not enough -- it has to be the same line.
+        // Moving arnm therefore means moving .blockchain_core first and copying this from it.
         .arnm = .{
-            .url = "https://github.com/gradido/arnm/archive/refs/tags/v0.7.5.tar.gz",
-            .hash = "arnm-0.7.5-ZdhGsFiuGgBgKTeY_sObjyGhXvKbhB97imrlnNp9DVe9",
+            .url = "https://github.com/gradido/arnm/archive/refs/tags/v0.8.1.tar.gz",
+            .hash = "arnm-0.8.1-ZdhGsKDJIABS-gEr8bPKHaSzVNqJ73a19tHDHdAHdDzZ",
         },
         // The HTTP server on the fast path. build.zig copies the libh2o-evloop source list out
         // of this checkout's CMakeLists.txt, so the pin and that list have to move together.
@@ -177,6 +186,24 @@
         },
         // Feeds compile_commands.json, which is where the -Wall -Wextra findings become visible
         // in an editor -- zig itself hides them on a successful build.
+        //
+        // **This pin writes a 1.2 GB compile_commands.json, and moving it needs the toolchain
+        // first.** At this commit the walk that collects sources follows every linked library
+        // and remembers nothing: a step reached from N targets is walked N times, so 1346
+        // distinct files come out as 29719 entries, 98 % of them belonging to libsodium,
+        // LibreSSL, h2o, SQLite and libpq rather than to us. The include-path recursion has the
+        // same hole, which is why one entry carries LibreSSL's -I run four times and the median
+        // entry is 31 KB. build.zig hangs the step on the install step, so every build writes it.
+        //
+        // Upstream fixed both in `7b1f750` -- a hash map keyed by source path, and a "not
+        // already queued" check on the worklist. Measured against a local copy of this pin with
+        // the same two fixes applied: 4.4 MB and 1348 entries, the two duplicates being
+        // static_sites.c and field_rules.c, which really are compiled twice.
+        //
+        // That rewrite cannot be taken here. It reaches for
+        // `std.Build.Step.Compile.runPkgConfig`, which is not `pub` in zig 0.15.1, and every
+        // commit carrying the fix carries that call -- so the earliest fixed version already
+        // needs 0.16. Same shape as the .curl entry: move the toolchain, then this pin.
         .compile_commands = .{
             .url = "https://github.com/the-argus/zig-compile-commands/archive/9400cd1963ea6bb58fe47ba7d9700075b808cdd2.tar.gz",
             .hash = "zig_compile_commands-0.0.1-OZg5-e_JAAAGg1WHAePtq4l4Uvjs34BexnFFCZk63EaG",

@@ -23,7 +23,8 @@
 #include <uv.h>
 
 #include "service_core/http.h"
-#include "service_core/log.h"
+#include "service_core/log/log.h"
+#include "service_core/log/logger.h"
 #include "service_core/runtime.h"
 
 static sc_quit_flag g_quit;
@@ -99,6 +100,7 @@ static void push(work_item *item)
 static void run_worker(void *arg)
 {
     (void)arg;
+    (void)sc_log_thread_join();
     for (;;) {
         work_item *item;
 
@@ -107,6 +109,7 @@ static void run_worker(void *arg)
             uv_cond_wait(&g_worker.wake, &g_worker.lock);
         if (g_worker.stop && g_worker.count == 0) {
             uv_mutex_unlock(&g_worker.lock);
+            sc_log_thread_leave();
             return;
         }
         item = &g_worker.items[g_worker.queue[g_worker.head]];
@@ -346,6 +349,7 @@ static int handle_path(sc_http_req *req, void *user_data)
 int main(int argc, char **argv)
 {
     sc_http_config http_config;
+    sc_log_config log_cfg;
     sc_http_server *server;
     unsigned long port;
     unsigned long threads = 0;
@@ -370,7 +374,10 @@ int main(int argc, char **argv)
         }
     }
 
-    sc_log_init(SC_LOG_WARN);
+    sc_log_default_config(&log_cfg);
+    log_cfg.min_level = SC_LOG_WARN;
+    sc_log_init(&log_cfg);
+    sc_log_thread_join();
     sc_runtime_install_signal_handlers(&g_quit);
 
     http_config.host = "127.0.0.1";
@@ -378,12 +385,17 @@ int main(int argc, char **argv)
     http_config.role = "http-probe";
     http_config.threads = (uint16_t)threads;
     server = sc_http_server_create(&http_config);
-    if (server == NULL)
+    if (server == NULL) {
+        sc_log_thread_leave();
+        sc_log_shutdown();
         return 1;
+    }
 
     g_worker.server = server;
     if (uv_mutex_init(&g_worker.lock) != 0 || uv_cond_init(&g_worker.wake) != 0) {
         sc_http_server_destroy(server);
+        sc_log_thread_leave();
+        sc_log_shutdown();
         return 1;
     }
 
@@ -400,10 +412,14 @@ int main(int argc, char **argv)
         sc_http_route(server, "/defer-stats", handle_defer_stats, NULL) != SC_OK ||
         sc_http_on_resume(server, on_resume, NULL) != SC_OK || sc_http_listen(server) != SC_OK) {
         sc_http_server_destroy(server);
+        sc_log_thread_leave();
+        sc_log_shutdown();
         return 1;
     }
     if (uv_thread_create(&g_worker.thread, run_worker, NULL) != 0) {
         sc_http_server_destroy(server);
+        sc_log_thread_leave();
+        sc_log_shutdown();
         return 1;
     }
 
@@ -422,5 +438,7 @@ int main(int argc, char **argv)
     (void)uv_thread_join(&g_worker.thread);
 
     sc_http_server_destroy(server);
+    sc_log_thread_leave();
+    sc_log_shutdown();
     return 0;
 }

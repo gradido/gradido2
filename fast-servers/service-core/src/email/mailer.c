@@ -49,7 +49,8 @@
 #include "arnm/memory.h"
 
 #include "service_core/atomic.h"
-#include "service_core/log.h"
+#include "service_core/log/log.h"
+#include "service_core/log/logger.h"
 
 /*
  * How long an idle worker sleeps before looking at the quit flag and its own retirement clock
@@ -507,7 +508,13 @@ static void worker_main(void *arg)
 {
     sc_mail_worker *worker = arg;
     sc_mailer *mailer = worker->mailer;
-    sc_mail_session *handle = sc_mail_session_open();
+    sc_mail_session *handle;
+
+    /* A worker is a thread that comes and goes -- a burst starts one, linger_ms ends it -- and
+     * the logger gives a thread an arena pool and a return queue of its own. Registering here
+     * and giving them back at the bottom is what keeps a retirement from leaking both. */
+    (void)sc_log_thread_join();
+    handle = sc_mail_session_open();
 
     uv_mutex_lock(&mailer->lock);
 
@@ -517,6 +524,7 @@ static void worker_main(void *arg)
         sc_log_error(SC_CAT_MAIL, "mail.worker.no_handle", "worker %u has no curl handle",
                      worker->index);
         worker_retire(worker, NULL);
+        sc_log_thread_leave();
         return;
     }
 
@@ -569,6 +577,10 @@ static void worker_main(void *arg)
     }
 
     worker_retire(worker, handle);
+    /* After worker_retire, which is what drops the mailer lock: giving the pool back waits for
+     * the logger to hand this thread's arenas over, and waiting for that under a lock every
+     * enqueue takes would be a queue stalled on a log line. */
+    sc_log_thread_leave();
 }
 
 /* ------------------------------------------------------------------ *

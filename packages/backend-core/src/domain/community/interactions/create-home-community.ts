@@ -7,7 +7,7 @@ import { CommunityRepository } from '../repositories'
 /**
  * The instance becomes a community.
  *
- * This runs once, at the first start against an empty database, and everything that follows
+ * This runs once, from the `setup` command against an empty database, and everything that follows
  * depends on it: `users.community_id` is NOT NULL, so no member can exist before this row
  * does, and the backend refuses to serve without it.
  *

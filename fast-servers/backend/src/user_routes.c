@@ -29,7 +29,7 @@
 #include "backend_core/domain/user.h"
 #include "field_rules.h"
 #include "service_core/api_error.h"
-#include "service_core/log.h"
+#include "service_core/log/log.h"
 
 #define ROUTE_PATH "/user/create"
 
@@ -153,8 +153,10 @@ static void render_member(arnm_json_value *root, arnm_json_value *value, const c
         render_number(number, out, out_size);
         return;
     }
-    if (arnm_json_read_array(value, elements, 1, NULL) == ARNM_SUCCESS ||
-        arnm_json_read_array(value, elements, 1, NULL) == ARNM_ERROR_DESTINATION_BUFFER_TO_SMALL) {
+    if (arnm_json_read_array(value, ARNM_JSON_FIELD_TYPE_VALUE, elements, 1, NULL) ==
+            ARNM_SUCCESS ||
+        arnm_json_read_array(value, ARNM_JSON_FIELD_TYPE_VALUE, elements, 1, NULL) ==
+            ARNM_ERROR_DESTINATION_BUFFER_TO_SMALL) {
         (void)snprintf(out, out_size, "Array");
         return;
     }
@@ -316,7 +318,8 @@ int backend_user_create(sc_http_req *req, void *user_data)
              * JavaScript calls it one and finds no keys in it. So an array is answered as an
              * object with everything missing, which is what the reference path answers. */
             arnm_json_value *elements[1];
-            arnm_result as_array = arnm_json_read_array(root, elements, 1, NULL);
+            arnm_result as_array =
+                arnm_json_read_array(root, ARNM_JSON_FIELD_TYPE_VALUE, elements, 1, NULL);
             char rendered[64];
 
             if (as_array == ARNM_SUCCESS || as_array == ARNM_ERROR_DESTINATION_BUFFER_TO_SMALL) {

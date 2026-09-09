@@ -174,14 +174,25 @@ int sc_jwt_sign_hs256(const sc_jwt_config *config, const char *claim, const char
      *
      * No test between the lines: the writer keeps the first error and does nothing after it, so
      * the write below stands in for a check after every one of them. */
-    arnm_json_writer_add_string(&writer, claim, value);
-    arnm_json_writer_add_bool(&writer, "urn:gradido:claim", true);
-    arnm_json_writer_add_int64(&writer, "iat", now);
+    /* The escaping is asked for rather than assumed: since arnm 0.8.0 the writer passes bytes
+     * through untouched unless a field says otherwise, and every string here came from a caller
+     * or from the configuration -- a claim name, a uuid, an issuer -- and not out of this
+     * source. In practice none of them holds a quote; the flag is what makes that a property of
+     * the input rather than of the encoder. The `urn:gradido:claim` key is the one literal and
+     * the one that needs neither. */
+    arnm_json_writer_add_string_flags(&writer, claim, strlen(claim), true, value, strlen(value),
+                                      ARNM_JSON_WRITER_STRING_ESCAPE);
+    arnm_json_writer_add_bool(&writer, ARNM_JSON_WRITER_KEY("urn:gradido:claim"), true);
+    arnm_json_writer_add_int64(&writer, ARNM_JSON_WRITER_KEY("iat"), now);
     if (config->issuer != NULL)
-        arnm_json_writer_add_string(&writer, "iss", config->issuer);
+        arnm_json_writer_add_string_flags(&writer, ARNM_JSON_WRITER_KEY("iss"), config->issuer,
+                                          strlen(config->issuer),
+                                          ARNM_JSON_WRITER_STRING_ESCAPE);
     if (config->audience != NULL)
-        arnm_json_writer_add_string(&writer, "aud", config->audience);
-    arnm_json_writer_add_int64(&writer, "exp", now + ttl);
+        arnm_json_writer_add_string_flags(&writer, ARNM_JSON_WRITER_KEY("aud"), config->audience,
+                                          strlen(config->audience),
+                                          ARNM_JSON_WRITER_STRING_ESCAPE);
+    arnm_json_writer_add_int64(&writer, ARNM_JSON_WRITER_KEY("exp"), now + ttl);
 
     if (!arnm_ok(arnm_json_writer_write(&writer, &allocator, &payload, &payload_len)))
         return -1;

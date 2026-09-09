@@ -33,8 +33,8 @@ const isService = (value: string | undefined): value is Service =>
  *
  * `gradido` alone is `gradido backend serve`, which is the download-and-start promise of
  * `Architecture.md` — one file, no arguments, a server. A named service takes the arguments
- * after its name, so `gradido backend migrate-down` and `gradido migrate-down` are the same
- * command: the service may be left out, and then it is the backend.
+ * after its name, so `gradido backend setup` and `gradido setup` are the same command: the
+ * service may be left out, and then it is the backend.
  *
  * Nothing here starts more than one service. Two of them in one process would share a heap
  * and a signal handler and would be a deployment decision made by an argument parser — a
@@ -119,6 +119,8 @@ services
 
 backend commands
   serve         start the server (the default)
+  setup         say who this community is, then stop. Run once, with a
+                terminal attached, before the first serve
   migrate-down  take the database down one migration, then stop.
                 Needs DB_MIGRATE_DOWN to name the migration to end at
 

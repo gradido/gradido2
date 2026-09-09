@@ -156,12 +156,17 @@ int main(void)
             uint32_t len = 0;
             arnm_init_arena_borrow(&alloc, scratch, sizeof(scratch));
             arnm_json_writer_init(&writer, &alloc, ARNM_JSON_WRITE_DEFAULT, NULL);
-            arnm_json_writer_add_string(&writer, "gradidoID", CLAIM_VALUE);
-            arnm_json_writer_add_bool(&writer, "urn:gradido:claim", true);
-            arnm_json_writer_add_int64(&writer, "iat", now);
-            arnm_json_writer_add_string(&writer, "iss", "gradido");
-            arnm_json_writer_add_string(&writer, "aud", "gradido-backend");
-            arnm_json_writer_add_int64(&writer, "exp", now + 600);
+            arnm_json_writer_add_string_flags(&writer, ARNM_JSON_WRITER_KEY("gradidoID"),
+                                              CLAIM_VALUE, strlen(CLAIM_VALUE),
+                                              ARNM_JSON_WRITER_STRING_ESCAPE);
+            arnm_json_writer_add_bool(&writer, ARNM_JSON_WRITER_KEY("urn:gradido:claim"), true);
+            arnm_json_writer_add_int64(&writer, ARNM_JSON_WRITER_KEY("iat"), now);
+            arnm_json_writer_add_string_flags(&writer, ARNM_JSON_WRITER_KEY("iss"), "gradido", 7,
+                                              ARNM_JSON_WRITER_STRING_ESCAPE);
+            arnm_json_writer_add_string_flags(&writer, ARNM_JSON_WRITER_KEY("aud"),
+                                              "gradido-backend", 15,
+                                              ARNM_JSON_WRITER_STRING_ESCAPE);
+            arnm_json_writer_add_int64(&writer, ARNM_JSON_WRITER_KEY("exp"), now + 600);
             arnm_json_writer_write(&writer, &alloc, &text, &len);
             sink += len;
         }

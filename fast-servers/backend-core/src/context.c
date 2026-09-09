@@ -2,9 +2,8 @@
  * Everything that has to be true before a request can be served, in the order it becomes true.
  *
  * The counterpart of packages/backend's `open()`: the database answers, its schema is current,
- * and this instance knows which community it is. On an empty database the last step is a
- * conversation with whoever started the process -- which is the role's business, so it arrives
- * here as a callback.
+ * and this instance knows which community it is. Nothing here asks anybody anything -- an empty
+ * database ends the start with a line naming the `setup` command.
  *
  * All the failures have one outcome, so they are reported as one line each and the caller only
  * has to decide whether to go on: a database that will not come, will not migrate or has no
@@ -16,15 +15,14 @@
 #include <string.h>
 
 #include "backend_core/database/migrations.h"
-#include "service_core/log.h"
+#include "service_core/log/log.h"
 
 sc_status bc_context_open(const sc_db_config *db_config, const sc_quit_flag *quit,
-                          int (*ask)(bc_home_community_setup *setup), bc_context *out)
+                          bc_context *out)
 {
     char error[BC_SQL_ERROR_MAX];
     sc_log_value db_field[1];
     sc_log_context log = {0};
-    bc_home_community_setup setup;
     int found = 0;
     sc_status status;
 
@@ -70,35 +68,23 @@ sc_status bc_context_open(const sc_db_config *db_config, const sc_quit_flag *qui
         return SC_OK;
 
     /*
-     * This is the one place the two possible first moments of a Gradido server meet: a database
-     * that has been through this before answered above, and an empty one turns the start into a
-     * short conversation. There is no third case, because `users.community_id` is NOT NULL:
-     * without this row nothing can register, so serving without it would only mean failing later
-     * and less clearly.
+     * There is no second case here and that is the point. There is no third one either, because
+     * `users.community_id` is NOT NULL: without this row nothing can register, so serving
+     * without it would only mean failing later and less clearly.
      */
-    memset(&setup, 0, sizeof(setup));
-    if (ask == NULL || !ask(&setup)) {
-        sc_log_value reason[1] = {SC_LOG_STR("reason", "no-terminal")};
+    {
+        sc_log_value reason[1] = {SC_LOG_STR("reason", "not-set-up")};
         sc_log_context setup_log = {0};
 
         setup_log.data = reason;
         setup_log.data_count = 1;
         sc_log_event(SC_LOG_FATAL, SC_CAT_STARTUP, "startup.setup.failed", &setup_log,
-                     "cannot start: this database has no community yet, and there is no terminal "
-                     "to ask on. Start the backend once with a terminal attached to set it up -- "
-                     "under docker compose that is: docker compose run --rm backend");
-        bc_context_close(out);
-        return SC_ERR_UNAVAILABLE;
+                     "cannot start: this database has no community yet. Run the setup command "
+                     "once, with a terminal attached, to say who this community is -- under "
+                     "docker compose that is: docker compose run --rm backend setup");
     }
-
-    status = bc_create_home_community(out->db, &setup, &out->home, error, sizeof(error));
-    if (status != SC_OK) {
-        sc_log_event(SC_LOG_FATAL, SC_CAT_STARTUP, "startup.database.failed", &log,
-                     "the home community could not be written: %s", error);
-        bc_context_close(out);
-        return status;
-    }
-    return SC_OK;
+    bc_context_close(out);
+    return SC_ERR_UNAVAILABLE;
 }
 
 void bc_context_close(bc_context *context)

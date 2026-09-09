@@ -10,18 +10,26 @@ import { Logger, setupGracefulShutdown } from '@gradido/service-core'
 import { AppContext } from './AppContext'
 import { CONFIG } from './config'
 import { createBackendApp, type StaticSite, staticRoutes } from './server'
-import { migrateDownCommand, resolveHomeCommunity, SetupError } from './setup'
+import { migrateDownCommand, requireHomeCommunity, SetupError, setupCommand } from './setup'
 
 /**
  * What this process was asked to do.
  *
- * `serve` by default, because that is what starting a server means. Going down is its own
- * command for a reason that is not a rule about servers: a serving start migrates *up* to the
- * version its code needs, so taking the database to N-1 and then serving a build that needs N
- * would undo the step and re-apply it in the same breath. Going down means the next thing
- * started is a different build, and that is a separate act.
+ * `serve` by default, because that is what starting a server means. The other two are commands
+ * rather than things a normal start does, and for two different reasons.
+ *
+ * Going down is its own command for a reason that is not a rule about servers: a serving start
+ * migrates *up* to the version its code needs, so taking the database to N-1 and then serving a
+ * build that needs N would undo the step and re-apply it in the same breath. Going down means
+ * the next thing started is a different build, and that is a separate act.
+ *
+ * `setup` is its own command because it asks questions. A process that both answers requests and
+ * reads an answer off a terminal is two things at once: it cannot be started unattended, its log
+ * and its prompts share a stream, and under `docker compose up` the questions go where nobody is
+ * looking. So a serving start against a database with no community stops and names this command
+ * instead — see `setup/requireHomeCommunity.ts`.
  */
-const COMMANDS = ['serve', 'migrate-down'] as const
+const COMMANDS = ['serve', 'setup', 'migrate-down'] as const
 
 /**
  * What the backend needs from whoever started it and cannot work out for itself.
@@ -58,6 +66,11 @@ export async function runBackend(
 
   if (command === 'migrate-down') {
     await runMigrateDown(logger)
+    return
+  }
+
+  if (command === 'setup') {
+    await runSetup(logger)
     return
   }
 
@@ -139,7 +152,7 @@ function corsPlugin() {
  * The `migrate-down` command: open the database, take it down one migration, stop.
  *
  * Deliberately not `open()` — that migrates up on the way, which is the contradiction above,
- * and it asks for a home community, which a schema operation has no business needing.
+ * and it requires a home community, which a schema operation has no business needing.
  */
 async function runMigrateDown(logger: Logger): Promise<void> {
   const db = connectDatabase(CONFIG)
@@ -166,10 +179,54 @@ async function runMigrateDown(logger: Logger): Promise<void> {
 }
 
 /**
+ * The `setup` command: open the database, bring the schema up, ask who this community is, stop.
+ *
+ * The same three steps `open()` takes, minus the server and plus the conversation. The
+ * migrations are not optional here: the row cannot be written into a schema that is not there,
+ * and running them is idempotent, so this decides nothing a serving start would decide
+ * differently.
+ */
+async function runSetup(logger: Logger): Promise<void> {
+  const db = connectDatabase(CONFIG)
+  try {
+    await waitForDatabase(db, logger)
+    await runMigrations(db, logger)
+    await setupCommand({ db, logger })
+  } catch (error) {
+    if (error instanceof SchemaMismatchError) {
+      /* Already reported as db.migration.denied, with the migration named. */
+      logger.flush()
+      await db.close().catch(() => {
+        /* Already exiting; a connection that will not close changes nothing about that. */
+      })
+      process.exit(1)
+    }
+    if (error instanceof SetupError) {
+      logger.fatal(
+        { cat: 'startup', event: 'startup.setup.failed', data: { reason: error.reason } },
+        `cannot set up: ${error.message}`,
+      )
+    } else {
+      logger.fatal(
+        { cat: 'startup', event: 'startup.database.failed', data: { db: CONFIG.DB_TYPE } },
+        `cannot reach the database: ${databaseErrorMessage(error)}`,
+      )
+    }
+    logger.flush()
+    await db.close().catch(() => {
+      /* Already failing; a connection that will not close changes nothing about that. */
+    })
+    process.exit(1)
+  }
+  logger.flush()
+  await db.close()
+}
+
+/**
  * Everything that has to be true before a request can be served, in the order it becomes
  * true: the database answers, its schema is current, and this instance knows which community
- * it is. On an empty database the last step is a conversation with whoever started the
- * process — see `setup/`.
+ * it is. Nothing here asks anybody anything — an empty database ends the start with a line
+ * naming the `setup` command; see `setup/requireHomeCommunity.ts`.
  *
  * All four failures have one outcome, so they are reported as one line: a database that will
  * not come, will not migrate or has no community ends the process here, where the reason is
@@ -180,7 +237,7 @@ async function open(logger: Logger): Promise<AppContext> {
   try {
     await waitForDatabase(db, logger)
     await runMigrations(db, logger)
-    const homeCommunity = await resolveHomeCommunity({ db, logger })
+    const homeCommunity = await requireHomeCommunity({ db, logger })
     return new AppContext(logger, db, homeCommunity)
   } catch (error) {
     /* Two failures with one outcome but not one cause: a database that will not answer is

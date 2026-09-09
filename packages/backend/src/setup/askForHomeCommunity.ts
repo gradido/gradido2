@@ -8,7 +8,10 @@ import {
 import * as v from 'valibot'
 
 /**
- * The first start against an empty database: ask the admin who this community is.
+ * The `setup` command's questions: ask the admin who this community is.
+ *
+ * Reached from `setupCommand.ts` and from nowhere else. A serving start does not come here —
+ * see `requireHomeCommunity.ts` for why the conversation is a command of its own.
  *
  * Legacy reads `COMMUNITY_NAME` and `COMMUNITY_DESCRIPTION` out of the environment at every
  * start. gradido2 asks once and writes a row, because these are not settings — they are the
@@ -52,9 +55,9 @@ export async function askForHomeCommunity(): Promise<HomeCommunitySetup> {
 /**
  * Whether anybody is there to be asked.
  *
- * Without a terminal there is nobody to answer, and a process that blocked on a prompt
- * nobody can see would look like a hung start rather than an unfinished setup. The caller
- * turns this into a message that says what to do instead.
+ * Without a terminal there is nobody to answer, and a command that blocked on a prompt
+ * nobody can see would look like a hang rather than an unfinished setup. The caller turns
+ * this into a message that says what to do instead.
  */
 export function canAskForHomeCommunity(): boolean {
   return process.stdin.isTTY === true && process.stdout.isTTY === true
