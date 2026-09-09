@@ -1,5 +1,6 @@
 export * from './bootstrap'
 export * from './config'
+export * from './email'
 export * from './logging'
 export * from './ServiceContext'
 export * from './session'

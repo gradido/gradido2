@@ -3,53 +3,38 @@ import {
   createHomeCommunity,
   type DatabaseContext,
 } from '@gradido/backend-core'
-import { askForHomeCommunity, canAskForHomeCommunity } from './askForHomeCommunity'
-import { SetupError } from './requireHomeCommunity'
+import type { HomeCommunitySetup } from '@gradido/shared/schemas'
 
 /**
- * `setup` — say who this community is, once, and stop.
+ * The last step of `setup`: write the community row, unless it is already there.
  *
- * This is the conversation that used to happen inside a serving start. It is a command for the
- * same kind of reason `migrate-down` is one, though not the same reason: a server's job is to
- * answer requests, and a process that is also reading an answer from a terminal is two things at
- * once. It cannot be started by an orchestrator without somebody watching it, its log and its
- * questions share a terminal, and the moment it is run under `docker compose up` rather than
- * `run` the prompt goes somewhere nobody is looking. Splitting it out is what postgres does with
- * `initdb`, vault with `operator init` and django with `createsuperuser`.
+ * Everything before it — the questions, and the `.env` they were written to — has happened
+ * by the time this is reached, because the answers decide *which* database this opens. See
+ * `main.ts`, `runSetup`, for the order and `askForSetup.ts` for the conversation.
  *
- * **It is safe to run twice.** A database that already has a community says so and stops with 0 —
- * setting up an instance that is set up is not a failure, it is a no-op, and an operator running
- * this from a script should not have to check first.
+ * `setup` is a command rather than something a serving start does because it asks questions.
+ * A process that both answers requests and reads an answer off a terminal is two things at
+ * once: it cannot be started unattended, its log and its prompts share a terminal, and under
+ * `docker compose up` rather than `run` the prompts go where nobody is looking. Splitting it
+ * out is what postgres does with `initdb`, vault with `operator init` and django with
+ * `createsuperuser`.
  *
- * The migrations run first, because the row cannot be written into a schema that is not there
- * yet. That is the same thing a serving start does and it is idempotent, so nothing is decided
- * here that `serve` would have decided differently.
+ * **It is safe to run twice.** A database that already has a community says so and stops
+ * with 0 — the `.env` written a moment ago is the point of the second run, and an operator
+ * changing a relay should not have to drop a row to do it.
  */
-export async function setupCommand(context: DatabaseContext): Promise<void> {
+export async function setupCommand(
+  context: DatabaseContext,
+  community: HomeCommunitySetup,
+): Promise<void> {
   const existing = await new CommunityRepository(context.db).findHomeCommunity()
   if (existing !== undefined) {
     /* Not a log line: it reports what this invocation found, not something that happened to
-       the instance, and the contracted stream has nothing to say about a command that did
-       nothing. The community that is already there was logged the day it was written. */
+       the instance, and the contracted stream has nothing to say about a command that wrote
+       no row. The community that is already there was logged the day it was written. */
     process.stderr.write(`this instance is already set up as "${existing.name}"\n`)
     return
   }
 
-  if (!canAskForHomeCommunity()) {
-    throw new SetupError(
-      'no-terminal',
-      [
-        'setup needs a terminal to ask on, and there is none.',
-        'Run it with one attached —',
-        'under docker compose that is: docker compose run --rm backend setup',
-      ].join(' '),
-    )
-  }
-
-  /* Asks whatever is buffered to go out before the questions start — the migration lines
-     usually are. On a terminal the log writes synchronously anyway (see logging/logger.ts,
-     WATCHED), so this is the belt to that pair of braces rather than the only thing holding
-     them apart. */
-  context.logger.flush()
-  await createHomeCommunity(context, await askForHomeCommunity())
+  await createHomeCommunity(context, community)
 }

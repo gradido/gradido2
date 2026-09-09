@@ -30,9 +30,10 @@
 #include <vector>
 
 extern "C" {
+#include "service_core/email/config.h"
+#include "service_core/email/mailer.h"
 #include "service_core/log/log.h"
 #include "service_core/log/logger.h"
-#include "service_core/email/mailer.h"
 
 /* sc_mail_encode_subject() arrives with email/message.h, which mailer.h includes. It used to be
  * declared here by hand, because the encoder had no header of its own -- the split into
@@ -926,6 +927,60 @@ TEST_F(MailTest, SendsThroughARealRelay)
     EXPECT_EQ(sent, 1u);
 
     sc_mailer_destroy(mailer);
+}
+
+/*
+ * The startup probe, against the same relay. It is the one thing in this file that opens a
+ * session and hands nothing over, and what it has to prove is that a refusal really is a
+ * refusal of the session: a probe that answered SC_OK for a port nothing listens on would tell
+ * every starting server that its mail is fine.
+ */
+TEST_F(MailTest, ProbeRefusesARelayThatIsNotThere)
+{
+    sc_mail_relay relay{};
+    char error[SC_MAIL_ERROR_MAX] = {0};
+    sc_mail_session *session;
+
+    ASSERT_EQ(sc_mail_global_init(), SC_OK);
+    session = sc_mail_session_open();
+    ASSERT_NE(session, nullptr);
+
+    relay.url = kDeadRelay;
+    relay.from = "bench@gradido.local";
+    relay.timeout_ms = 500;
+    EXPECT_EQ(sc_mail_session_probe(session, &relay, error, sizeof(error)), SC_ERR_NETWORK);
+    EXPECT_NE(error[0], '\0');
+
+    sc_mail_session_close(session);
+}
+
+TEST_F(MailTest, ProbeRefusesNothingToProbe)
+{
+    sc_mail_relay relay{};
+
+    EXPECT_EQ(sc_mail_session_probe(nullptr, &relay, nullptr, 0), SC_ERR_INVALID_ARGUMENT);
+}
+
+TEST_F(MailTest, ProbeTakesARealRelay)
+{
+    const char *url = live_url();
+    if (url == nullptr)
+        GTEST_SKIP() << "set SC_MAIL_TEST_URL to a listening SMTP server";
+
+    sc_mail_relay relay{};
+    char error[SC_MAIL_ERROR_MAX] = {0};
+    sc_mail_session *session;
+
+    ASSERT_EQ(sc_mail_global_init(), SC_OK);
+    session = sc_mail_session_open();
+    ASSERT_NE(session, nullptr);
+
+    relay.url = url;
+    relay.from = "bench@gradido.local";
+    relay.timeout_ms = 5000;
+    EXPECT_EQ(sc_mail_session_probe(session, &relay, error, sizeof(error)), SC_OK) << error;
+
+    sc_mail_session_close(session);
 }
 
 /* The same, driven by workers instead of by the caller: what a server actually does. */

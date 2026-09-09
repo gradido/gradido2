@@ -256,6 +256,28 @@ You carry the file to a piece of ground. You start it. It digs its own well, ask
 question it cannot answer for itself — who are you, this community? — and then there is a
 city, and it is yours.
 
+The one question turned out to be eleven, which is what happens to one questions. Where the
+well is, who carries the letters, the word that opens the carrier's bag. And most of the
+eleven were being answered identically, in the same order, by people raising a city on a
+bench for the afternoon and pulling it down again before supper.
+
+So the file learned to ask the *first* question first: is this a city, or is this a city on a
+bench? For a bench it then writes out all eleven itself and holds the sheet up — this name,
+this ground, the well it dug, letters to the box in the corner rather than to anybody alive —
+walks over to the box to check that somebody is sitting in it, comes back and says so, and
+asks one thing. Yes or no. A founder who says no is asked the eleven one at a time, with the
+sensible answer already written in the margin of each; pressing on takes it.
+
+Everything the founder said that is *not* who the city is — which well, which letter-carrier,
+the word for the bag — is written on a note nailed inside the gate. The city reads that note
+each morning before it does anything else, and it never argues with an instruction the
+magistrate has already shouted over the wall: what was shouted stands, and the note fills in
+the rest. Both cities read the same note in the same hand, which is what lets a founder pull
+one down and raise the other on the same ground without writing anything twice.
+
+The name is not on the note and never will be. A name on a note is a name two people can
+disagree about, and there is exactly one place a city's name is allowed to live.
+
 The pictures live in a chest beside it. Not in the book: Senomagos kept the faces of her
 people *inside* the archive, so every copy anyone made of that archive carried everybody's
 face along with it, and reading one line meant lifting all of them. The new cities write a key
@@ -292,3 +314,28 @@ two crafts, because they were only ever two crafts on account of the two scripts
 There is no scribe. Not because he was bad at the work — he was the best of them — but because
 a man who is the only one able to compare two things is also the only one able to be wrong
 about them, and that is a great deal to ask of one man for a hundred years.
+
+## XV. Asking the letter-carrier whether he is awake
+
+Every morning, before the gates are open to anybody, a runner goes down to the letter-carrier's
+house.
+
+He knocks. He says which city he is from. If the bag needs a word he gives the word. And then
+— this is the part worth having — he hands over no letter at all, wishes the man a good day,
+and walks back.
+
+He goes by the road the letters go by, and not by the footpath over the hill, and that is not
+thoroughness. A carrier will open his door to a man who came over the hill and turn away the
+cart that arrives on the road, for reasons entirely about the road; a runner who took the
+short way would come back saying all is well every morning of a month in which nothing was
+delivered. One line goes on the board: *he answered*, or *he did not, and these were his
+words*.
+
+The city opens either way. A city that cannot send letters can still do every single thing
+that is not sending a letter, and there is no version of this where the gates stay shut over
+it. What there is a version of, and what the runner exists to prevent, is finding out three
+weeks later from a citizen who never got hers — and then spending an afternoon establishing
+which of the eleven answers was the wrong one.
+
+A city that was never given a letter-carrier says that too, in as many words, on the same
+board. Silence there would be indistinguishable from a carrier nobody thought to check.

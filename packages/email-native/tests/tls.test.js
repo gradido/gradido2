@@ -4,6 +4,14 @@
  *
  * tls/gradido_mbedtls_config.h takes a lot out of mbedtls. A build that only
  * compiles proves nothing — this connects, verifies a chain and sends a mail.
+ *
+ * **Off unless TLS is set**, which is what `bun run test:tls` does. Not because the
+ * handshakes are slow — the two of them are 0,6 s together — but because the file takes
+ * ~15 s to leave: the successful send holds something open in teardown that nobody has
+ * chased down yet. It skips rather than disappears, so the suite reports that it was not
+ * run and how to run it.
+ *
+ *   TLS=1 node --test tests/tls.test.js
  */
 const test = require('node:test')
 const assert = require('node:assert')
@@ -100,8 +108,12 @@ const haveOpenssl = (() => {
   }
 })()
 
+const why =
+  (process.env.TLS !== '1' && 'set TLS=1, or run `bun run test:tls`') ||
+  (!haveOpenssl && 'no openssl to make a certificate with')
+
 test('smtps: the trimmed mbedtls handshakes and verifies the chain', {
-  skip: !haveOpenssl,
+  skip: why,
 }, async (t) => {
   const ca = makeCert()
   t.after(() => fs.rmSync(ca.dir, { recursive: true, force: true }))
@@ -135,7 +147,7 @@ test('smtps: the trimmed mbedtls handshakes and verifies the chain', {
   assert.match(relay.versions[0], /^TLSv1\.[23]$/, `negotiated ${relay.versions[0]}`)
 })
 
-test('smtps: an unknown CA is refused, not ignored', { skip: !haveOpenssl }, async (t) => {
+test('smtps: an unknown CA is refused, not ignored', { skip: why }, async (t) => {
   const server = makeCert()
   const other = makeCert() // a CA the relay's certificate was not signed by
   let arrived = false

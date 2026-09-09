@@ -3,12 +3,21 @@ import {
   databaseConfigSchema,
   isDatabasePasswordAcceptable,
 } from '@gradido/backend-core'
-import { portSchema, runtimeConfigSchema } from '@gradido/service-core'
+import {
+  EMAIL_HOST_MESSAGE,
+  EMAIL_SENDER_MESSAGE,
+  emailConfigSchema,
+  hasEmailHost,
+  hasEmailSender,
+  portSchema,
+  runtimeConfigSchema,
+} from '@gradido/service-core'
 import * as v from 'valibot'
 
 const backendConfigSchema = v.object({
   ...runtimeConfigSchema.entries,
   ...databaseConfigSchema.entries,
+  ...emailConfigSchema.entries,
   BACKEND_PORT: v.optional(portSchema, '4000'),
   /**
    * Confirms a down migration on a release — see `setup/migrateDownCommand.ts`.
@@ -28,16 +37,27 @@ type BackendConfig = v.InferOutput<typeof backendConfigSchema>
 
 export const configSchema = v.pipe(
   backendConfigSchema,
-  /* Forwarded onto DB_PASSWORD so the failure names the variable somebody has to set:
-     grabEnvAndCheckBySchema prints the first segment of the issue path. The parameter is
-     annotated with the whole config on purpose — a check typed by the narrower shape the
-     rule reads would make the pipe answer with that shape and drop every other variable. */
+  /* Each rule is forwarded onto the variable somebody has to set, because that is the one
+     `grabEnvAndCheckBySchema` prints: it names the first segment of the issue path. Every
+     one of them needs two variables to decide — a password is only wrong for a *postgresql*
+     in *production*, a sender is only missing when `EMAIL` is true — so they are checks on
+     the whole config rather than pipes on the field. The parameter is annotated with the
+     whole config on purpose: a check typed by the narrower shape the rule reads would make
+     the pipe answer with that shape and drop every other variable. */
   v.forward(
     v.check(
       (config: BackendConfig) => isDatabasePasswordAcceptable(config),
       DATABASE_PASSWORD_MESSAGE,
     ),
     ['DB_PASSWORD'],
+  ),
+  v.forward(
+    v.check((config: BackendConfig) => hasEmailHost(config), EMAIL_HOST_MESSAGE),
+    ['EMAIL_SMTP_HOST'],
+  ),
+  v.forward(
+    v.check((config: BackendConfig) => hasEmailSender(config), EMAIL_SENDER_MESSAGE),
+    ['EMAIL_SENDER'],
   ),
 )
 

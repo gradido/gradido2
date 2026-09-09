@@ -287,6 +287,16 @@ thread with the Message-ID, or rejects it with the relay's own words. That is th
 nodemailer has by default, and it is the reason **this addon links no libuv and no arnm at
 all** — the two files above have neither threads nor an arena.
 
+`verify()` is that same work with the message left out: the greeting, `EHLO`, the configured
+TLS upgrade and `AUTH`, then `NOOP` and goodbye. It resolves when the relay took the session
+and rejects with the relay's own words when it did not, and it touches neither `sent` nor
+`failed` — nothing was mailed. It is what a starting server asks so that a wrong port or a
+rotated password is a line in its log rather than a mail that quietly never arrives, and the
+reason it belongs here rather than in the caller is that it is **the same libcurl and the same
+trust configuration the sends use**: a certificate Node's `tls` would accept and mbedtls would
+not must fail this check, not the first mail after it. `packages/backend` calls it once at
+startup, and `sc_mail_session_probe` is the same thing on the C path.
+
 Two costs come with it, and both are the trade rather than an oversight:
 
 - **A connection per mail is a TCP handshake, a TLS handshake and the SMTP greeting dialogue.**
@@ -322,6 +332,12 @@ nm -D --defined-only build/email_native.node | grep -cE ' (SSL_|EVP_|OPENSSL_|CR
 `tests/tls.test.js` stands up an `smtps://` relay with a self-signed certificate and has the
 addon deliver through it, then points the mailer at a certificate the relay was not signed
 by and asserts that nothing is delivered. A build that only compiles would prove nothing.
+
+It is **not** in `bun run test`; `bun run test:tls` is what runs it, and the default suite
+reports it as skipped with that sentence. The handshakes themselves are 0,6 s — what is
+expensive is leaving: the file takes ~15 s to exit after the successful send, and where that
+goes is not yet known. Run it after touching `tls/gradido_mbedtls_config.h`, the curl trim in
+`build.zig`, or anything under `service-core/src/email/transport.c`.
 
 ### One exported symbol, and why it matters
 
@@ -519,7 +535,11 @@ napi/                         the Node-API bindings and the version script
 tls/                          the mbedTLS trim (MBEDTLS_USER_CONFIG_FILE)
 scripts/                      the copy into fast-servers
 tests/                        node --test; the addon, its TLS, the snapshots, the
-                              branch markers, the preview, the send benchmark
+                              branch markers, the preview. `bun run test` walks the
+                              directory; the two files that cost minutes rather than
+                              seconds skip unless asked for -- the send benchmark
+                              needs BENCH=1 (`bun run bench`) and the TLS handshakes
+                              TLS=1 (`bun run test:tls`)
 ```
 
 `include/` and `src/` mirror the paths those two files have in `fast-servers/service-core`,

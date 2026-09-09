@@ -6,11 +6,21 @@ import {
   SchemaMismatchError,
   waitForDatabase,
 } from '@gradido/backend-core'
-import { Logger, setupGracefulShutdown } from '@gradido/service-core'
+import { Logger, setupGracefulShutdown, smtpRelay } from '@gradido/service-core'
 import { AppContext } from './AppContext'
 import { CONFIG } from './config'
+import { probeMailRelay } from './mail'
 import { createBackendApp, type StaticSite, staticRoutes } from './server'
-import { migrateDownCommand, requireHomeCommunity, SetupError, setupCommand } from './setup'
+import {
+  askForSetup,
+  canAskForSetup,
+  migrateDownCommand,
+  requireHomeCommunity,
+  SetupError,
+  say,
+  setupCommand,
+  writeEnvFile,
+} from './setup'
 
 /**
  * What this process was asked to do.
@@ -100,10 +110,53 @@ export async function runBackend(
         },
         `backend listening on http://localhost:${CONFIG.BACKEND_PORT}`,
       )
+      reportMailRelay(logger)
       setupGracefulShutdown(appContext, async () => {
         await app.stop()
       })
     })
+}
+
+/**
+ * Opens a session to the configured relay once, at startup, and says how it went.
+ *
+ * Info when the relay took the session, warn when it did not — and never fatal, because a
+ * server whose mail is misconfigured still serves every route that sends none. What it must
+ * not do is discover the problem on the first registration, hours later, in a log line about
+ * a member.
+ *
+ * Not awaited: the server is already listening, and the answer belongs in the log rather
+ * than in front of the first request. The probe carries its own deadline.
+ *
+ * The `data` deliberately stops at the relay. `contracts/logging.json`, *redaction*, never
+ * logs an email address, and the sender is one; whether there are credentials is a boolean,
+ * because that is the part an operator reading a refusal needs.
+ */
+function reportMailRelay(logger: Logger): void {
+  if (!CONFIG.EMAIL) {
+    logger.info(
+      { cat: 'mail', event: 'mail.relay.disabled' },
+      'no mail is sent by this instance: EMAIL is false',
+    )
+    return
+  }
+
+  const relay = smtpRelay(CONFIG)
+  const data = { host: relay.host, port: relay.port, tls: relay.tls, auth: relay.user !== '' }
+  const where = `${relay.host}:${relay.port}`
+  probeMailRelay(relay).then((failure) => {
+    if (failure === undefined) {
+      logger.info(
+        { cat: 'mail', event: 'mail.relay.connected', data },
+        `the mail relay at ${where} took a session`,
+      )
+    } else {
+      logger.warn(
+        { cat: 'mail', event: 'mail.relay.failed', data },
+        `the mail relay at ${where} did not answer: ${failure}`,
+      )
+    }
+  })
 }
 
 /**
@@ -179,36 +232,60 @@ async function runMigrateDown(logger: Logger): Promise<void> {
 }
 
 /**
- * The `setup` command: open the database, bring the schema up, ask who this community is, stop.
+ * The `setup` command: ask what this installation is, write it down, then write the row.
  *
- * The same three steps `open()` takes, minus the server and plus the conversation. The
- * migrations are not optional here: the row cannot be written into a schema that is not there,
- * and running them is idempotent, so this decides nothing a serving start would decide
+ * **The questions come first, and that is the whole shape of it.** They decide which database
+ * this opens — an answer of `postgresql` where the environment said `sqlite` names a different
+ * server — so nothing can be opened before they are answered. The `.env` is written next,
+ * because a conversation that ended without leaving anything behind would have to be held
+ * again; then the database the answers name is opened, migrated and given its community row.
+ *
+ * The migrations are not optional here: the row cannot be written into a schema that is not
+ * there, and running them is idempotent, so this decides nothing a serving start would decide
  * differently.
  */
 async function runSetup(logger: Logger): Promise<void> {
-  const db = connectDatabase(CONFIG)
+  if (!canAskForSetup()) {
+    logger.fatal(
+      { cat: 'startup', event: 'startup.setup.failed', data: { reason: 'no-terminal' } },
+      'cannot set up: setup needs a terminal to ask on, and there is none. Run it with one attached — under docker compose that is: docker compose run --rm backend setup',
+    )
+    logger.flush()
+    process.exit(1)
+  }
+
+  const answers = await askForSetup()
+  try {
+    say('', `Written to ${writeEnvFile(answers.env)}`, '')
+  } catch (error) {
+    /* The answers were given and there is nowhere to put them. Nothing has been migrated and
+       no row has been written, so the whole conversation has to be held again once the file
+       system allows it. */
+    logger.fatal(
+      { cat: 'startup', event: 'startup.setup.failed', data: { reason: 'config-unwritable' } },
+      `cannot set up: ${error instanceof Error ? error.message : String(error)}`,
+    )
+    logger.flush()
+    process.exit(1)
+  }
+
+  const db = connectDatabase(answers.database)
   try {
     await waitForDatabase(db, logger)
     await runMigrations(db, logger)
-    await setupCommand({ db, logger })
+    await setupCommand({ db, logger }, answers.community)
   } catch (error) {
-    if (error instanceof SchemaMismatchError) {
-      /* Already reported as db.migration.denied, with the migration named. */
-      logger.flush()
-      await db.close().catch(() => {
-        /* Already exiting; a connection that will not close changes nothing about that. */
-      })
-      process.exit(1)
-    }
-    if (error instanceof SetupError) {
+    /* One failure left by the time this is reached: the database the answers named. The
+       conversation cannot fail — a rejected answer is asked again — and a schema this build
+       cannot run against has already reported itself as db.migration.denied, with the
+       migration named and what to do about it. */
+    if (!(error instanceof SchemaMismatchError)) {
       logger.fatal(
-        { cat: 'startup', event: 'startup.setup.failed', data: { reason: error.reason } },
-        `cannot set up: ${error.message}`,
-      )
-    } else {
-      logger.fatal(
-        { cat: 'startup', event: 'startup.database.failed', data: { db: CONFIG.DB_TYPE } },
+        {
+          cat: 'startup',
+          event: 'startup.database.failed',
+          data: { db: answers.database.DB_TYPE },
+        },
         `cannot reach the database: ${databaseErrorMessage(error)}`,
       )
     }

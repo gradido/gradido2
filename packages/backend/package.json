@@ -23,6 +23,7 @@
   "dependencies": {
     "@elysiajs/cors": "1.4.2",
     "@gradido/backend-core": "workspace:*",
+    "@gradido/email-native": "workspace:*",
     "@gradido/service-core": "workspace:*",
     "@gradido/shared": "workspace:*",
     "dotenv": "17.4.2",
