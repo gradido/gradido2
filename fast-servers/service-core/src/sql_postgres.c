@@ -169,19 +169,36 @@ sc_status sc_sql_postgres_run(sc_db *db, sc_sql_statement *statement, int32_t sl
         }
     }
 
-    /* Twice at most: a session that has lost a name this table still believes in -- a DISCARD
-     * somebody ran, a pooler in between -- gets the statement prepared again, once. */
+    /*
+     * A session that has lost a name this table still believes in -- a DISCARD ALL, a DEALLOCATE,
+     * a pooler that handed this transaction to a server connection that never saw it. Only the
+     * name that was reported missing is forgotten: whether the others went with it cannot be
+     * seen from here, and assuming they did is worse than finding out -- preparing a name the
+     * session still has is refused as a duplicate, and that slot would then never work on this
+     * connection again. A session that lost everything pays one failure per statement instead,
+     * each of them recovered the same way.
+     *
+     * What happens next depends on where the statement ran. Outside a transaction nothing is
+     * broken but the name, and the statement is prepared again and run, once. Inside one,
+     * PostgreSQL has already aborted the transaction: a second attempt here would only be
+     * refused with 25P02, and every statement the unit ran before this one is gone with it. So
+     * the statement fails, and the connection is marked for the executor, which rolls back and
+     * runs the whole unit again -- this statement prepared afresh.
+     */
     for (attempt = 0;; ++attempt) {
         status = prepare(db, statement, slot, name, error);
         if (status != SC_OK)
             return status;
         result = PQexecPrepared((PGconn *)db->native, name, (int)param_count, values, lengths,
                                 formats, 0);
-        if (attempt == 0 && is_unknown_statement(result)) {
+        if (!is_unknown_statement(result))
+            break;
+        db->prepared[slot] = NULL;
+        if (attempt == 0 && PQtransactionStatus((PGconn *)db->native) == PQTRANS_IDLE) {
             PQclear(result);
-            db->prepared[slot] = NULL;
             continue;
         }
+        db->rerun_unit = 1;
         break;
     }
 

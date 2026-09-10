@@ -107,6 +107,7 @@ sc_status sc_sql_query(sc_db *db, sc_sql_statement *statement, const sc_sql_para
     if (rows == NULL)
         return SC_ERR_INVALID_ARGUMENT;
     memset(rows, 0, sizeof(*rows));
+    rows->error = error;
     return run(db, statement, params, param_count, rows, NULL, error);
 }
 
@@ -128,22 +129,25 @@ sc_status sc_sql_simple(sc_db *db, const char *text, sc_sql_error *error)
 
 int sc_sql_next(sc_sql_rows *rows)
 {
-    if (rows == NULL || rows->db == NULL || rows->handle == NULL)
+    if (rows == NULL || rows->db == NULL || rows->handle == NULL || rows->status != SC_OK)
         return 0;
     if (rows->db->kind == SC_DB_SQLITE)
         return sc_sql_sqlite_next(rows);
     return sc_sql_postgres_next(rows);
 }
 
-void sc_sql_close(sc_sql_rows *rows)
+sc_status sc_sql_close(sc_sql_rows *rows)
 {
-    if (rows == NULL || rows->db == NULL || rows->handle == NULL)
-        return;
-    if (rows->db->kind == SC_DB_SQLITE)
-        sc_sql_sqlite_close(rows);
-    else
-        sc_sql_postgres_close(rows);
-    rows->handle = NULL;
+    if (rows == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+    if (rows->db != NULL && rows->handle != NULL) {
+        if (rows->db->kind == SC_DB_SQLITE)
+            sc_sql_sqlite_close(rows);
+        else
+            sc_sql_postgres_close(rows);
+        rows->handle = NULL;
+    }
+    return rows->status;
 }
 
 /* --- columns ------------------------------------------------------------------------------

@@ -57,6 +57,8 @@ struct TestUnit {
     sc_status work_status = SC_OK;
     /* A gate the work waits at, for filling a queue behind it. */
     std::mutex *gate = nullptr;
+    /* How often the work was run, whatever the executor called it. */
+    int calls = 0;
 };
 
 TestUnit *of(sc_db_unit *unit)
@@ -91,7 +93,9 @@ sc_db_end count_work(sc_db *db, sc_db_unit *unit)
     self->work_status = sc_sql_query(db, &kCount, nullptr, 0, &rows, &error);
     if (self->work_status == SC_OK && sc_sql_next(&rows))
         self->counted = sc_sql_col_int(&rows, 0);
-    sc_sql_close(&rows);
+    const sc_status closed = sc_sql_close(&rows);
+    if (self->work_status == SC_OK)
+        self->work_status = closed;
     return SC_DB_COMMIT;
 }
 
@@ -101,7 +105,9 @@ sc_db_end sleep_work(sc_db *db, sc_db_unit *unit)
     sc_sql_error error{};
 
     of(unit)->work_status = sc_sql_query(db, &kSleep, nullptr, 0, &rows, &error);
-    sc_sql_close(&rows);
+    const sc_status closed = sc_sql_close(&rows);
+    if (of(unit)->work_status == SC_OK)
+        of(unit)->work_status = closed;
     return SC_DB_COMMIT;
 }
 
@@ -456,6 +462,69 @@ TEST(PostgresExec, WorkersRunUnitsSideBySide)
     EXPECT_GE(took, 380);
     EXPECT_LT(took, 1200) << "eight 200 ms units on four workers took " << took << " ms";
     sc_db_exec_close(exec);
+}
+
+sc_sql_statement kRerunInsert =
+    SC_SQL_STATEMENT("exec_test.rerun_insert", "INSERT INTO rerun_t (v) VALUES ($1)", nullptr);
+sc_sql_statement kRerunCount =
+    SC_SQL_STATEMENT("exec_test.rerun_count", "SELECT count(*) FROM rerun_t", nullptr);
+
+/* The first attempt makes the session forget every prepared statement halfway through, the way
+ * a DISCARD ALL or a pooler handing the transaction to another server connection would. */
+sc_db_end forget_halfway(sc_db *db, sc_db_unit *unit)
+{
+    TestUnit *self = of(unit);
+    sc_sql_error error{};
+    sc_sql_param first[1] = {sc_sql_int(1)};
+    sc_sql_param second[1] = {sc_sql_int(2)};
+
+    ++self->calls;
+    self->work_status = sc_sql_exec(db, &kRerunInsert, first, 1, nullptr, &error);
+    if (self->work_status != SC_OK)
+        return SC_DB_ROLLBACK;
+    /* Counted by the work itself: to the work, the rerun is the same attempt as the run it
+     * repeats, which is the point being tested. */
+    if (self->calls == 1 && sc_sql_simple(db, "DEALLOCATE ALL", &error) != SC_OK)
+        return SC_DB_ROLLBACK;
+    self->work_status = sc_sql_exec(db, &kRerunInsert, second, 1, nullptr, &error);
+    return self->work_status == SC_OK ? SC_DB_COMMIT : SC_DB_ROLLBACK;
+}
+
+/*
+ * Inside a transaction a lost statement cannot be prepared again on the spot -- PostgreSQL has
+ * already aborted the transaction, and a second try is refused with 25P02. So the unit runs
+ * again from its start, in a fresh transaction with the lost statement prepared afresh: what the
+ * first run wrote went with the rollback, and the second writes it once. It is the same attempt
+ * run again, not a new one.
+ */
+TEST(PostgresExec, AUnitWhoseSessionLostItsStatementsRunsAgain)
+{
+    sc_db_config config{};
+    sc_db *db = nullptr;
+    sc_sql_error error{};
+
+    if (!real_postgres(&config, 1))
+        GTEST_SKIP() << "set SC_DB_TEST_PG_HOST to a reachable PostgreSQL";
+    ASSERT_EQ(sc_db_open(&config, &db), SC_OK);
+    ASSERT_EQ(sc_sql_simple(db, "CREATE TEMP TABLE rerun_t (v bigint UNIQUE)", &error), SC_OK)
+        << error.message;
+
+    TestUnit u;
+    u.unit.access = SC_DB_WRITE;
+    u.unit.work = forget_halfway;
+    EXPECT_EQ(sc_db_run(db, &u.unit), SC_OK) << u.unit.error.message;
+    EXPECT_EQ(u.calls, 2) << "run again after the statement was lost";
+    /* ...and not charged to the unit's own budget: a registration that met a DISCARD ALL still
+     * has all five of its draws. */
+    EXPECT_EQ(u.unit.attempt, 1u);
+    EXPECT_EQ(u.work_status, SC_OK);
+
+    sc_sql_rows rows{};
+    ASSERT_EQ(sc_sql_query(db, &kRerunCount, nullptr, 0, &rows, &error), SC_OK) << error.message;
+    ASSERT_TRUE(sc_sql_next(&rows));
+    EXPECT_EQ(sc_sql_col_int(&rows, 0), 2);
+    EXPECT_EQ(sc_sql_close(&rows), SC_OK);
+    sc_db_close(db);
 }
 
 /* Workers go to cache groups the way loops do, and a group without a worker of its own joins

@@ -30,6 +30,13 @@ struct sc_db {
      * whenever the session is: a reset PostgreSQL connection has forgotten every name.
      */
     void *prepared[SC_SQL_STATEMENTS_MAX];
+    /*
+     * Set by a statement that failed for a reason the unit around it did not cause and a fresh
+     * run would not meet again -- a session that lost its prepared statements inside a
+     * transaction. The executor rolls back and runs the unit again when it sees it, and clears
+     * it before every run, so a connection used outside the executor leaves nothing behind.
+     */
+    int rerun_unit;
 };
 
 /**

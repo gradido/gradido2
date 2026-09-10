@@ -87,15 +87,16 @@ static const char *begin_text(const sc_db *db)
 static void run_unit(sc_db *db, sc_db_unit *unit)
 {
     sc_sql_error ignored;
+    uint32_t reruns = 0;
 
     unit->status = SC_OK;
-    unit->attempt = 0;
+    unit->attempt = 1;
     memset(&unit->error, 0, sizeof(unit->error));
 
     for (;;) {
         sc_db_end end;
 
-        ++unit->attempt;
+        db->rerun_unit = 0;
         if (unit->access == SC_DB_WRITE) {
             sc_status status = sc_sql_simple(db, begin_text(db), &unit->error);
 
@@ -105,6 +106,27 @@ static void run_unit(sc_db *db, sc_db_unit *unit)
             }
         }
         end = unit->work(db, unit);
+
+        /* The session, not the unit, lost something the unit relied on -- see rerun_unit in
+         * db_internal.h. Whatever the work concluded from its failed statement is thrown away
+         * with the transaction, and it runs again; it is not asked, because it could not know.
+         *
+         * *The same attempt* again, not the next one: `attempt` is the work's own count of the
+         * times it asked for AGAIN, and a unit budgets it -- a registration draws five times
+         * before it calls its generator broken. A session that lost three statements must not
+         * spend three of those draws. So reruns have a count of their own, and a bound of their
+         * own, for a connection that loses statements faster than they can be prepared. */
+        if (db->rerun_unit) {
+            db->rerun_unit = 0;
+            if (unit->access == SC_DB_WRITE)
+                (void)sc_sql_simple(db, "ROLLBACK", &ignored);
+            if (++reruns < SC_DB_RERUN_MAX)
+                continue;
+            sc_sql_set_error(&unit->error, SC_SQL_ERROR_OTHER,
+                             "the connection kept losing its prepared statements");
+            unit->status = SC_ERR_INVALID_ARGUMENT;
+            return;
+        }
 
         if (unit->access == SC_DB_WRITE) {
             if (end == SC_DB_COMMIT) {
@@ -126,6 +148,7 @@ static void run_unit(sc_db *db, sc_db_unit *unit)
             unit->status = SC_ERR_INVALID_ARGUMENT;
             return;
         }
+        ++unit->attempt;
     }
 }
 
@@ -166,7 +189,10 @@ static sc_status make_usable(sc_db *db, sc_db_unit *unit)
 
 static void run_on_worker(exec_worker *worker, sc_db_unit *unit)
 {
-    const uint64_t waited_ns = uv_hrtime() - unit->queued_ns;
+    const uint64_t now = uv_hrtime();
+    /* Read after the unit was taken, so never earlier than it was queued -- the guard is the
+     * sweeper's, kept in the same form so that the two checks cannot drift apart. */
+    const uint64_t waited_ns = now > unit->queued_ns ? now - unit->queued_ns : 0;
     sc_status status;
 
     /* Waited too long to be worth running: whoever sent it has been kept five seconds, and the
@@ -252,14 +278,21 @@ static void sweeper_main(void *arg)
         if (stop)
             break;
 
-        now = uv_hrtime();
         for (g = 0; g != exec->group_count; ++g) {
             exec_group *group = &exec->groups[g];
             sc_db_unit *expired = NULL;
             sc_db_unit **tail = &expired;
 
+            /* The time is read under the group's lock, not once for all groups before it: a unit
+             * queued between the two would carry a queued_ns later than `now`, and `now -
+             * queued_ns` on unsigned numbers is then not negative but enormous -- a request that
+             * arrived a microsecond ago answered 503 as if it had waited for ever. Under the lock
+             * no unit can be queued after the reading, and the comparison is written so that it
+             * could not wrap even if one were. */
             uv_mutex_lock(&group->lock);
-            while (group->head != NULL && now - group->head->queued_ns > limit_ns) {
+            now = uv_hrtime();
+            while (group->head != NULL && now > group->head->queued_ns &&
+                   now - group->head->queued_ns > limit_ns) {
                 sc_db_unit *unit = group->head;
 
                 group->head = unit->next;

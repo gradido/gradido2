@@ -96,8 +96,7 @@ sc_status bc_user_find_address_owner(sc_db *db, const char *email, bc_address_ow
             *found = 1;
         }
     }
-    sc_sql_close(&rows);
-    return status;
+    return bc_sql_finish(&rows, &failure, status, error, error_size);
 }
 
 /* What a refused write was: a generated value drawn before -- which the caller draws again for
@@ -141,7 +140,9 @@ sc_status bc_user_create_account(sc_db *db, const bc_new_account *account,
     if (status != SC_OK)
         return refused(&failure, out, error, error_size, status);
     user_id = sc_sql_next(&rows) ? sc_sql_col_int(&rows, 0) : 0;
-    sc_sql_close(&rows);
+    status = bc_sql_finish(&rows, &failure, SC_OK, error, error_size);
+    if (status != SC_OK)
+        return status;
 
     /* The verification code is bounded to 2^53-1 by contract, so it is an int64 on both sides
      * without a bit to spare or to lose -- see bc_new_email_verification_code. */
@@ -153,12 +154,16 @@ sc_status bc_user_create_account(sc_db *db, const bc_new_account *account,
     if (status != SC_OK)
         return refused(&failure, out, error, error_size, status);
     if (!sc_sql_next(&rows)) {
-        /* Not a failure: DO NOTHING did nothing, which is what the address being taken looks
-         * like. Whose it is, for the contracted `usr` on user.registration.denied -- read in the
-         * same transaction, which the caller ends with a rollback. */
+        /* No row, and -- asked before concluding anything -- no failure either: DO NOTHING did
+         * nothing, which is what the address being taken looks like. A row that failed to come
+         * back is not an address somebody holds. Whose it is, for the contracted `usr` on
+         * user.registration.denied, is read in the same transaction, which the caller ends with a
+         * rollback. */
         sc_sql_param address[1] = {sc_sql_text(account->email)};
 
-        sc_sql_close(&rows);
+        status = bc_sql_finish(&rows, &failure, SC_OK, error, error_size);
+        if (status != SC_OK)
+            return status;
         out->outcome = BC_ACCOUNT_ADDRESS_TAKEN;
         status = sc_sql_query(db, &kOwnerOfAddress, address, 1, &rows, &failure);
         if (status != SC_OK) {
@@ -167,11 +172,12 @@ sc_status bc_user_create_account(sc_db *db, const bc_new_account *account,
         }
         if (sc_sql_next(&rows))
             out->taken_by = (uint64_t)sc_sql_col_int(&rows, 0);
-        sc_sql_close(&rows);
-        return SC_OK;
+        return bc_sql_finish(&rows, &failure, SC_OK, error, error_size);
     }
     contact_id = sc_sql_col_int(&rows, 0);
-    sc_sql_close(&rows);
+    status = bc_sql_finish(&rows, &failure, SC_OK, error, error_size);
+    if (status != SC_OK)
+        return status;
 
     main_address[0] = sc_sql_int(contact_id);
     main_address[1] = sc_sql_int(user_id);

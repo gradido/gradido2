@@ -78,6 +78,15 @@
 #define SC_DB_RETRY_AFTER_S 1
 /** How often a unit may ask to run again before that is taken as a bug rather than bad luck. */
 #define SC_DB_AGAIN_MAX 16
+/**
+ * How often a unit is run again because its connection lost a prepared statement -- a
+ * DISCARD ALL, a pooler -- before the connection is taken to be the problem. Each rerun
+ * prepares at least the statement that was lost, so a unit gets through once it has met each
+ * of its statements lost at most once; this is far above what any unit uses, and only a
+ * connection that loses statements as fast as they are prepared reaches it. Counted apart from
+ * SC_DB_AGAIN_MAX, and not in `attempt`: see run_unit in db_exec.c.
+ */
+#define SC_DB_RERUN_MAX 64
 
 typedef enum sc_db_access { SC_DB_READ = 0, SC_DB_WRITE = 1 } sc_db_access;
 
@@ -113,7 +122,8 @@ struct sc_db_unit {
      * business and lives in the caller's part of the unit.
      */
     sc_status status;
-    /** 1 on the first run, one more for every SC_DB_AGAIN. */
+    /** 1 on the first run, one more for every SC_DB_AGAIN -- and only for that: a run repeated
+     *  because the connection lost a prepared statement is the same attempt again. */
     uint32_t attempt;
     sc_sql_error error;
 

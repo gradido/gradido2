@@ -446,18 +446,20 @@ static sc_status applied_migrations(sc_db *db, bc_applied_set *out, char *error,
     }
     while (sc_sql_next(&rows)) {
         if (out->count == BC_MIGRATIONS_MAX) {
-            sc_sql_close(&rows);
             bc_sql_set_error(error, error_size,
                              "this database has more migrations than this build can hold");
-            return SC_ERR_TOO_LONG;
+            return bc_sql_finish(&rows, &failure, SC_ERR_TOO_LONG, error, error_size);
         }
         out->items[out->count].version = (uint32_t)sc_sql_col_int(&rows, 0);
         if (!sc_sql_col_copy(&rows, 1, out->items[out->count].name, BC_MIGRATION_NAME_MAX))
             out->items[out->count].name[0] = '\0';
         ++out->count;
     }
-    sc_sql_close(&rows);
-    return SC_OK;
+    /* The loop stopping is not the list ending. A row that failed to be read would leave a
+     * shorter list that still looks like a valid beginning of this build's migrations -- and
+     * bc_migrations_run would then apply again what this database already has. So the cursor
+     * is asked whether it reached the end, and a list it did not finish is a failure. */
+    return bc_sql_finish(&rows, &failure, SC_OK, error, error_size);
 }
 
 /**

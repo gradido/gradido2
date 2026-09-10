@@ -83,7 +83,11 @@ sc_status bc_community_find_home(sc_db *db, bc_home_community *out, int *found, 
             *found = 0;
         }
     }
-    sc_sql_close(&rows);
+    /* LIMIT 2 is read to its end, so a second row that failed to arrive is a failure here and
+     * not "exactly one home community". */
+    status = bc_sql_finish(&rows, &failure, status, error, error_size);
+    if (status != SC_OK)
+        *found = 0;
     return status;
 }
 
@@ -111,8 +115,7 @@ static sc_status insert_home(sc_db *db, const bc_home_community_setup *setup, co
         return status;
     }
     *id_out = sc_sql_next(&rows) ? (uint64_t)sc_sql_col_int(&rows, 0) : 0;
-    sc_sql_close(&rows);
-    return SC_OK;
+    return bc_sql_finish(&rows, &failure, SC_OK, error, error_size);
 }
 
 sc_status bc_create_home_community(sc_db *db, const bc_home_community_setup *setup,

@@ -35,3 +35,14 @@ sc_status bc_sql_exec(sc_db *db, const char *sql, char *error, size_t error_size
         bc_sql_set_error(error, error_size, failure.message);
     return status;
 }
+
+sc_status bc_sql_finish(sc_sql_rows *rows, const sc_sql_error *failure, sc_status status,
+                        char *error, size_t error_size)
+{
+    sc_status closed = sc_sql_close(rows);
+
+    if (status != SC_OK || closed == SC_OK)
+        return status;
+    bc_sql_set_error(error, error_size, failure != NULL ? failure->message : NULL);
+    return closed;
+}

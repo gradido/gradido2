@@ -125,7 +125,7 @@ class Registration : public ::testing::Test
             << failure.message;
         if (sc_sql_next(&rows))
             count = sc_sql_col_int(&rows, 0);
-        sc_sql_close(&rows);
+        EXPECT_EQ(sc_sql_close(&rows), SC_OK) << failure.message;
         return count;
     }
 

@@ -206,8 +206,19 @@ typedef struct sc_sql_rows {
     void *handle;    /* PGresult * or sqlite3_stmt * */
     int32_t row;     /* PostgreSQL: the current row, -1 before the first */
     int32_t count;   /* PostgreSQL: rows in the result */
-    int32_t pending; /* SQLite: what the last step answered, not yet handed out */
+    int32_t pending; /* SQLite: what the last step answered, not yet handed out; -1 at the end */
+    /* SC_OK while every row so far was read; the first failure otherwise, and it stays. */
+    sc_status status;
+    /* Where that failure is described: the error sc_sql_query was given, or NULL. */
+    sc_sql_error *error;
 } sc_sql_rows;
+
+/* A result that is the only report of a failure, and must not be dropped. */
+#if defined(__GNUC__) || defined(__clang__)
+#define SC_SQL_MUST_USE __attribute__((warn_unused_result))
+#else
+#define SC_SQL_MUST_USE
+#endif
 
 /**
  * Runs @p statement and positions a cursor before its first row.
@@ -221,11 +232,28 @@ typedef struct sc_sql_rows {
 sc_status sc_sql_query(sc_db *db, sc_sql_statement *statement, const sc_sql_param *params,
                        uint32_t param_count, sc_sql_rows *rows, sc_sql_error *error);
 
-/** Moves to the next row. 1 when there is one, 0 when the rows are done. */
+/**
+ * Moves to the next row. 1 when there is one; 0 when the rows are done -- *or when reading the
+ * next one failed*, which sc_sql_close tells apart. On SQLite a statement produces its rows as
+ * they are stepped, so a row can fail after the ones before it were fine; PostgreSQL computes
+ * the whole result first and reports any failure at sc_sql_query.
+ *
+ * 0 and not -1 for a failure, deliberately: `while (sc_sql_next(&rows))` is the loop every
+ * caller writes, and a -1 would be a true that walks into a row that is not there.
+ *
+ * Once it has answered 0 it keeps answering 0, on both databases -- asking again does not start
+ * the rows over.
+ */
 int sc_sql_next(sc_sql_rows *rows);
 
-/** Gives the cursor back. Safe on a cursor that is already closed. */
-void sc_sql_close(sc_sql_rows *rows);
+/**
+ * Gives the cursor back and says whether the rows were all read: SC_OK, or the failure that
+ * ended them early, described in the error sc_sql_query was given. Until this says SC_OK, a
+ * loop that stopped because sc_sql_next answered 0 has not seen the end of the rows -- it may
+ * have seen the first half of them, which is the failure that must not be taken for an
+ * answer. So the result is not optional. Safe on a cursor that is already closed.
+ */
+SC_SQL_MUST_USE sc_status sc_sql_close(sc_sql_rows *rows);
 
 /**
  * Runs a statement that returns no rows. @p changes, when not NULL, receives how many rows it

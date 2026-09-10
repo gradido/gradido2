@@ -14,6 +14,7 @@
 #include <stdint.h>
 
 #include "service_core/db.h"
+#include "service_core/sql.h"
 #include "service_core/status.h"
 
 /** Long enough for what either driver says about a refused statement. */
@@ -39,5 +40,14 @@ sc_status bc_sql_exec(sc_db *db, const char *sql, char *error, size_t error_size
  * to someone.
  */
 void bc_sql_set_error(char *error, size_t error_size, const char *message);
+
+/**
+ * Closes @p rows and folds its verdict into @p status: a repository's own failure wins, and
+ * otherwise a cursor whose rows ended early -- see sc_sql_close -- becomes the failure, with
+ * @p failure's words copied into @p error. The way every repository ends a read, so that none of
+ * them can take the first half of a result for all of it.
+ */
+sc_status bc_sql_finish(sc_sql_rows *rows, const sc_sql_error *failure, sc_status status,
+                        char *error, size_t error_size);
 
 #endif /* BACKEND_CORE_SQL_H */

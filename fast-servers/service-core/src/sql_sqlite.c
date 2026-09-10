@@ -136,19 +136,42 @@ sc_status sc_sql_sqlite_run(sc_db *db, sc_sql_statement *statement, int32_t slot
     return SC_OK;
 }
 
+/*
+ * What `pending` holds once the rows have ended. SQLite's result codes are never negative, so it
+ * cannot be mistaken for a step's answer.
+ *
+ * It exists because SQLite does not stay at the end: a step on a statement that has answered
+ * SQLITE_DONE resets it and runs it again, and the rows would come round a second time for a
+ * caller that asked once more. PostgreSQL's cursor is an index into a finished result and stays
+ * where it is. The two answer the same now: once 0, always 0.
+ */
+#define ROWS_FINISHED (-1)
+
 int sc_sql_sqlite_next(sc_sql_rows *rows)
 {
     sqlite3_stmt *statement = (sqlite3_stmt *)rows->handle;
+    int step;
 
+    if (rows->pending == ROWS_FINISHED)
+        return 0;
     /* The row sc_sql_sqlite_run already stepped to is handed out first; after that, a step per
-     * row. An error in the middle of a result ends it like its last row would. */
+     * row. */
     if (rows->pending != 0) {
         const int had = rows->pending;
 
-        rows->pending = 0;
+        rows->pending = had == SQLITE_ROW ? 0 : ROWS_FINISHED;
         return had == SQLITE_ROW;
     }
-    return sqlite3_step(statement) == SQLITE_ROW;
+    step = sqlite3_step(statement);
+    if (step == SQLITE_ROW)
+        return 1;
+    rows->pending = ROWS_FINISHED;
+    /* Not the end: a row that failed to be produced. It is kept -- the cursor answers no more
+     * rows from here on, and sc_sql_close reports this -- so that the rows read so far are never
+     * mistaken for all of them. */
+    if (step != SQLITE_DONE)
+        rows->status = refused(rows->db, statement, rows->error);
+    return 0;
 }
 
 void sc_sql_sqlite_close(sc_sql_rows *rows)
