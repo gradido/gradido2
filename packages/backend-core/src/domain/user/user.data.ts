@@ -35,6 +35,22 @@ export interface NewAccount {
  * The name and language are here because the mail that goes out in that case is addressed to
  * the member who *owns* the address, in their language — never in the new registrant's.
  */
+/**
+ * What `createAccount` answers: a member was written, or the address already belonged to one.
+ *
+ * Two shapes rather than a nullable id, because the two are not "success and failure" — the
+ * caller answers the identical empty 204 either way, and the only difference is which line goes
+ * into the log. A `bigint | undefined` would leave that distinction to be remembered rather
+ * than read.
+ */
+export type CreateAccountResult =
+  | { readonly created: bigint }
+  | { readonly takenBy: bigint }
+  /** A generated value landed on one that exists. `constraint` names which, where the driver
+   *  says; the caller draws again. Never the address — that is `takenBy`, and it is not a
+   *  collision to retry but an answer to give. */
+  | { readonly collided: string }
+
 export interface AddressOwner {
   readonly id: bigint
   readonly firstName: string

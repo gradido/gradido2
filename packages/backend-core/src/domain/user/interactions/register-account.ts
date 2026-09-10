@@ -32,52 +32,95 @@ import { UserRepository } from '../repositories'
  * member cannot sign in until the address is confirmed. There is no invalidation to make
  * visible here, which is why this Interaction says nothing about it.
  */
+/**
+ * How many times a registration is attempted before the draws are treated as broken.
+ *
+ * Reaching this is not bad luck: a v4 gradido_id is 122 random bits and the verification code
+ * is 53, so five collisions in a row is not a number that happens. It is the CSPRNG answering
+ * the same thing every time, and a loop that kept going would hide that forever.
+ */
+const MAX_ATTEMPTS = 5
+
 export async function registerAccount(
   context: BackendContext,
   request: UserCreateRequest,
 ): Promise<void> {
   const users = new UserRepository(context.db)
 
-  const owner = await users.findAddressOwner(request.email)
-  if (owner !== undefined) {
-    context.logger
-      .child({ usr: owner.id })
-      .info(
-        { cat: 'user', event: 'user.registration.denied', data: { reason: 'address-in-use' } },
-        'registration for an address that is already in use, answering as if it were new',
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const result = await users.createAccount({
+      /* Already trimmed and lowercased: `emailSchema` does it in the pipe, so one address is
+         one string before it ever reaches here. That matters more than it used to --
+         `user_contacts_email_key` compares the bytes it is given, and it is now the only thing
+         deciding whether an address is taken. */
+      email: request.email,
+      firstName: request.firstName,
+      lastName: request.lastName,
+      language: request.language,
+      /* The community this instance is. It is on the context rather than looked up here:
+         one row, written once at setup, and the process refuses to start without it. */
+      communityId: context.homeCommunity.id,
+      /* Drawn, not checked. Both of these are answered by an index at the moment of the write,
+         and a collision comes back below as something to draw again. */
+      gradidoId: newGradidoId(),
+      emailVerificationCode: newEmailVerificationCode(),
+      createdAt: new Date(),
+    })
+
+    if ('collided' in result) {
+      /* Two random values can land on one that exists, and they are not equally unlikely: a v4
+         gradido_id is 122 bits and will not happen, while the verification code is bounded to
+         2^53-1 for SQLite's sake, where a community of a million members has a birthday chance
+         of roughly one in eighteen thousand over its whole life. Both are drawn again on the
+         next turn of this loop.
+         Logged at warn rather than passed over, because a run of these is not luck: it is a
+         generator that has stopped being random, and the only way anybody finds out is if the
+         rare case says something when it happens. */
+      context.logger.warn(
+        {
+          cat: 'user',
+          event: 'user.registration.collision',
+          data: { constraint: result.collided, attempt },
+        },
+        'a generated value was already taken, drawing again',
       )
+      continue
+    }
 
-    // TODO: legacy mails the member who *owns* the address — in their language and with
-    // their name, never the new registrant's — so that somebody typing the wrong address
-    // is noticed by the person who would otherwise never hear about it.
-    // await sendAccountMultiRegistrationEmail({ ...owner, email })
-    // await EVENT_EMAIL_ACCOUNT_MULTIREGISTRATION(owner)
+    if ('takenBy' in result) {
+      context.logger
+        .child({ usr: result.takenBy })
+        .info(
+          { cat: 'user', event: 'user.registration.denied', data: { reason: 'address-in-use' } },
+          'registration for an address that is already in use, answering as if it were new',
+        )
 
+      // TODO: legacy mails the member who *owns* the address — in their language and with
+      // their name, never the new registrant's — so that somebody typing the wrong address
+      // is noticed by the person who would otherwise never hear about it. It needs their name
+      // and language, which this no longer reads: the id is what the log line is contracted to
+      // carry, and loading a whole member for a mail nobody sends yet would be a round trip
+      // spent on a comment.
+      // await sendAccountMultiRegistrationEmail({ ...owner, email })
+      // await EVENT_EMAIL_ACCOUNT_MULTIREGISTRATION(owner)
+
+      return
+    }
+
+    context.logger
+      .child({ usr: result.created })
+      .info(
+        { cat: 'user', event: 'user.registration.created', data: { language: request.language } },
+        'account created',
+      )
     return
   }
 
-  const userId = await users.createAccount({
-    email: request.email,
-    firstName: request.firstName,
-    lastName: request.lastName,
-    language: request.language,
-    /* The community this instance is. It is on the context rather than looked up here:
-       one row, written once at setup, and the process refuses to start without it. */
-    communityId: context.homeCommunity.id,
-    /* Drawn until it is free in this community — see gradidoId.logic.ts. */
-    gradidoId: await newGradidoId((candidate) =>
-      users.gradidoIdExists(candidate, context.homeCommunity.id),
-    ),
-    emailVerificationCode: newEmailVerificationCode(),
-    createdAt: new Date(),
-  })
-
-  context.logger
-    .child({ usr: userId })
-    .info(
-      { cat: 'user', event: 'user.registration.created', data: { language: request.language } },
-      'account created',
-    )
+  /* Every draw landed on a value that exists. At these widths that is not a coincidence
+     happening five times, it is a generator that has stopped generating -- so this is an error
+     and not another turn of the loop, and the caller answers 500 rather than a silent 204 that
+     would tell somebody their registration went through. */
+  throw new Error(`no free generated values after ${MAX_ATTEMPTS} attempts`)
 
   // TODO, in the order legacy does them, each waiting on something that does not exist yet:
   //

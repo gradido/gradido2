@@ -3,9 +3,8 @@
  *
  * What each of these is for is on the declarations in backend_core/domain/user.h; what is
  * asserted here is the part a reader of that header would have to take on trust: that the
- * verification code stays inside the bound both databases can hold, that the gradido id ladder
- * gives up rather than spins, and that an address is normalized the one way every lookup and
- * every write agrees on.
+ * verification code stays inside the bound both databases can hold, and that an address is
+ * normalized the one way every lookup and every write agrees on.
  *
  * C++ because googletest is; see the note at the top of service-core/tests/test_cache.cpp.
  */
@@ -67,56 +66,24 @@ TEST(VerificationCode, StaysInsideTheContractedRange)
     EXPECT_EQ(seen.size(), 2000u);
 }
 
-int never_taken(const char *, void *) { return 0; }
-int always_taken(const char *, void *) { return 1; }
-int cannot_tell(const char *, void *) { return -1; }
-
-int taken_once(const char *, void *user_data)
-{
-    int *calls = static_cast<int *>(user_data);
-    return (*calls)++ == 0 ? 1 : 0;
-}
-
-TEST(GradidoId, DrawsAUuidNobodyHolds)
-{
-    char id[BC_UUID_TEXT_MAX];
-
-    ASSERT_EQ(bc_new_gradido_id(never_taken, nullptr, id), SC_OK);
-    EXPECT_EQ(std::string(id).size(), 36u);
-    /* v4 and the RFC 9562 variant, in the two places they live. */
-    EXPECT_EQ(id[14], '4');
-    EXPECT_NE(std::string("89ab").find(id[19]), std::string::npos);
-}
-
-TEST(GradidoId, DrawsAgainWhenTheFirstIsTaken)
+/*
+ * A draw and nothing else. What makes a gradido_id unique is `users_uuid_key` at the moment of
+ * the write, and the collision that index reports is answered in test_register_account.cpp,
+ * where there is a database to report it -- there is no ladder here to give up on any more.
+ */
+TEST(GradidoId, DrawsAUuidThatIsNotTheLastOne)
 {
     char first[BC_UUID_TEXT_MAX];
     char second[BC_UUID_TEXT_MAX];
-    int calls = 0;
 
-    ASSERT_EQ(bc_new_gradido_id(taken_once, &calls, first), SC_OK);
-    EXPECT_EQ(calls, 2);
-    ASSERT_EQ(bc_new_gradido_id(never_taken, nullptr, second), SC_OK);
+    bc_new_gradido_id(first);
+    bc_new_gradido_id(second);
+
+    EXPECT_EQ(std::string(first).size(), 36u);
+    /* v4 and the RFC 9562 variant, in the two places they live. */
+    EXPECT_EQ(first[14], '4');
+    EXPECT_NE(std::string("89ab").find(first[19]), std::string::npos);
     EXPECT_STRNE(first, second);
-}
-
-/* Five draws in a row colliding is not a number that happens at 122 random bits -- it is the
- * lookup answering yes for reasons of its own, and a loop that would spin on it forever is worse
- * than an error that says so. */
-TEST(GradidoId, GivesUpRatherThanSpinning)
-{
-    char id[BC_UUID_TEXT_MAX];
-
-    EXPECT_EQ(bc_new_gradido_id(always_taken, nullptr, id), SC_ERR_UNAVAILABLE);
-}
-
-/* A lookup that failed is not a free uuid. Treating it as one would write a row against an index
- * nobody checked. */
-TEST(GradidoId, StopsWhenTheLookupCannotTell)
-{
-    char id[BC_UUID_TEXT_MAX];
-
-    EXPECT_EQ(bc_new_gradido_id(cannot_tell, nullptr, id), SC_ERR_INVALID_ARGUMENT);
 }
 
 TEST(Language, KnowsTheContractedSetAndDefaultsToGerman)

@@ -1,7 +1,7 @@
 /*
  * The three pieces of user logic that touch no database: the address normalization every lookup
- * agrees on, the verification code, and the gradido id ladder. See backend_core/domain/user.h
- * for what each of them is and why.
+ * agrees on, the verification code, and the gradido id. See backend_core/domain/user.h for what
+ * each of them is and why.
  */
 #include "backend_core/domain/user.h"
 
@@ -51,23 +51,12 @@ uint64_t bc_new_email_verification_code(void)
     }
 }
 
-sc_status bc_new_gradido_id(int (*exists)(const char *gradido_id, void *user_data), void *user_data,
-                            char *out)
+/* A draw and nothing else; what makes the value unique is `users_uuid_key` at the moment of the
+ * write. This exists as a named function rather than as a call to bc_new_uuid so that the reason
+ * there is no lookup here has somewhere to live -- see the declaration. */
+void bc_new_gradido_id(char *out)
 {
-    int draw;
-
-    if (exists == NULL || out == NULL)
-        return SC_ERR_INVALID_ARGUMENT;
-    for (draw = 0; draw != BC_GRADIDO_ID_MAX_DRAWS; ++draw) {
-        int taken;
-
-        bc_new_uuid(out);
-        taken = exists(out, user_data);
-        if (taken < 0)
-            return SC_ERR_INVALID_ARGUMENT;
-        if (taken == 0)
-            return SC_OK;
-    }
-    out[0] = '\0';
-    return SC_ERR_UNAVAILABLE;
+    if (out == NULL)
+        return;
+    bc_new_uuid(out);
 }

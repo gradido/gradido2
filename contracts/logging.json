@@ -2,8 +2,8 @@
   "contractVersion": 1,
   "kind": "logging",
   "description": "The shape of a log line. Pino on the reference path, spdlog on the fast path, one JSON format. A disagreement between the two is a bug, which is why this is a contract and not a per-implementation setting.",
-  "principle": "A log line is a structured event with a human sentence attached, not a sentence with fields attached. Tests compare the structure. The sentence is never compared — contracting English prose in two languages achieves nothing and cannot be kept green.",
-  "notCopiedFromLegacy": "Legacy derives a log4js category per class and per method — 'backend.auth.jwt.JWT.verifyAndDecrypt' is a category. That taxonomy restates the file tree and grows with it. Here the category is a small closed set and the identity of a line is its event id.",
+  "principle": "A log line is a structured event with a human sentence attached, not a sentence with fields attached. Tests compare the structure. The sentence is never compared \u2014 contracting English prose in two languages achieves nothing and cannot be kept green.",
+  "notCopiedFromLegacy": "Legacy derives a log4js category per class and per method \u2014 'backend.auth.jwt.JWT.verifyAndDecrypt' is a category. That taxonomy restates the file tree and grows with it. Here the category is a small closed set and the identity of a line is its event id.",
   "envelope": {
     "description": "Fields every line carries. time, level and msg keep Pino's default names so the reference path needs no custom serializer and the fast path has a fixed target to match.",
     "fields": [
@@ -80,7 +80,7 @@
     ]
   },
   "levels": {
-    "description": "Pino's numeric values. spdlog maps its own levels onto these numbers on output — the number is the contract, the spelling is not.",
+    "description": "Pino's numeric values. spdlog maps its own levels onto these numbers on output \u2014 the number is the contract, the spelling is not.",
     "values": [
       {
         "name": "trace",
@@ -100,7 +100,7 @@
       {
         "name": "warn",
         "value": "40",
-        "use": "recovered, but someone should know — e.g. an unknown role string from the database"
+        "use": "recovered, but someone should know \u2014 e.g. an unknown role string from the database"
       },
       {
         "name": "error",
@@ -164,13 +164,13 @@
     "rules": [
       "Lowercase, dot separated, no verbs in the past tense beyond the outcome.",
       "The outcome is the last segment: created, failed, denied, refused, expired, evicted, refreshed, reverted, started, stopped, applied.",
-      "An event id never changes once it exists — see AGENTS.md, names are stable forever. To retire one, stop emitting it; do not rename it.",
+      "An event id never changes once it exists \u2014 see AGENTS.md, names are stable forever. To retire one, stop emitting it; do not rename it.",
       "One event id means one shape: the same keys in data every time it is emitted, on both paths."
     ],
     "examples": ["auth.login.failed", "transaction.created", "session.context.expired"]
   },
   "events": {
-    "description": "Seed set. This grows with the rebuild — an event is contracted when the code that emits it is written, not before.",
+    "description": "Seed set. This grows with the rebuild \u2014 an event is contracted when the code that emits it is written, not before.",
     "values": [
       {
         "event": "startup.server.started",
@@ -249,7 +249,7 @@
             "description": "closed vocabulary: no-terminal, not-set-up, config-unwritable"
           }
         ],
-        "note": "The process exits with 1 after this line. Distinct from startup.database.failed on purpose: the database answered, what is missing is a setup step nobody has taken. not-set-up is a serving start against a database with no community — serving never asks, it names the `setup` command and stops. no-terminal is that command itself, run where there is nobody to answer it. config-unwritable is that command again, with the answers given and the .env they belong in refused by the file system \u2014 nothing was written and nothing was migrated. See db/communities.json."
+        "note": "The process exits with 1 after this line. Distinct from startup.database.failed on purpose: the database answered, what is missing is a setup step nobody has taken. not-set-up is a serving start against a database with no community \u2014 serving never asks, it names the `setup` command and stops. no-terminal is that command itself, run where there is nobody to answer it. config-unwritable is that command again, with the answers given and the .env they belong in refused by the file system \u2014 nothing was written and nothing was migrated. See db/communities.json."
       },
       {
         "event": "auth.login.succeeded",
@@ -268,7 +268,7 @@
             "description": "closed vocabulary: unknown_contact, wrong_password, not_verified, deleted"
           }
         ],
-        "note": "Never log which of these it was to the client — the response says only that the login failed. The log may be specific; the response may not."
+        "note": "Never log which of these it was to the client \u2014 the response says only that the login failed. The log may be specific; the response may not."
       },
       {
         "event": "auth.rights.unknown_role",
@@ -335,7 +335,7 @@
             "type": "uint32"
           }
         ],
-        "note": "Carries err. The path is the route pattern, not the concrete URL — a concrete one leaks ids into the log."
+        "note": "Carries err. The path is the route pattern, not the concrete URL \u2014 a concrete one leaks ids into the log."
       },
       {
         "event": "db.connection.failed",
@@ -414,7 +414,7 @@
             "description": "postgresql | sqlite"
           }
         ],
-        "note": "The migration was rolled back in full before this line — both target databases roll DDL back. The process then ends through startup.database.failed, so this line says which step failed and that one says the run is over."
+        "note": "The migration was rolled back in full before this line \u2014 both target databases roll DDL back. The process then ends through startup.database.failed, so this line says which step failed and that one says the run is over."
       },
       {
         "event": "community.home.created",
@@ -424,7 +424,7 @@
           {
             "name": "uuid",
             "type": "uuid",
-            "description": "communities.community_uuid — the community's public identity."
+            "description": "communities.community_uuid \u2014 the community's public identity."
           },
           {
             "name": "url",
@@ -432,7 +432,7 @@
             "description": "Base URL other communities reach it at."
           }
         ],
-        "note": "Written once, at the first start against a database that has no community. The key pair generated with it is never logged, in whole or in part — see redaction. This is the line an admin looks for when they want to know when the instance was set up."
+        "note": "Written once, at the first start against a database that has no community. The key pair generated with it is never logged, in whole or in part \u2014 see redaction. This is the line an admin looks for when they want to know when the instance was set up."
       },
       {
         "event": "db.migration.reverted",
@@ -454,7 +454,7 @@
             "description": "postgresql | sqlite"
           }
         ],
-        "note": "One down step, and only ever one per run. warn rather than info because a down step is not the inverse of an up step — what it dropped, it dropped with its rows. On a release the run had to be confirmed by naming this migration; how that confirmation is given is each implementation's own business, that it is required is not."
+        "note": "One down step, and only ever one per run. warn rather than info because a down step is not the inverse of an up step \u2014 what it dropped, it dropped with its rows. On a release the run had to be confirmed by naming this migration; how that confirmation is given is each implementation's own business, that it is required is not."
       },
       {
         "event": "db.migration.refused",
@@ -467,7 +467,7 @@
             "description": "postgresql | sqlite"
           }
         ],
-        "note": "A down run that did not happen: unconfirmed on a release, confirmed with the wrong name, nothing applied, or a migration with no down step. Which of those is in msg rather than in a field, the way db.connection.failed carries the driver's own message — the process exits with 1 and a person reads the line. Distinct from db.migration.denied, which is about a schema this build cannot run against at all and names where it diverges."
+        "note": "A down run that did not happen: unconfirmed on a release, confirmed with the wrong name, nothing applied, or a migration with no down step. Which of those is in msg rather than in a field, the way db.connection.failed carries the driver's own message \u2014 the process exits with 1 and a person reads the line. Distinct from db.migration.denied, which is about a schema this build cannot run against at all and names where it diverges."
       },
       {
         "event": "db.migration.denied",
@@ -496,7 +496,7 @@
             "description": "postgresql | sqlite"
           }
         ],
-        "note": "The database was built by code this build is not, so nothing is applied and the process exits. msg names the migration to go back past and says the branch that applied it is where the down step lives — this one has no down step for a migration it does not have. Distinct from db.migration.failed, where a migration this build does carry was rolled back."
+        "note": "The database was built by code this build is not, so nothing is applied and the process exits. msg names the migration to go back past and says the branch that applied it is where the down step lives \u2014 this one has no down step for a migration it does not have. Distinct from db.migration.failed, where a migration this build does carry was rolled back."
       },
       {
         "event": "user.registration.created",
@@ -509,7 +509,7 @@
             "description": "The Language enum value the account was created with."
           }
         ],
-        "note": "Carries usr with the new users.id. Never the email address — the account is identifiable without carrying personal data into log storage, see redaction."
+        "note": "Carries usr with the new users.id. Never the email address \u2014 the account is identifiable without carrying personal data into log storage, see redaction."
       },
       {
         "event": "user.registration.denied",
@@ -522,7 +522,25 @@
             "description": "closed vocabulary: address-in-use"
           }
         ],
-        "note": "A registration that was answered as if it had succeeded. Carries usr with the id of the member who already holds the address — not of anybody new, because none was created. The answer to the caller says nothing about this; the log is the only place it is visible, which is the point."
+        "note": "A registration that was answered as if it had succeeded. Carries usr with the id of the member who already holds the address \u2014 not of anybody new, because none was created. The answer to the caller says nothing about this; the log is the only place it is visible, which is the point."
+      },
+      {
+        "event": "user.registration.collision",
+        "cat": "user",
+        "level": "warn",
+        "data": [
+          {
+            "name": "constraint",
+            "type": "string",
+            "description": "Which unique index refused the row, as the driver names it. PostgreSQL gives the constraint; SQLite gives the columns in a sentence and the string is whatever it said."
+          },
+          {
+            "name": "attempt",
+            "type": "uint32",
+            "description": "Which try this was, from 1."
+          }
+        ],
+        "note": "A generated value -- users.gradido_id or user_contacts.email_verification_code -- was drawn onto one that already exists, and the registration is being tried again with fresh values. Never the address: that is user.registration.denied, which is an answer and not a retry. At 122 and 53 random bits this line is not one an installation should see, which is why it is warn: a run of them is a generator that has stopped being random, and nothing else would ever say so."
       },
       {
         "event": "mail.relay.connected",
@@ -608,7 +626,7 @@
       },
       {
         "what": "email addresses and phone numbers",
-        "why": "use usr with users.id — the account is identifiable without carrying personal data into log storage"
+        "why": "use usr with users.id \u2014 the account is identifiable without carrying personal data into log storage"
       },
       {
         "what": "avatar bytes and any other blob",
@@ -629,7 +647,7 @@
     "rules": [
       "Compare: level, cat, event, presence and value of every data key, and err.code when present.",
       "Ignore: msg, time, req, and field order.",
-      "A missing event on the fast path is a documented gap, the same as a skipped contract test — not a failure to hide by loosening the comparison."
+      "A missing event on the fast path is a documented gap, the same as a skipped contract test \u2014 not a failure to hide by loosening the comparison."
     ]
   }
 }

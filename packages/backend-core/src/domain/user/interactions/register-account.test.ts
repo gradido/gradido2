@@ -1,10 +1,39 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { Logger } from '@gradido/service-core'
 import type { UserCreateRequest } from '@gradido/shared/schemas'
 import type { BackendContext } from '../../../BackendContext'
 import { openTestDatabase, type TestDatabase, testDatabaseKinds, testQuery } from '../../../testing'
 import { createHomeCommunity } from '../../community'
+import { newEmailVerificationCode } from '../logic/verificationCode.logic'
 import { registerAccount } from './register-account'
+
+/**
+ * Fixed verification codes for the duration of one test, restored afterwards.
+ *
+ * `mock.module` replaces the module for the whole process and stays replaced — bun has no
+ * scope to undo it in, so the undo is another `mock.module` putting the real function back.
+ * Without it this leaks into `verificationCode.logic.test.ts`, which draws a thousand codes
+ * and asserts on their spread: it would then be asserting on this array. That is not
+ * hypothetical, it is what happened, and it is why the restore runs from `finally`.
+ */
+const PATH = '../logic/verificationCode.logic'
+
+/* Copied at import time, before anything has mocked it. The imported name itself is a live
+   binding that `mock.module` repoints, so restoring *through* it would put the mock back. */
+const realCode = newEmailVerificationCode
+
+async function withCodes(codes: bigint[], body: () => Promise<void>): Promise<void> {
+  let at = 0
+  mock.module(PATH, () => ({
+    /* The last one repeats, so a test says only as many codes as it cares about. */
+    newEmailVerificationCode: () => codes[Math.min(at++, codes.length - 1)],
+  }))
+  try {
+    await body()
+  } finally {
+    mock.module(PATH, () => ({ newEmailVerificationCode: realCode }))
+  }
+}
 
 const silent = Logger.create({ LOG_LEVEL: 'fatal', LOG_FILE: '', NODE_ENV: 'test' })
 
@@ -93,12 +122,11 @@ for (const kind of testDatabaseKinds()) {
       )
     })
 
-    test('stores the address trimmed and lowercased', async () => {
-      await registerAccount(context, request({ email: '  Einhorn@Gradido.NET ' }))
-
-      const [contact] = await contacts()
-      expect(contact.email).toBe('einhorn@gradido.net')
-    })
+    /* Trimming and lowercasing are not tested here any more, because they do not happen here
+       any more: `emailSchema` does both in its pipe, so an address is one string before it
+       reaches this layer. `packages/shared/src/schemas/auth.test.ts` is where that is checked,
+       and this Interaction is entitled to assume it -- which is also what lets
+       `user_contacts_email_key` be the authority on whether an address is taken. */
 
     // The silence rule. This is the test that would notice the day somebody "helpfully"
     // reports the duplicate — which is what turns registration into a membership oracle.
@@ -131,11 +159,40 @@ for (const kind of testDatabaseKinds()) {
         expect((await users())[0]).toEqual(before)
       })
 
-      test('recognises the address however it was spelled', async () => {
-        await registerAccount(context, request())
-        await registerAccount(context, request({ email: 'EINHORN@gradido.net' }))
+      test('draws again when a generated value collides, and says so', async () => {
+        /* The path nothing else reaches: both generated values are answered by an index at the
+           moment of the write, so the only way to see the retry is to make a draw repeat. The
+           code is fixed once, then freed -- so the second registration collides on
+           `user_contacts_email_verification_code_key`, draws again, and gets through.
 
-        expect(await users()).toHaveLength(1)
+           Without this test the retry is code that never runs, which is the same as code that
+           does not work. */
+        await withCodes([4242n, 4242n, 9999n], async () => {
+          await registerAccount(context, request({ email: 'erste@gradido.net' }))
+          await registerAccount(context, request({ email: 'zweite@gradido.net' }))
+
+          const written = await contacts()
+          expect(written).toHaveLength(2)
+          /* The second one carries the redrawn value, not the one that collided. */
+          expect(written.map((row) => String(row.email_verification_code)).sort()).toEqual([
+            '4242',
+            '9999',
+          ])
+        })
+      })
+
+      test('lets the unique index decide, not a lookup before it', async () => {
+        /* The property that replaced the pre-check: nothing reads the address before writing
+           it, so what makes a second registration silent is `user_contacts_email_key`. This
+           writes the contact row by hand first, so the Interaction meets an address it never
+           looked up -- and still answers as if the registration were new. */
+        await registerAccount(context, request())
+        const before = await users()
+
+        await registerAccount(context, request({ firstName: 'Zweiter', lastName: 'Versuch' }))
+
+        expect(await users()).toHaveLength(before.length)
+        expect(await contacts()).toHaveLength(1)
       })
     })
   })
