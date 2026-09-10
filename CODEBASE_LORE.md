@@ -339,3 +339,96 @@ which of the eleven answers was the wrong one.
 
 A city that was never given a letter-carrier says that too, in as many words, on the same
 board. Silence there would be indistinguishable from a carrier nobody thought to check.
+
+## XVI. The carters of Eporedon
+
+For a long time the clerks of Eporedon went to the Archive themselves.
+
+A traveller asked, the clerk walked to the Archive's window, and he stood there until the answer
+came. So did everybody in the queue behind him, for the whole of it — not because anything was
+wrong with them, but because the man who would have served them was standing at a window on the
+other side of the city. The Archive is quick. It is not so quick that a queue does not notice.
+
+The city had a rule about waiting, and it is a good rule: **a clerk waits only at a door he can
+see from his desk.** Where there is a door, he watches it himself and serves the queue in
+between; where there is none, somebody is hired to wait. The Archive has a door. By the rule,
+the clerks should have watched it — and the builders tried to picture that city. Every errand
+would have to be written as a note with a hook for each answer that might come back, and a hook
+after that for the answer to the answer, and the builders counted the notes and found them three
+times as long, for every errand the city would ever run, forever. A rule that makes the city's
+own paperwork unreadable is being applied past the place it was made for.
+
+So the rule has an exception, written into it where anyone can read it, and the Surveyor came
+back with his stopwatch to be sure it was one. Handing an errand over, and having it handed
+back, costs a blink. Waiting for the Archive costs a thousand of them. A city that pays one
+blink to never stand at a window again has not broken its rule. It has read it.
+
+It was built wrong twice first, which is how the right shape was found.
+
+The first time there was one cart and a bar across the Archive door, and the clerks queued for
+the bar. The second time there were several carts, and whichever clerk was free pushed whichever
+cart stood nearest — and still stood at the window while it was loaded, and every cart spent its
+life in unfamiliar hands, being learned again each morning by somebody new.
+
+Now there are the carters.
+
+**A carter owns one cart for his whole life and never lends it.** He knows its wheels and its
+load, and the Archive knows him: the forms he has had stamped once stay stamped, and he does not
+fill them in again. How many carters there are is decided by how many carts the Archive can load
+at once — never by how many clerks there are. A carter who is waiting sleeps beside his cart,
+and a sleeping carter costs the city nothing but his bed.
+
+The clerk writes the errand on a slate. He seats the traveller on a bench, serves the next
+traveller, and the next. A carter takes the slate, goes, chalks what he brings back **on the
+same slate**, under the errand, and carries it to the clerk who wrote it — that clerk and no
+other. Nothing is copied on the way there or on the way back. And a carter never asks a clerk
+whether the Archive should keep what was written: the slate says so itself. 
+*Keep it. Throw it away. Or once more, with fresh numbers* 
+— which is what an errand says when the number it drew turned out to be somebody
+else's already. The runners of chapter XI still know every shelf; that was never the question.
+The question was who stands at the Archive while the shelf is found.
+
+The slates are why nothing is ever copied. A clerk takes one from his own stack when a traveller
+arrives, and it is written from the top down — nothing is rubbed out in between, because nothing
+needs to be. When the answer has been read out to the traveller the slate is wiped, once, all of
+it, and goes back on the stack for whoever comes next. Nobody tidies a slate line by line, and
+nobody ever buys a new one while there is a clean one on the stack. The stack is the clerk's
+own: a slate always comes back to the stack it was taken from, whoever carried it in between,
+and no two clerks ever reach into the same stack — which is why nobody has to take turns at one.
+They come in a few sizes, and a clerk takes the smallest that will do. The largest is the end of
+it: an errand whose answer would not fit on the largest slate in the city is not one errand but
+several, and is asked for in parts.
+
+Behind every clerk hangs a board on the wall as well, for working out. He chalks up the
+traveller's words to make sense of them and wipes it for the next, and it never leaves the
+desk. What travels is the slate.
+
+Clerks and carters live in courtyards, and a clerk hands his slates to carters of his own
+courtyard. A slate that crossed the city would arrive, but it would arrive having been carried
+through every street on the way, and in the largest cities there are a great many streets.
+
+The bench has a fixed number of seats. A traveller who finds it full is not seated on the floor.
+He is shown a sign — **come back in a moment** — and nothing of his errand has been started, which
+is the whole reason the sign can say that honestly: coming back cannot find it half done. And
+nobody sits on the bench longer than the sand takes to run through the glass.
+
+That glass has a story. At first it was turned when a carter came by the bench to take the next
+slate. This worked every day until the day the Archive door jammed, when every carter was
+standing at the jammed door and not one came by the bench, and the travellers sat there exactly
+as long as the Archive was silent, with the glass lying on its side. Now there is a warden who
+does nothing else. He does not carry slates and cannot open doors. He turns the glass, and when
+the sand is through he sends the traveller home with the sign, whatever the carters are doing.
+
+The small city with the well — the one founded in an afternoon — does it differently, because a
+well is not an archive. A clerk who needs to read something lets down his own bucket; handing
+that to anybody would take longer than reading it. But the well has one rope, so everything
+written goes by one carter, and he never has to wait for anybody else's bucket. Her book had a
+quirk nobody had asked for: turn past its last page and it began again at the first, so a
+clerk who looked once more to be sure read everything a second time. Now the book stays shut
+once its last page is read, however often somebody looks.
+
+Sirodunon has no carters. Her clerk is one tireless man who leaves a note at the Archive's
+window and serves the queue until the answer comes — only at the well does he let down the
+bucket himself. But she has the same bench, the same glass and the same sign, in the same
+words — because a traveller must never be able to tell, from the answer, which city he was
+standing in.
