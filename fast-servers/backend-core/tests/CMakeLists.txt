@@ -22,6 +22,17 @@ target_include_directories(test_user PRIVATE
 )
 target_link_libraries(test_user PRIVATE backend_core service_core GTest::gtest)
 
-# The half of the user domain that needs no database: the address normalization, the verification
-# code's contracted range, and the gradido id ladder.
+# The half of the user domain that needs no database: the address normalization and the
+# verification code's contracted range.
 add_test(NAME backend_core.user COMMAND test_user)
+
+add_executable(test_register_account test_register_account.cpp)
+target_include_directories(test_register_account PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../service-core/include
+)
+target_link_libraries(test_register_account PRIVATE backend_core service_core GTest::gtest)
+
+# The other half: what the unique indexes answer when the two rows are written without asking
+# first. Needs a database, and makes its own -- SQLite, on a file it removes again.
+add_test(NAME backend_core.register_account COMMAND test_register_account)

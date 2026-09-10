@@ -84,32 +84,25 @@ int bc_normalize_email(const char *email, char *out, size_t out_size);
  */
 uint64_t bc_new_email_verification_code(void);
 
-/** How many draws bc_new_gradido_id gives up after. See its comment. */
-#define BC_GRADIDO_ID_MAX_DRAWS 5
-
 /**
- * A `users.gradido_id` nobody in this community holds yet.
+ * A value for `users.gradido_id`.
  *
- * **Unique per community, not globally** -- contracts/db/users.json, `uuid_key`. A v4 uuid from
- * the system CSPRNG makes a collision unlikely, and unlikely is not impossible: the check is what
- * makes the rule true rather than probable, and it costs one indexed lookup on a path that is
- * already writing three rows.
+ * **Unique per community, not globally** -- contracts/db/users.json, `uuid_key`. This draws and
+ * hands over; it does not ask whether the value is free. `users_uuid_key` answers that question
+ * at the moment of the write, which is the only moment the answer is still true, and a lookup
+ * before it would be a round trip spent on an answer that can go stale between the reading and
+ * the writing.
  *
- * The asymmetry with `alias` is the whole reason this exists as code rather than as a constraint
- * alone: a *generated* value that collides is simply drawn again and nobody notices, while a
- * *chosen* alias that collides is a person being told no.
+ * So a collision is not prevented here, it is *survived*: bc_register_account is told
+ * BC_ACCOUNT_COLLIDED, says so in the log and draws again. At 122 random bits from the system
+ * CSPRNG that path is not one anybody will see -- which is exactly why it has to be written down
+ * rather than assumed away, because nothing that never runs is ever noticed to be wrong.
  *
- * @p exists is a parameter rather than a repository call, so the ladder can be tested without a
- * database and so this stays free of persistence. It answers 1 for taken, 0 for free and -1 when
- * it could not tell, which ends the draw rather than counting as free.
- *
- * Answers SC_ERR_UNAVAILABLE after BC_GRADIDO_ID_MAX_DRAWS. Reaching that is not a collision --
- * at 122 random bits, five in a row is not a number that happens. It is @p exists answering true
- * for reasons of its own, and a loop that would spin forever on it is worse than an error that
- * says so.
+ * The asymmetry with `alias` is the reason this exists as a function rather than as a constraint
+ * alone: a *generated* value that collides is drawn again and nobody notices, while a *chosen*
+ * alias that collides is a person being told no.
  */
-sc_status bc_new_gradido_id(int (*exists)(const char *gradido_id, void *user_data), void *user_data,
-                            char *out);
+void bc_new_gradido_id(char *out);
 
 /* --- repository ------------------------------------------------------------------------------ */
 
@@ -124,33 +117,63 @@ sc_status bc_new_gradido_id(int (*exists)(const char *gradido_id, void *user_dat
 sc_status bc_user_find_address_owner(sc_db *db, const char *email, bc_address_owner *out,
                                      int *found, char *error, size_t error_size);
 
-/**
- * Whether this community already has a member with that gradido id.
- *
- * Scoped by community because `users_uuid_key` is, and asking table-wide would be a different
- * question: another community's member holding the same uuid is not a conflict, it is what the
- * two-column key exists to allow.
- *
- * It does not replace the index -- between this select and the insert there is a window, and only
- * the index closes it. It is here because a *generated* value that turns out to be taken can
- * simply be drawn again.
- */
-sc_status bc_user_gradido_id_exists(sc_db *db, const char *gradido_id, uint64_t community_id,
-                                    int *exists, char *error, size_t error_size);
+/** How a refused write is named back to the caller, where the driver names it. */
+#define BC_CONSTRAINT_MAX 128
+
+/** What became of the three writes. Every one of these is a normal end, not a failure. */
+typedef enum bc_account_outcome {
+    /** The rows are written and `user_id` holds `users.id`. */
+    BC_ACCOUNT_CREATED = 0,
+    /** `user_contacts_email_key` already holds the address; `taken_by` is whose it is. */
+    BC_ACCOUNT_ADDRESS_TAKEN,
+    /** A *generated* value landed on one that exists, and `constraint` names which where the
+     *  driver says so. Never the address: that is BC_ACCOUNT_ADDRESS_TAKEN, which is an answer
+     *  to give rather than a draw to repeat. */
+    BC_ACCOUNT_COLLIDED
+} bc_account_outcome;
 
 /**
- * Writes the member and their login address, or neither, and answers with `users.id`.
+ * Which of the three happened, and the one value that goes with it.
  *
- * Just the id: everything else about a new account is what the caller passed in, and a repository
- * that echoed it back would only invite somebody to read it as confirmation.
+ * One struct rather than three out parameters, because the fields are mutually exclusive: a
+ * caller that reads `user_id` after BC_ACCOUNT_ADDRESS_TAKEN is reading a zero, and putting them
+ * behind an outcome it has to switch on is what makes that hard to do by accident.
+ */
+typedef struct bc_create_account_result {
+    bc_account_outcome outcome;
+    uint64_t user_id;
+    uint64_t taken_by;
+    /** libpq gives the constraint's own name, SQLite the columns; empty when neither said. */
+    char constraint[BC_CONSTRAINT_MAX];
+} bc_create_account_result;
+
+/**
+ * Writes the member and their login address, or neither, and says which of the three happened.
+ *
+ * **The unique index decides, not a lookup before it.** `user_contacts_email_key` is what makes
+ * an address one member's, so this asks it by writing rather than by selecting first: a lookup
+ * answers about a moment that is over by the time the insert runs, and two registrations for one
+ * free address would both find it free -- one would then fail on the index, which is a 500 that
+ * happens only for addresses that were *not* yet registered. That is the membership oracle
+ * contracts/server/backend/user.json closes with one empty 204 for both cases, and no rule
+ * outside the database can keep it closed.
+ *
+ * `ON CONFLICT (email) DO NOTHING` rather than letting the insert fail, because three unique
+ * constraints can refuse this row and they mean different things: the address being taken is the
+ * contracted silence, while a collision on `email_verification_code` or on `users_uuid_key` is a
+ * coincidence to draw again for. No row returned says "the address" and nothing else, without
+ * reading an error message -- which on SQLite would be parsing English.
  *
  * Three statements, because the two rows point at each other: the member exists before the
- * contact can name them, and `users.email_id` can only be written once the contact has an id.
- * Inside one transaction, so an account without an address -- which nothing could log into and
- * nothing would report -- cannot survive a failure halfway through.
+ * contact can name them, and `users.email_id` -- which of several addresses mail goes to -- can
+ * only be written once the contact has an id. Inside one transaction, so an account without an
+ * address cannot survive a failure halfway through, and so the member row written before a
+ * conflict is discovered goes away again.
+ *
+ * Answers SC_OK for all three outcomes. A non-OK status is the database having gone wrong.
  */
-sc_status bc_user_create_account(sc_db *db, const bc_new_account *account, uint64_t *id_out,
-                                 char *error, size_t error_size);
+sc_status bc_user_create_account(sc_db *db, const bc_new_account *account,
+                                 bc_create_account_result *out, char *error, size_t error_size);
 
 /* --- interaction ----------------------------------------------------------------------------- */
 
@@ -166,7 +189,8 @@ struct bc_context;
  *
  * Answers SC_OK for a registration that was written **and** for one that was answered as if it
  * had been: the silence rule is that the caller cannot tell, and that starts here rather than at
- * the route.
+ * the route. A generated value that was already taken is neither -- it is drawn again, and only
+ * a run of those long enough to mean the draw itself is broken becomes SC_ERR_UNAVAILABLE.
  *
  * Takes @p context's database lock for its whole length, which is why the context is not const
  * here -- see bc_context.db_lock for what that lock is and what it is standing in for.

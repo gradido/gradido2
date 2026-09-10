@@ -21,8 +21,15 @@ export type TestDatabase = {
   readonly close: () => Promise<void>
 }
 
-/** Everything migration 0001 creates, plus the bookkeeping. Emptied before a run. */
-const MIGRATED_TABLES = ['user_contacts', 'users', 'migrations']
+/**
+ * Every table the migrations create, plus the bookkeeping. Emptied before a run.
+ *
+ * Children before parents, so that a database with the foreign keys still in place drops
+ * cleanly; `CASCADE` covers the rest. A migration that adds a table adds it here — a name
+ * missing from this list does not fail loudly, it fails as `relation already exists` from the
+ * *next* migration run, which reads like a broken migration rather than a stale test helper.
+ */
+const MIGRATED_TABLES = ['user_contacts', 'users', 'communities', 'migrations']
 
 /**
  * A database name has to say it is a test database.

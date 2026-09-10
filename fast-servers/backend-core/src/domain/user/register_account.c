@@ -28,24 +28,14 @@
 
 #include "service_core/log/log.h"
 
-/** What the gradido id ladder asks the database, carried through as its user_data. */
-typedef struct gradido_id_probe {
-    sc_db *db;
-    uint64_t community_id;
-    char *error;
-    size_t error_size;
-} gradido_id_probe;
-
-static int gradido_id_taken(const char *gradido_id, void *user_data)
-{
-    gradido_id_probe *probe = (gradido_id_probe *)user_data;
-    int exists = 0;
-
-    if (bc_user_gradido_id_exists(probe->db, gradido_id, probe->community_id, &exists, probe->error,
-                                  probe->error_size) != SC_OK)
-        return -1;
-    return exists;
-}
+/**
+ * How many registrations are attempted before the draws are treated as broken.
+ *
+ * Reaching this is not bad luck: a v4 gradido_id is 122 random bits and the verification code is
+ * 53, so five collisions in a row is not a number that happens. It is the CSPRNG answering the
+ * same thing every time, and a loop that kept going would hide that forever.
+ */
+#define BC_REGISTER_MAX_ATTEMPTS 5
 
 /* The interaction, with the database already taken. The lock and the work are separated so that
  * every `return` below is one return and not one release plus one return. */
@@ -53,12 +43,9 @@ static sc_status register_account_locked(bc_context *context, const char *first_
                                          const char *last_name, const char *email,
                                          const char *language, char *error, size_t error_size)
 {
-    bc_address_owner owner;
     bc_new_account account;
-    gradido_id_probe probe;
-    uint64_t user_id = 0;
-    int found = 0;
-    sc_status status;
+    bc_create_account_result result;
+    int attempt;
 
     if (context == NULL || first_name == NULL || last_name == NULL || email == NULL ||
         error == NULL || error_size == 0)
@@ -70,29 +57,6 @@ static sc_status register_account_locked(bc_context *context, const char *first_
         bc_sql_set_error(error, error_size, "the email address does not fit its column");
         return SC_ERR_TOO_LONG;
     }
-
-    status =
-        bc_user_find_address_owner(context->db, account.email, &owner, &found, error, error_size);
-    if (status != SC_OK)
-        return status;
-    if (found) {
-        sc_log_value data[1] = {SC_LOG_STR("reason", "address-in-use")};
-        sc_log_context log = {0};
-
-        log.usr = owner.id;
-        log.data = data;
-        log.data_count = 1;
-        sc_log_event(SC_LOG_INFO, SC_CAT_USER, "user.registration.denied", &log,
-                     "registration for an address that is already in use, answering as if it "
-                     "were new");
-
-        /* Legacy mails the member who *owns* the address -- in their language and with their
-         * name, never the new registrant's -- so that somebody typing the wrong address is
-         * noticed by the person who would otherwise never hear about it. The reference path has
-         * the same TODO and the same reason: no role sends mail yet. */
-        return SC_OK;
-    }
-
     if (strlen(first_name) + 1 > sizeof(account.first_name) ||
         strlen(last_name) + 1 > sizeof(account.last_name)) {
         bc_sql_set_error(error, error_size, "a name does not fit its column");
@@ -105,36 +69,79 @@ static sc_status register_account_locked(bc_context *context, const char *first_
     /* The community this instance is. It is on the context rather than looked up here: one row,
      * written once at setup, and the process refuses to start without it. */
     account.community_id = context->home.id;
-    account.email_verification_code = bc_new_email_verification_code();
-    account.created_at = sc_now_ms();
 
-    probe.db = context->db;
-    probe.community_id = context->home.id;
-    probe.error = error;
-    probe.error_size = error_size;
-    status = bc_new_gradido_id(gradido_id_taken, &probe, account.gradido_id);
-    if (status != SC_OK) {
-        if (status == SC_ERR_UNAVAILABLE)
-            (void)snprintf(error, error_size, "no free gradido_id after %d draws",
-                           BC_GRADIDO_ID_MAX_DRAWS);
-        return status;
+    for (attempt = 1; attempt <= BC_REGISTER_MAX_ATTEMPTS; ++attempt) {
+        sc_status status;
+
+        /* Drawn, not checked. Both are answered by an index at the moment of the write, and a
+         * collision comes back below as something to draw again. */
+        bc_new_gradido_id(account.gradido_id);
+        account.email_verification_code = bc_new_email_verification_code();
+        account.created_at = sc_now_ms();
+
+        status = bc_user_create_account(context->db, &account, &result, error, error_size);
+        if (status != SC_OK)
+            return status;
+
+        if (result.outcome == BC_ACCOUNT_COLLIDED) {
+            /* Two random values can land on one that exists, and they are not equally unlikely: a
+             * v4 gradido_id is 122 bits and will not happen, while the verification code is
+             * bounded to 2^53-1 for SQLite's sake, where a community of a million members has a
+             * birthday chance of roughly one in eighteen thousand over its whole life. Both are
+             * drawn again on the next turn of this loop.
+             * At warn rather than passed over, because a run of these is not luck: it is a
+             * generator that has stopped being random, and the only way anybody finds out is if
+             * the rare case says something when it happens. */
+            sc_log_value data[2] = {SC_LOG_STR("constraint", result.constraint),
+                                    SC_LOG_INT("attempt", attempt)};
+            sc_log_context log = {0};
+
+            log.data = data;
+            log.data_count = 2;
+            sc_log_event(SC_LOG_WARN, SC_CAT_USER, "user.registration.collision", &log,
+                         "a generated value was already taken, drawing again");
+            continue;
+        }
+
+        if (result.outcome == BC_ACCOUNT_ADDRESS_TAKEN) {
+            sc_log_value data[1] = {SC_LOG_STR("reason", "address-in-use")};
+            sc_log_context log = {0};
+
+            log.usr = result.taken_by;
+            log.data = data;
+            log.data_count = 1;
+            sc_log_event(SC_LOG_INFO, SC_CAT_USER, "user.registration.denied", &log,
+                         "registration for an address that is already in use, answering as if it "
+                         "were new");
+
+            /* Legacy mails the member who *owns* the address -- in their language and with their
+             * name, never the new registrant's -- so that somebody typing the wrong address is
+             * noticed by the person who would otherwise never hear about it. The reference path
+             * has the same TODO and the same reason: no role sends mail yet, and loading a whole
+             * member for it would be a round trip spent on a comment. */
+            return SC_OK;
+        }
+
+        {
+            sc_log_value data[1] = {SC_LOG_STR("language", account.language)};
+            sc_log_context log = {0};
+
+            log.usr = result.user_id;
+            log.data = data;
+            log.data_count = 1;
+            sc_log_event(SC_LOG_INFO, SC_CAT_USER, "user.registration.created", &log,
+                         "account created");
+        }
+        return SC_OK;
     }
 
-    status = bc_user_create_account(context->db, &account, &user_id, error, error_size);
-    if (status != SC_OK)
-        return status;
-
-    {
-        sc_log_value data[1] = {SC_LOG_STR("language", account.language)};
-        sc_log_context log = {0};
-
-        log.usr = user_id;
-        log.data = data;
-        log.data_count = 1;
-        sc_log_event(SC_LOG_INFO, SC_CAT_USER, "user.registration.created", &log,
-                     "account created");
-    }
-    return SC_OK;
+    /* Every draw landed on a value that exists. At these widths that is not a coincidence
+     * happening five times, it is a generator that has stopped generating -- so this is an error
+     * and not another turn of the loop, and the route answers 500 rather than the silent 204 that
+     * would tell somebody their registration went through. */
+    (void)snprintf(error, error_size, "no free generated values after %d attempts",
+                   BC_REGISTER_MAX_ATTEMPTS);
+    return SC_ERR_UNAVAILABLE;
 }
 
 sc_status bc_register_account(bc_context *context, const char *first_name, const char *last_name,
@@ -145,10 +152,10 @@ sc_status bc_register_account(bc_context *context, const char *first_name, const
 
     if (context == NULL)
         return SC_ERR_INVALID_ARGUMENT;
-    /* The address is looked up and then written, and the two have to be one act: two of these
-     * interleaving would both find the address free, and the second write would fail on the
-     * unique index -- a 500 that only ever happens for addresses that are registered, which is
-     * exactly the oracle the silence rule exists to close. See bc_context.db_lock. */
+    /* Not for the silence rule any more -- `user_contacts_email_key` keeps that closed now, and
+     * it stays closed however many registrations interleave. What is left is the one thing the
+     * lock was always also doing: there is one connection and there are as many loops as the
+     * machine has cores. See bc_context.db_lock. */
     bc_context_lock(context);
     status =
         register_account_locked(context, first_name, last_name, email, language, error, error_size);

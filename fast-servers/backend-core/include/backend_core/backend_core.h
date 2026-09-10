@@ -54,10 +54,13 @@ typedef struct bc_context {
      * *statement* safe and says nothing about a sequence of them.
      *
      * It is taken around a whole interaction rather than around a statement, because that is
-     * the unit that has to be atomic: `registerAccount` looks an address up and then writes it,
-     * and two of those interleaving would both find the address free and one would then fail on
-     * the unique index -- a 500 that only ever happens for registered addresses, which is the
-     * membership oracle the silence rule exists to prevent.
+     * the unit that has to be atomic: an interaction is a `BEGIN ... COMMIT`, and a second one
+     * whose statements land inside it is not a transaction at all.
+     *
+     * It is no longer what keeps the membership oracle closed. `registerAccount` used to look an
+     * address up and then write it, and two of those interleaving would both have found it free;
+     * now it writes and lets `user_contacts_email_key` answer, which holds however many
+     * registrations run at once and holds across processes, which a mutex never could.
      *
      * **It is held across a database call on the request path, and that is what has to go.**
      * `Architecture.md`, *The write must be answered, not acknowledged*, has the design it is
@@ -84,8 +87,7 @@ typedef struct bc_context {
  * Every failure is logged where it happens -- `startup.database.failed`, `db.migration.denied`,
  * `startup.setup.failed` -- so the caller decides what to do and does not describe it again.
  */
-sc_status bc_context_open(const sc_db_config *db_config, const sc_quit_flag *quit,
-                          bc_context *out);
+sc_status bc_context_open(const sc_db_config *db_config, const sc_quit_flag *quit, bc_context *out);
 
 /** Closes what bc_context_open opened. NULL is allowed and does nothing. */
 void bc_context_close(bc_context *context);
