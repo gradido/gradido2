@@ -15,13 +15,7 @@
 
 #include "backend_core/database/contract_files.h"
 #include "service_core/log/log.h"
-
-#if defined(SC_DB_WITH_SQLITE)
-#include <sqlite3.h>
-#endif
-#if defined(SC_DB_WITH_POSTGRESQL)
-#include <libpq-fe.h>
-#endif
+#include "service_core/sql.h"
 
 /*
  * The bookkeeping table has to exist before it can say whether anything else does, so it is the
@@ -428,87 +422,44 @@ uint32_t bc_migrations_schema_version(const bc_migration_set *set)
  * build carries, and a highest version alone cannot tell a database built by another branch from
  * one built by this one.
  */
-static const char kSelectApplied[] =
-    "SELECT version, file_name FROM migrations ORDER BY version ASC";
+static sc_sql_statement kSelectApplied = SC_SQL_STATEMENT(
+    "migrations.applied", "SELECT version, file_name FROM migrations ORDER BY version ASC",
+    "SELECT version, file_name FROM migrations ORDER BY version ASC");
+static sc_sql_statement kRecordApplied = SC_SQL_STATEMENT(
+    "migrations.record", "INSERT INTO migrations (version, file_name, date) VALUES ($1, $2, $3)",
+    "INSERT INTO migrations (version, file_name, date) VALUES (?1, ?2, ?3)");
+static sc_sql_statement kForgetApplied =
+    SC_SQL_STATEMENT("migrations.forget", "DELETE FROM migrations WHERE version = $1",
+                     "DELETE FROM migrations WHERE version = ?1");
 
 static sc_status applied_migrations(sc_db *db, bc_applied_set *out, char *error, size_t error_size)
 {
+    sc_sql_rows rows;
+    sc_sql_error failure;
+    sc_status status;
+
     out->count = 0;
-
-    switch (sc_db_kind_of(db)) {
-    case SC_DB_SQLITE: {
-#if defined(SC_DB_WITH_SQLITE)
-        sqlite3 *handle = (sqlite3 *)sc_db_native(db);
-        sqlite3_stmt *statement = NULL;
-        int step;
-
-        if (sqlite3_prepare_v2(handle, kSelectApplied, -1, &statement, NULL) != SQLITE_OK) {
-            bc_sql_set_error(error, error_size, sqlite3_errmsg(handle));
-            return SC_ERR_INVALID_ARGUMENT;
-        }
-        while ((step = sqlite3_step(statement)) == SQLITE_ROW) {
-            const unsigned char *name;
-
-            if (out->count == BC_MIGRATIONS_MAX) {
-                sqlite3_finalize(statement);
-                bc_sql_set_error(error, error_size,
-                                 "this database has more migrations than this build can hold");
-                return SC_ERR_TOO_LONG;
-            }
-            out->items[out->count].version = (uint32_t)sqlite3_column_int(statement, 0);
-            name = sqlite3_column_text(statement, 1);
-            (void)snprintf(out->items[out->count].name, BC_MIGRATION_NAME_MAX, "%s",
-                           name != NULL ? (const char *)name : "");
-            ++out->count;
-        }
-        if (step != SQLITE_DONE) {
-            bc_sql_set_error(error, error_size, sqlite3_errmsg(handle));
-            sqlite3_finalize(statement);
-            return SC_ERR_INVALID_ARGUMENT;
-        }
-        sqlite3_finalize(statement);
-        return SC_OK;
-#else
-        bc_sql_set_error(error, error_size, "this build has no SQLite driver");
-        return SC_ERR_UNAVAILABLE;
-#endif
+    status = sc_sql_query(db, &kSelectApplied, NULL, 0, &rows, &failure);
+    if (status != SC_OK) {
+        bc_sql_set_error(error, error_size, failure.message);
+        return status;
     }
-    case SC_DB_POSTGRESQL:
-    default: {
-#if defined(SC_DB_WITH_POSTGRESQL)
-        PGconn *handle = (PGconn *)sc_db_native(db);
-        PGresult *result = PQexec(handle, kSelectApplied);
-        int rows;
-        int row;
-
-        if (result == NULL || PQresultStatus(result) != PGRES_TUPLES_OK) {
-            bc_sql_set_error(error, error_size,
-                             result != NULL ? PQresultErrorMessage(result)
-                                            : PQerrorMessage(handle));
-            PQclear(result);
-            return SC_ERR_INVALID_ARGUMENT;
-        }
-        rows = PQntuples(result);
-        if (rows > BC_MIGRATIONS_MAX) {
-            PQclear(result);
+    while (sc_sql_next(&rows)) {
+        if (out->count == BC_MIGRATIONS_MAX) {
             bc_sql_set_error(error, error_size,
                              "this database has more migrations than this build can hold");
-            return SC_ERR_TOO_LONG;
+            return bc_sql_finish(&rows, &failure, SC_ERR_TOO_LONG, error, error_size);
         }
-        for (row = 0; row != rows; ++row) {
-            out->items[row].version = (uint32_t)strtoul(PQgetvalue(result, row, 0), NULL, 10);
-            (void)snprintf(out->items[row].name, BC_MIGRATION_NAME_MAX, "%s",
-                           PQgetisnull(result, row, 1) ? "" : PQgetvalue(result, row, 1));
-        }
-        out->count = (size_t)rows;
-        PQclear(result);
-        return SC_OK;
-#else
-        bc_sql_set_error(error, error_size, "this build has no PostgreSQL driver");
-        return SC_ERR_UNAVAILABLE;
-#endif
+        out->items[out->count].version = (uint32_t)sc_sql_col_int(&rows, 0);
+        if (!sc_sql_col_copy(&rows, 1, out->items[out->count].name, BC_MIGRATION_NAME_MAX))
+            out->items[out->count].name[0] = '\0';
+        ++out->count;
     }
-    }
+    /* The loop stopping is not the list ending. A row that failed to be read would leave a
+     * shorter list that still looks like a valid beginning of this build's migrations -- and
+     * bc_migrations_run would then apply again what this database already has. So the cursor
+     * is asked whether it reached the end, and a list it did not finish is a failure. */
+    return bc_sql_finish(&rows, &failure, SC_OK, error, error_size);
 }
 
 /**
@@ -583,82 +534,30 @@ static void deny_schema(const bc_applied_set *applied, const bc_migration_set *c
 static sc_status record_applied(sc_db *db, const bc_migration *migration, char *error,
                                 size_t error_size)
 {
-    int64_t now = sc_now_ms();
+    sc_sql_param params[3];
+    sc_sql_error failure;
+    sc_status status;
 
-    switch (sc_db_kind_of(db)) {
-    case SC_DB_SQLITE: {
-#if defined(SC_DB_WITH_SQLITE)
-        sqlite3 *handle = (sqlite3 *)sc_db_native(db);
-        sqlite3_stmt *statement = NULL;
-        int step;
-
-        if (sqlite3_prepare_v2(handle,
-                               "INSERT INTO migrations (version, file_name, date) VALUES (?, ?, ?)",
-                               -1, &statement, NULL) != SQLITE_OK) {
-            bc_sql_set_error(error, error_size, sqlite3_errmsg(handle));
-            return SC_ERR_INVALID_ARGUMENT;
-        }
-        sqlite3_bind_int(statement, 1, (int)migration->version);
-        sqlite3_bind_text(statement, 2, migration->name, -1, SQLITE_STATIC);
-        sqlite3_bind_int64(statement, 3, now);
-        step = sqlite3_step(statement);
-        sqlite3_finalize(statement);
-        if (step != SQLITE_DONE) {
-            bc_sql_set_error(error, error_size, sqlite3_errmsg(handle));
-            return SC_ERR_INVALID_ARGUMENT;
-        }
-        return SC_OK;
-#else
-        (void)now;
-        bc_sql_set_error(error, error_size, "this build has no SQLite driver");
-        return SC_ERR_UNAVAILABLE;
-#endif
-    }
-    case SC_DB_POSTGRESQL:
-    default: {
-#if defined(SC_DB_WITH_POSTGRESQL)
-        PGconn *handle = (PGconn *)sc_db_native(db);
-        char version[16];
-        char date[BC_TIMESTAMP_TEXT_MAX];
-        const char *params[3];
-        PGresult *result;
-        int ok;
-
-        (void)snprintf(version, sizeof(version), "%u", (unsigned)migration->version);
-        bc_sql_timestamp_text(now, date, sizeof(date));
-        params[0] = version;
-        params[1] = migration->name;
-        params[2] = date;
-        result = PQexecParams(handle,
-                              "INSERT INTO migrations (version, file_name, date) "
-                              "VALUES ($1, $2, $3)",
-                              3, NULL, params, NULL, NULL, 0);
-        ok = result != NULL && PQresultStatus(result) == PGRES_COMMAND_OK;
-        if (!ok)
-            bc_sql_set_error(error, error_size,
-                             result != NULL ? PQresultErrorMessage(result)
-                                            : PQerrorMessage(handle));
-        PQclear(result);
-        return ok ? SC_OK : SC_ERR_INVALID_ARGUMENT;
-#else
-        (void)now;
-        bc_sql_set_error(error, error_size, "this build has no PostgreSQL driver");
-        return SC_ERR_UNAVAILABLE;
-#endif
-    }
-    }
+    params[0] = sc_sql_int(migration->version);
+    params[1] = sc_sql_text(migration->name);
+    params[2] = sc_sql_time(sc_now_ms());
+    status = sc_sql_exec(db, &kRecordApplied, params, 3, NULL, &failure);
+    if (status != SC_OK)
+        bc_sql_set_error(error, error_size, failure.message);
+    return status;
 }
 
 static sc_status forget_applied(sc_db *db, uint32_t version, char *error, size_t error_size)
 {
-    char statement[96];
+    sc_sql_param params[1];
+    sc_sql_error failure;
+    sc_status status;
 
-    /* The one place a value is formatted into a statement rather than bound, and it is safe for
-     * a reason that has to hold rather than be hoped for: `version` is a uint32_t out of the
-     * contract, printed as digits. Nothing here comes from a request. */
-    (void)snprintf(statement, sizeof(statement), "DELETE FROM migrations WHERE version = %u",
-                   (unsigned)version);
-    return bc_sql_exec(db, statement, error, error_size);
+    params[0] = sc_sql_int(version);
+    status = sc_sql_exec(db, &kForgetApplied, params, 1, NULL, &failure);
+    if (status != SC_OK)
+        bc_sql_set_error(error, error_size, failure.message);
+    return status;
 }
 
 /**

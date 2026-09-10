@@ -14,13 +14,14 @@
 #ifndef BACKEND_CORE_H
 #define BACKEND_CORE_H
 
-#include <uv.h>
-
 #include "backend_core/domain/community.h"
 #include "service_core/config.h"
 #include "service_core/db.h"
+#include "service_core/db_exec.h"
+#include "service_core/http.h"
 #include "service_core/runtime.h"
 #include "service_core/status.h"
+#include "service_core/topology.h"
 
 /**
  * What an interaction serving a request is allowed to reach.
@@ -42,35 +43,17 @@
  * here as they are written, and an interaction that needs one will say so by reading it here.
  */
 typedef struct bc_context {
-    sc_db *db;
-    bc_home_community home;
     /**
-     * What serialises the database, and it is an interim rather than a design.
+     * Where database work runs -- service_core/db_exec.h. A route builds a unit in the request's
+     * memory and hands it here; the executor parks the request, runs the work on a worker that
+     * owns its connection, and hands the unit back on the loop the request came in on.
      *
-     * There is one connection and there are as many loops as the machine has cores, so without
-     * this two requests write into one PGconn at the same time -- which is a data race libpq
-     * documents -- and two `BEGIN ... COMMIT` sequences interleave on one SQLite handle, which
-     * is a transaction containing somebody else's statements. Serialized SQLite makes each
-     * *statement* safe and says nothing about a sequence of them.
-     *
-     * It is taken around a whole interaction rather than around a statement, because that is
-     * the unit that has to be atomic: an interaction is a `BEGIN ... COMMIT`, and a second one
-     * whose statements land inside it is not a transaction at all.
-     *
-     * It is no longer what keeps the membership oracle closed. `registerAccount` used to look an
-     * address up and then write it, and two of those interleaving would both have found it free;
-     * now it writes and lets `user_contacts_email_key` answer, which holds however many
-     * registrations run at once and holds across processes, which a mutex never could.
-     *
-     * **It is held across a database call on the request path, and that is what has to go.**
-     * `Architecture.md`, *The write must be answered, not acknowledged*, has the design it is
-     * standing in for: the handler defers, a thread that owns the database does the work, and the
-     * loop answers when it comes back -- `sc_http_defer` and `sc_http_resume` are already there
-     * for it. Until then a registration blocks the loop it arrived on for the length of one
-     * write, which is affordable only because registration is rare and is not a reason to put a
-     * second such lock anywhere.
+     * It replaced a pool of connections that loops took turns holding, which in turn replaced a
+     * mutex around one connection. Both kept the loop waiting while the database worked; this
+     * does not, and it keeps every connection on the one thread that owns it.
      */
-    uv_mutex_t db_lock;
+    sc_db_exec *exec;
+    bc_home_community home;
 } bc_context;
 
 /**
@@ -86,15 +69,17 @@ typedef struct bc_context {
  *
  * Every failure is logged where it happens -- `startup.database.failed`, `db.migration.denied`,
  * `startup.setup.failed` -- so the caller decides what to do and does not describe it again.
+ *
+ * Then the executor: DB_POOL_SIZE workers on PostgreSQL, the writer and a read connection per
+ * loop on SQLite, grouped by @p topology the same way @p server's loops are, and joined to
+ * @p server so that a unit submitted with a request comes back to that request's loop. A
+ * database that will not hold every connection stops the start here, saying how many it took.
  */
-sc_status bc_context_open(const sc_db_config *db_config, const sc_quit_flag *quit, bc_context *out);
+sc_status bc_context_open(const sc_db_config *db_config, sc_http_server *server,
+                          const sc_topology *topology, const sc_quit_flag *quit, bc_context *out);
 
 /** Closes what bc_context_open opened. NULL is allowed and does nothing. */
 void bc_context_close(bc_context *context);
-
-/** Takes the database for the length of one interaction. See bc_context.db_lock. */
-void bc_context_lock(bc_context *context);
-void bc_context_unlock(bc_context *context);
 
 /**
  * Brings the domain up: what will be the database pool, the session cache and the repositories.

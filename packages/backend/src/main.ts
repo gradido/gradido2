@@ -1,6 +1,7 @@
 import { cors } from '@elysiajs/cors'
 import {
   connectDatabase,
+  DatabaseGate,
   databaseErrorMessage,
   runMigrations,
   SchemaMismatchError,
@@ -315,7 +316,11 @@ async function open(logger: Logger): Promise<AppContext> {
     await waitForDatabase(db, logger)
     await runMigrations(db, logger)
     const homeCommunity = await requireHomeCommunity({ db, logger })
-    return new AppContext(logger, db, homeCommunity)
+    /* As many places as bun's pool has connections, so that bun itself never queues: the wait,
+       and its bound, are the gate's. SQLite has one writer and a synchronous driver, so one
+       place -- the same single file the fast path's writer serialises on. */
+    const gate = new DatabaseGate(CONFIG.DB_TYPE === 'sqlite' ? 1 : CONFIG.DB_POOL_SIZE)
+    return new AppContext(logger, db, homeCommunity, gate)
   } catch (error) {
     /* Two failures with one outcome but not one cause: a database that will not answer is
        an operator's problem with a service, an instance that cannot be set up is a step

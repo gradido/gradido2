@@ -1,5 +1,4 @@
 import { registerAccount } from '@gradido/backend-core'
-import { errorBodySchema } from '@gradido/shared/errors'
 import { userCreateRequestSchema } from '@gradido/shared/schemas'
 import { Elysia, status } from 'elysia'
 import * as v from 'valibot'

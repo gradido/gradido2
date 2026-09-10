@@ -1,7 +1,7 @@
 {
   "contractVersion": 1,
   "kind": "config",
-  "description": "How both implementations reach the database: the environment variables, their defaults, and the two rules that are decided here rather than twice. The backend and the federation server talk to the same database and must name it the same way, so the variables live in one place and not in each service.",
+  "description": "How both implementations reach the database: the environment variables, their defaults, and the rules that are decided here rather than twice. The backend and the federation server talk to the same database and must name it the same way, so the variables live in one place and not in each service.",
   "principle": "A variable means the same thing on both paths or it is not in this file. Where the two drivers spell one idea differently -- libpq takes a socket directory as `host`, bun's client takes it as `path` -- the difference belongs under the variable, never in it.",
   "origin": "gradido2",
   "readBy": ["packages/backend-core/src/database/schema.ts", "fast-servers/service-core/src/db.c"],
@@ -48,6 +48,18 @@
       "appliesTo": "postgresql"
     },
     {
+      "name": "DB_POOL_SIZE",
+      "type": "uint16",
+      "default": "10",
+      "minimum": 1,
+      "appliesTo": "postgresql",
+      "description": "The most connections one process holds to the database, and therefore the most statements it has running there at once. A limit on concurrency at the database rather than a cache of connections: past the point where the database is busy, another connection adds only waiting, memory and lock contention on the server, so the pool is where a burst queues instead of piling onto the database. It is sized from what the database server can do, never from the machine the application runs on. Every process that serves has its own, so the server's max_connections has to cover the sum of them plus room for administration -- see rules.pool.",
+      "spelling": {
+        "libpq": "fast-servers opens every connection at startup, each owned by one worker thread for its whole life, so a pool the server cannot hold stops the start with the database's own refusal instead of failing requests later. The HTTP loops hand their work to those workers; how many loops there are does not change how many connections are opened.",
+        "bun": "Passed as `max` to bun's SQL client, which opens connections on demand up to that number. The wait in front of them is the service's own -- see rules.pool."
+      }
+    },
+    {
       "name": "DB_FILE",
       "type": "string",
       "default": "./gradido_community.sqlite",
@@ -71,6 +83,16 @@
       "statement": "Refuse to start when DB_TYPE is 'postgresql' AND the connection is TCP (DB_HOST does not begin with '/') AND DB_PASSWORD is empty AND NODE_ENV is 'production'. Every other combination starts.",
       "why": "A passwordless TCP connection means the database answers over the network to whoever asks. A Unix socket is reached through filesystem permissions and peer authentication, where no password is not an oversight but the correct configuration -- so the rule that protects the first case must not refuse the second. SQLite is a file and has no password at all.",
       "note": "NODE_ENV is an odd variable for a C binary to consult and is still the right one: the two implementations are deployed into one environment and have to agree on when it is production. A rule that is stricter on one path than the other is a rule an operator learns twice."
+    },
+    "pool": {
+      "name": "The pool limits the database's concurrency, and waiting for it is bounded",
+      "statement": "A request that needs the database waits for a connection only in a queue of bounded length and for at most five seconds. When the queue is full, or the wait runs out before its work started, the request is answered 503 SERVICE_BUSY with Retry-After (errors/api.json) and nothing of it is run. Work that has started is not abandoned: a request whose work began waits for it to finish. A request never holds more than one connection at a time.",
+      "why": "How many statements a PostgreSQL server can usefully run at once is a property of that server -- its cores, its disks, its write-ahead log -- and not of the machine the application runs on. Tying the number of connections to the number of application threads would couple two optima that differ by an order of magnitude on large hardware, and would hand an overloaded database more work at exactly the moment it can do less. The queue is where a burst is absorbed; its bound is what keeps an overload from turning into every request waiting as long as the database does. Refusing work that has not started is safe to retry; abandoning work that has is not, because it may already have been written.",
+      "spelling": {
+        "fast-servers": "Workers own the connections; a loop parks the request and hands its unit of work to the queue of its cache group. SC_DB_QUEUE_PER_WORKER units per worker, SC_DB_QUEUE_WAIT_MS five seconds, enforced by a sweeper even while every worker is stuck -- service_core/db_exec.h.",
+        "bun": "A gate with DB_POOL_SIZE places in front of the database: an interaction takes a place before its first statement, waits for one for at most five seconds, and gives it back when it is done. bun's own pool never queues, because it never has more requests than connections. bun offers no bounded wait of its own -- idleTimeout, despite its description, closes a connection on which nothing arrives for that long, running statements included."
+      },
+      "note": "One connection per request at a time is what keeps the wait from becoming a deadlock: a request that held one and waited for a second could wait for itself. SQLite has no pool -- one file, one writer -- and DB_POOL_SIZE does not apply to it; its writes queue for the writer under the same bound."
     }
   }
 }

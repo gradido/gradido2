@@ -36,7 +36,9 @@ typedef enum sc_api_error {
     /** errors/api.json. What a client is told when the log knows more than it should. */
     SC_API_UNKNOWN = 3001,
     /** errors/api.json. This deployment's implementation does not serve that route. */
-    SC_API_ROUTE_NOT_IMPLEMENTED = 3008
+    SC_API_ROUTE_NOT_IMPLEMENTED = 3008,
+    /** errors/api.json. The database has all the work this process may give it. */
+    SC_API_SERVICE_BUSY = 3009
 } sc_api_error;
 
 /** The name the contract gives @p code, for the response body and for a log line's `err`.
@@ -76,6 +78,17 @@ sc_status sc_http_reply_route_not_implemented(sc_http_req *req, const char *rout
 /** `unknown error` -- contracts/errors/api.json. 500, and it says nothing else on purpose: what
  *  went wrong belongs in the log and not in an answer to whoever caused it. */
 sc_status sc_http_reply_unknown(sc_http_req *req);
+
+/**
+ * `service busy, retry after {retryAfter} seconds` -- contracts/errors/api.json. 503, with a
+ * `Retry-After` header saying the same number.
+ *
+ * What a request gets when the database executor would not take its work: every worker busy
+ * and the queue in front of them full, or its work waited there too long. Not a failure of this
+ * request and nothing a client did -- the same request a second later is expected to work,
+ * which is what the header says. service_core/db_exec.h, *Too much work*.
+ */
+sc_status sc_http_reply_busy(sc_http_req *req, unsigned retry_after_seconds);
 
 /** Longest message this build will put into an error body. */
 #define SC_API_ERROR_MESSAGE_MAX 512

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { Logger } from '@gradido/service-core'
 import type { UserCreateRequest } from '@gradido/shared/schemas'
 import type { BackendContext } from '../../../BackendContext'
+import { DatabaseGate } from '../../../database'
 import { openTestDatabase, type TestDatabase, testDatabaseKinds, testQuery } from '../../../testing'
 import { createHomeCommunity } from '../../community'
 import { newEmailVerificationCode } from '../logic/verificationCode.logic'
@@ -58,7 +59,12 @@ for (const kind of testDatabaseKinds()) {
         { db: database.connection, logger: silent },
         { name: 'Gradido Test', description: null, url: 'https://gdd.example.org' },
       )
-      context = { db: database.connection, logger: silent, homeCommunity }
+      context = {
+        db: database.connection,
+        logger: silent,
+        homeCommunity,
+        gate: new DatabaseGate(1),
+      }
     })
 
     afterEach(async () => {

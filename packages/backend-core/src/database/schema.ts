@@ -20,6 +20,27 @@ import * as v from 'valibot'
  * The variables live here rather than in each service because the backend and the
  * federation server talk to the same database and must name it the same way.
  */
+/** bun's own default, and SC_DB_POOL_SIZE_DEFAULT on the C path. */
+const DEFAULT_POOL_SIZE = '10'
+
+/**
+ * A number of connections from the environment: a whole number from 1 to 65535.
+ *
+ * Stricter than `portSchema`'s `parseInt`, which reads `10x` as 10 -- the C path refuses that,
+ * and a variable one implementation accepts and the other refuses is one an operator learns
+ * twice. Zero is refused because a pool that holds nothing serves nothing. Empty is the default,
+ * as it is on the C path: `DB_POOL_SIZE=` on a line of its own in an `.env` means "not decided",
+ * and `v.optional` alone would only see `undefined` as that.
+ */
+const poolSizeSchema = v.pipe(
+  v.string(),
+  v.transform((input: string) => (input === '' ? DEFAULT_POOL_SIZE : input)),
+  v.regex(/^[0-9]+$/, 'DB_POOL_SIZE must be a whole number of connections'),
+  v.transform<string, number>((input: string) => Number(input)),
+  v.minValue(1, 'DB_POOL_SIZE must be at least 1'),
+  v.maxValue(65535, 'DB_POOL_SIZE must be at most 65535'),
+)
+
 export const databaseConfigSchema = v.object({
   DB_TYPE: v.optional(v.picklist(['postgresql', 'sqlite']), 'sqlite'),
   /* PostgreSQL only. A leading '/' is a Unix socket directory, anything else is TCP --
@@ -29,6 +50,9 @@ export const databaseConfigSchema = v.object({
   DB_USER: v.optional(v.string(), 'gradido'),
   DB_PASSWORD: v.optional(v.string(), ''),
   DB_DATABASE: v.optional(v.string(), 'gradido_community'),
+  /* PostgreSQL only. The most connections this process holds, which limits how many statements
+     it has running at the database at once -- contracts/database-config.json, rules.pool. */
+  DB_POOL_SIZE: v.optional(poolSizeSchema, DEFAULT_POOL_SIZE),
   /* SQLite only. Relative paths are resolved against the working directory. */
   DB_FILE: v.optional(v.string(), './gradido_community.sqlite'),
 })

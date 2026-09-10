@@ -1,5 +1,5 @@
 import type { Logger } from '@gradido/service-core'
-import type { DatabaseConnection } from './database'
+import type { DatabaseConnection, DatabaseGate } from './database'
 import type { HomeCommunity } from './domain'
 
 /**
@@ -36,4 +36,11 @@ export interface DatabaseContext {
  */
 export interface BackendContext extends DatabaseContext {
   readonly homeCommunity: HomeCommunity
+  /**
+   * The places at the database a request may hold -- `DB_POOL_SIZE` of them, each for all the
+   * statements of one Interaction -- and the bounded wait for one. An Interaction that serves a
+   * request runs its database work inside `gate.run`; a request that does not get a place in
+   * time is answered 503. `database/gate.ts`, and `contracts/database-config.json`, `rules.pool`.
+   */
+  readonly gate: DatabaseGate
 }

@@ -261,6 +261,7 @@ The variables are the ones the TypeScript path reads, with the same defaults:
 | `DB_USER` | `gradido` | |
 | `DB_PASSWORD` | empty | refused when empty and `NODE_ENV=production`, as on the TypeScript path |
 | `DB_DATABASE` | `gradido_community` | |
+| `DB_POOL_SIZE` | `10` | PostgreSQL connections per serving process, one database worker each, all opened at startup; sized from what the database server can do, and every process's pool has to fit its `max_connections`. A request that gets no worker within five seconds is answered 503 with `Retry-After` |
 | `DB_FILE` | `./gradido_community.sqlite` | SQLite only |
 
 **The backend opens one at startup and refuses to serve without it.** It waits for the database,

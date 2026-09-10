@@ -566,12 +566,6 @@ const UnitTest = struct {
     /// part sees what the component itself sees. It is off by default because most tests reach
     /// only the component's own surface, where arnm does not appear.
     arnm: bool = false,
-    /// Puts libuv's headers on the path.
-    ///
-    /// Same rule again: `bc_context` carries the mutex that serialises the one database
-    /// connection against the many loops, so `backend_core.h` includes `uv.h` and a test that
-    /// builds a context sees what the component itself sees.
-    uv: bool = false,
     /// Set where the target must keep assert().
     ///
     /// zig defines NDEBUG for ReleaseFast and ReleaseSmall, which would switch off exactly the
@@ -989,9 +983,8 @@ pub fn build(b: *std.Build) void {
     // uv.h is included by service-core's own sources and by main.c, so the header path and the
     // library go on everything that compiles either -- a native Debian build needs
     // addMultiarchIncludeDir on each of them as well, which addComponent already does.
-    // The roles are here too: bc_context carries the lock that serialises the one database
-    // connection against the many loops, so uv.h reaches every translation unit that includes
-    // backend_core.h.
+    // The roles are here too: they start threads and wait on them through libuv, and the
+    // database pool they take connections from is a libuv mutex and condition variable.
     for ([_]*std.Build.Step.Compile{ service_core, backend_core, backend, federation }) |compile| {
         compile.linkLibrary(uv);
     }
@@ -1172,11 +1165,11 @@ pub fn build(b: *std.Build) void {
     // until something asks for that database; service-core answers SC_ERR_UNAVAILABLE and says
     // which build option would have provided it.
     //
-    // service-core's two driver files see these headers, and so do backend-core's repositories:
-    // there is deliberately no query surface both dialects implement, so a statement is written
-    // against the driver in a file that already knows which dialect it is in -- Architecture.md,
-    // *Databases*. Everything above those files is written against service_core/db.h, which
-    // carries no driver type.
+    // Only service-core sees these headers, and that is enforced rather than hoped for: every
+    // statement goes through service_core/sql.h, which prepares it per connection and runs it
+    // wherever the executor runs it. A repository that reached for PQexecParams would make that
+    // decision for itself at one call site -- so backend-core is not given the headers to try.
+    // Architecture.md, *Databases*.
     if (enable_postgres) {
         // Null only on the pass that fetches a lazy dependency; nothing is built on that pass.
         if (b.lazyDependency("libpq", .{
@@ -1198,20 +1191,16 @@ pub fn build(b: *std.Build) void {
             // the same reason libsodium does -- see nativeLibcFile. Without it a Debian host
             // stops with 88 errors on asm/errno.h inside the dependency.
             if (libc_file) |file| libpq.setLibCFile(file);
-            for ([_]*std.Build.Step.Compile{ service_core, backend_core }) |compile| {
-                compile.linkLibrary(libpq);
-                compile.root_module.addCMacro("SC_DB_WITH_POSTGRESQL", "1");
-            }
+            service_core.linkLibrary(libpq);
+            service_core.root_module.addCMacro("SC_DB_WITH_POSTGRESQL", "1");
         }
     }
 
     if (enable_sqlite) {
         const sqlite = buildSqlite(b, target, optimize, sanitize);
         if (libc_file) |file| sqlite.setLibCFile(file);
-        for ([_]*std.Build.Step.Compile{ service_core, backend_core }) |compile| {
-            compile.linkLibrary(sqlite);
-            compile.root_module.addCMacro("SC_DB_WITH_SQLITE", "1");
-        }
+        service_core.linkLibrary(sqlite);
+        service_core.root_module.addCMacro("SC_DB_WITH_SQLITE", "1");
     }
 
     // What every binary serving HTTP has to link. Collected rather than applied inline, because
@@ -1320,6 +1309,9 @@ pub fn build(b: *std.Build) void {
             .{ .name = "test_cache", .dir = "service-core/tests", .src = "test_cache.cpp", .lib = service_core },
             .{ .name = "test_mail", .dir = "service-core/tests", .src = "test_mail.cpp", .lib = service_core },
             .{ .name = "test_db", .dir = "service-core/tests", .src = "test_db.cpp", .lib = service_core },
+            .{ .name = "test_sql", .dir = "service-core/tests", .src = "test_sql.cpp", .lib = service_core },
+            .{ .name = "test_db_exec", .dir = "service-core/tests", .src = "test_db_exec.cpp", .lib = service_core },
+            .{ .name = "test_topology", .dir = "service-core/tests", .src = "test_topology.cpp", .lib = service_core },
             .{ .name = "test_env_file", .dir = "service-core/tests", .src = "test_env_file.cpp", .lib = service_core },
             .{ .name = "test_jwt", .dir = "service-core/tests", .src = "test_jwt.cpp", .lib = service_core },
             .{ .name = "test_secret", .dir = "service-core/tests", .src = "test_secret.cpp", .lib = service_core },
@@ -1330,7 +1322,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "test_log_pretty", .dir = "service-core/tests", .src = "test_log_pretty.cpp", .lib = service_core, .includes = &.{"service-core/src/log"}, .arnm = true, .keep_assertions = true },
             .{ .name = "test_migrations", .dir = "backend-core/tests", .src = "test_migrations.cpp", .lib = backend_core, .deps = &.{service_core}, .includes = &.{"service-core/include"} },
             .{ .name = "test_user", .dir = "backend-core/tests", .src = "test_user.cpp", .lib = backend_core, .deps = &.{service_core}, .includes = &.{"service-core/include"} },
-            .{ .name = "test_register_account", .dir = "backend-core/tests", .src = "test_register_account.cpp", .lib = backend_core, .deps = &.{service_core}, .includes = &.{"service-core/include"}, .uv = true },
+            .{ .name = "test_register_account", .dir = "backend-core/tests", .src = "test_register_account.cpp", .lib = backend_core, .deps = &.{service_core}, .includes = &.{"service-core/include"} },
             .{ .name = "test_field_rules", .dir = "backend/tests", .src = "test_field_rules.cpp", .sources = &.{"backend/src/field_rules.c"}, .includes = &.{"backend/src"} },
             .{ .name = "test_static_sites", .dir = "backend/tests", .src = "test_static_sites.cpp", .sources = &.{"backend/src/static_sites.c"}, .includes = &.{"service-core/include"} },
         };
@@ -1359,7 +1351,6 @@ pub fn build(b: *std.Build) void {
             test_exe.addIncludePath(b.path(b.fmt("{s}/include", .{std.fs.path.dirname(unit_test.dir).?})));
             for (unit_test.includes) |dir| test_exe.addIncludePath(b.path(dir));
             if (unit_test.arnm) test_exe.addIncludePath(arnm_dep.path("include"));
-            if (unit_test.uv) test_exe.linkLibrary(uv);
             test_exe.addCSourceFiles(.{
                 .files = &.{b.fmt("{s}/{s}", .{ unit_test.dir, unit_test.src })},
                 // The googletest macros do not compile clean under our flags and are not ours

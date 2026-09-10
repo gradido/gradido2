@@ -29,6 +29,7 @@
 #include "backend_core/domain/user.h"
 #include "field_rules.h"
 #include "service_core/api_error.h"
+#include "service_core/db_http.h"
 #include "service_core/log/log.h"
 
 #define ROUTE_PATH "/user/create"
@@ -253,6 +254,48 @@ static const char *apply_field_rule(const field_rule *rule, const char *text, si
     return NULL;
 }
 
+/* --- the answer ------------------------------------------------------------------------------ */
+
+/*
+ * On the loop the request came in on, after the worker is done -- or right away, when the
+ * executor ran the unit in place. @p where is the request, or NULL when its client left while
+ * the work ran; what was committed stays committed, and only the answer has nowhere to go.
+ */
+static void registration_done(sc_db_unit *unit, void *where)
+{
+    bc_registration *registration = (bc_registration *)unit;
+    sc_http_req *req = (sc_http_req *)where;
+
+    bc_registration_report(registration);
+    if (unit->status == SC_ERR_QUEUE_FULL) {
+        if (req != NULL)
+            (void)sc_http_reply_busy(req, SC_DB_RETRY_AFTER_S);
+        return;
+    }
+    if (unit->status != SC_OK) {
+        (void)reply_unknown(req, "POST", unit->error.message);
+        return;
+    }
+    if (registration->outcome == BC_REGISTRATION_FAILED) {
+        (void)reply_unknown(req, "POST", registration->error);
+        return;
+    }
+    if (req == NULL)
+        return;
+    /* 204, with no body at all, for a registration that was written **and** for one whose
+     * address was taken. There is nothing a caller can do with a new account: it does not exist
+     * to them until the address is confirmed, and the page's whole job afterwards is to point at
+     * an inbox.
+     *
+     * Answering with nothing also makes the silence rule structural rather than maintained. When
+     * the address is already taken there is no row to describe, so an earlier version of this
+     * route on the reference path invented a gradido id and echoed the names back; two paths
+     * producing an indistinguishable answer is a property somebody has to keep true. An empty
+     * body is the same bytes either way, and there is no fabricated identifier for a client to
+     * mistake for a real one. */
+    (void)sc_http_reply(req, 204, "", "", 0);
+}
+
 /* --- the handler ---------------------------------------------------------------------------- */
 
 int backend_user_create(sc_http_req *req, void *user_data)
@@ -267,6 +310,7 @@ int backend_user_create(sc_http_req *req, void *user_data)
     char values[FIELD_COUNT][FIELD_BYTES_MAX];
     char language[BC_LANGUAGE_MAX];
     char error[BC_SQL_ERROR_MAX];
+    bc_registration *registration;
     arnm_result parsed;
     uint64_t present = 0;
     size_t i;
@@ -406,22 +450,27 @@ int backend_user_create(sc_http_req *req, void *user_data)
 
     arnm_json_reader_release(&reader);
 
-    if (bc_register_account(context, values[0], values[1], values[2], language, error,
-                            sizeof(error)) != SC_OK)
+    /* The unit lives in the request's own memory: it outlives this handler, travels to the
+     * worker that owns a connection and back, and is freed with the request -- nothing copied
+     * on the way. service_core/db_http.h. */
+    registration = (bc_registration *)sc_http_alloc(req, sizeof(*registration));
+    if (registration == NULL)
+        return reply_unknown(req, "POST", "the request's memory could not hold a registration");
+    if (bc_registration_prepare(registration, &context->home, values[0], values[1], values[2],
+                                language, error, sizeof(error)) != SC_OK)
         return reply_unknown(req, "POST", error);
+    registration->unit.done = registration_done;
 
-    /* 204, with no body at all. There is nothing a caller can do with a new account: it does not
-     * exist to them until the address is confirmed, and the page's whole job afterwards is to
-     * point at an inbox.
-     *
-     * Answering with nothing also makes the silence rule structural rather than maintained. When
-     * the address is already taken there is no row to describe, so an earlier version of this
-     * route on the reference path invented a gradido id and echoed the names back; two paths
-     * producing an indistinguishable answer is a property somebody has to keep true. An empty
-     * body is the same bytes either way, and there is no fabricated identifier for a client to
-     * mistake for a real one. */
-    (void)sc_http_reply(req, 204, "", "", 0);
-    return 0;
+    switch (sc_db_submit(context->exec, req, &registration->unit)) {
+    case SC_OK:
+        /* On its way, or already answered: registration_done writes the response either way. */
+        return 0;
+    case SC_ERR_QUEUE_FULL:
+        (void)sc_http_reply_busy(req, SC_DB_RETRY_AFTER_S);
+        return 0;
+    default:
+        return reply_unknown(req, "POST", "the registration could not be handed to the database");
+    }
 }
 
 int backend_route_not_implemented(sc_http_req *req, void *user_data)

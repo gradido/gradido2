@@ -415,8 +415,8 @@ fs_add_component(dht_node ${DHT_NODE_SRC})
 foreach(target service_core backend_core backend federation)
   target_compile_definitions(${target} PRIVATE USE_SODIUM)
   # uv_a and not uv: the static one, matching what the zig build links. The roles need it as
-  # much as the two libraries do -- bc_context carries the lock that serialises the one database
-  # connection against the many loops, so uv.h reaches everything that includes backend_core.h.
+  # much as the two libraries do: they start and join threads through it, and the database
+  # executor they hand work to is libuv threads, mutexes and condition variables.
   target_link_libraries(${target} PUBLIC gradido_blockchain_core sodium uv_a)
   target_include_directories(${target} PRIVATE
     ${blockchain_core_SOURCE_DIR}/include
@@ -443,22 +443,17 @@ target_link_libraries(service_core PUBLIC CURL::libcurl)
 # The database drivers. db_postgres.c and db_sqlite.c are compiled either way and answer
 # SC_ERR_UNAVAILABLE without their driver, so what these switch is what the binary can open --
 # not whether it builds. service_core/db.h holds the arrangement.
-# backend-core is on these lists too: there is deliberately no query surface both dialects
-# implement, so a repository writes its statements against the driver, in a file that already
-# knows which dialect it is in -- Architecture.md, *Databases*.
+# Only service-core: every statement goes through service_core/sql.h, and backend-core is not
+# given the driver headers to go around it -- Architecture.md, *Databases*.
 if(FS_ENABLE_SQLITE)
-  foreach(target service_core backend_core)
-    target_link_libraries(${target} PUBLIC fs_sqlite3)
-    target_compile_definitions(${target} PRIVATE SC_DB_WITH_SQLITE=1)
-  endforeach()
+  target_link_libraries(service_core PUBLIC fs_sqlite3)
+  target_compile_definitions(service_core PRIVATE SC_DB_WITH_SQLITE=1)
 endif()
 
 if(FS_ENABLE_POSTGRES)
   find_package(PostgreSQL REQUIRED)
-  foreach(target service_core backend_core)
-    target_link_libraries(${target} PUBLIC PostgreSQL::PostgreSQL)
-    target_compile_definitions(${target} PRIVATE SC_DB_WITH_POSTGRESQL=1)
-  endforeach()
+  target_link_libraries(service_core PUBLIC PostgreSQL::PostgreSQL)
+  target_compile_definitions(service_core PRIVATE SC_DB_WITH_POSTGRESQL=1)
 endif()
 
 if(FS_ENABLE_H2O)

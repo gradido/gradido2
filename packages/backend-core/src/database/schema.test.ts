@@ -32,6 +32,23 @@ describe('databaseConfigSchema', () => {
     expect(config.DB_HOST).toBe('/var/run/postgresql')
     expect(isUnixSocketHost(config.DB_HOST)).toBe(true)
   })
+
+  /* contracts/database-config.json, DB_POOL_SIZE -- the same cases as test_db.cpp's
+     APoolSizeThatIsNotACountIsRefused, because a value one path starts with and the other
+     refuses is a deployment that works until somebody switches implementation. */
+  test('holds ten connections unless told otherwise', () => {
+    expect(v.parse(databaseConfigSchema, {}).DB_POOL_SIZE).toBe(10)
+    expect(v.parse(databaseConfigSchema, { DB_POOL_SIZE: '48' }).DB_POOL_SIZE).toBe(48)
+    expect(v.parse(databaseConfigSchema, { DB_POOL_SIZE: '1' }).DB_POOL_SIZE).toBe(1)
+    /* Set but empty is not decided, which is what `DB_POOL_SIZE=` in an .env says. */
+    expect(v.parse(databaseConfigSchema, { DB_POOL_SIZE: '' }).DB_POOL_SIZE).toBe(10)
+  })
+
+  test('refuses a pool size that is not a count of at least one', () => {
+    for (const wrong of ['0', '-4', 'ten', '10x', '65536']) {
+      expect(v.safeParse(databaseConfigSchema, { DB_POOL_SIZE: wrong }).success).toBe(false)
+    }
+  })
 })
 
 describe('isDatabasePasswordAcceptable', () => {

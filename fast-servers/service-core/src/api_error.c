@@ -21,6 +21,7 @@ static const sc_api_error_entry kErrors[] = {
     {SC_API_UNKNOWN, "UNKNOWN", 500, "unknown error"},
     {SC_API_ROUTE_NOT_IMPLEMENTED, "ROUTE_NOT_IMPLEMENTED", 501,
      "route not implemented on this server: %.*s"},
+    {SC_API_SERVICE_BUSY, "SERVICE_BUSY", 503, "service busy, retry after %u seconds"},
 };
 
 #define SC_API_ERROR_COUNT ((size_t)(sizeof(kErrors) / sizeof(kErrors[0])))
@@ -149,4 +150,19 @@ sc_status sc_http_reply_unknown(sc_http_req *req)
     const sc_api_error_entry *entry = find(SC_API_UNKNOWN);
 
     return reply(req, entry, entry->format);
+}
+
+sc_status sc_http_reply_busy(sc_http_req *req, unsigned retry_after_seconds)
+{
+    const sc_api_error_entry *entry = find(SC_API_SERVICE_BUSY);
+    char message[SC_API_ERROR_MESSAGE_MAX];
+    char seconds[16];
+    int length = snprintf(seconds, sizeof(seconds), "%u", retry_after_seconds);
+
+    /* The header is the part a client acts on without reading the body -- an HTTP library
+     * that retries honours it, and a load balancer may too. RFC 9110, section 10.2.3. */
+    if (length > 0)
+        (void)sc_http_header_add(req, "retry-after", seconds, (size_t)length);
+    (void)snprintf(message, sizeof(message), entry->format, retry_after_seconds);
+    return reply(req, entry, message);
 }

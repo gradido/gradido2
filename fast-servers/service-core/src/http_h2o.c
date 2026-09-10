@@ -31,9 +31,11 @@
 #include "h2o.h"
 #include "h2o/http1.h"
 
+#include "http_arena.h"
 #include "http_defer.h"
 #include "service_core/log/log.h"
 #include "service_core/log/logger.h"
+#include "service_core/topology.h"
 
 /*
  * h2o allocates the handler and hands it back on every request, so the registration data rides
@@ -90,6 +92,8 @@ struct sc_http_server {
     char host[64];
     char role[32];
     uint16_t port;
+    /* Borrowed from the config; the role that made the server keeps it alive. */
+    const sc_topology *topology;
 };
 
 /* The generator is how a deferred request learns that its client left: h2o calls `stop` when it
@@ -116,13 +120,20 @@ const char *sc_http_backend_name(void)
 static int on_request(h2o_handler_t *self, h2o_req_t *req)
 {
     sc_route_handler *route = (sc_route_handler *)self;
+    int answered;
 
+    /* The request's own memory lives from here to the end of the handler -- or, when the
+     * handler parks it, to the end of its resume callback. http_arena.h. */
+    sc_http_arena_enter((sc_http_req *)req, NULL);
     /* What applies to every request, before the one that applies to this path. A hook that
      * answers has answered; nothing else runs. */
     if (route->server->before_route != NULL &&
         route->server->before_route((sc_http_req *)req, route->server->before_route_data) == 0)
-        return 0;
-    return route->fn((sc_http_req *)req, route->user_data);
+        answered = 0;
+    else
+        answered = route->fn((sc_http_req *)req, route->user_data);
+    sc_http_arena_leave();
+    return answered;
 }
 
 static uint16_t resolve_threads(uint16_t requested)
@@ -151,6 +162,7 @@ sc_http_server *sc_http_server_create(const sc_http_config *cfg)
     if (server == NULL)
         return NULL;
     server->port = cfg->port;
+    server->topology = cfg->topology;
     memcpy(server->host, cfg->host, strlen(cfg->host) + 1);
     memcpy(server->role, cfg->role, strlen(cfg->role) + 1);
 
@@ -191,6 +203,11 @@ sc_http_server *sc_http_server_create(const sc_http_config *cfg)
     server->hostconf =
         h2o_config_register_host(&server->config, h2o_iovec_init(H2O_STRLIT("default")), 65535);
     return server;
+}
+
+uint16_t sc_http_server_threads(const sc_http_server *server)
+{
+    return server != NULL ? server->thread_count : 0;
 }
 
 void sc_http_server_destroy(sc_http_server *server)
@@ -257,8 +274,8 @@ sc_status sc_http_route_default(sc_http_server *server, sc_http_handler_fn fn, v
      * to when no registered path matched, and it is where h2o's own 404 comes from. Registering
      * here rather than at "/" is what keeps this a fallback instead of a prefix -- a handler at
      * "/" would also be consulted for a path that a longer route matched. */
-    handler = (sc_route_handler *)h2o_create_handler(&server->hostconf->fallback_path,
-                                                     sizeof(*handler));
+    handler =
+        (sc_route_handler *)h2o_create_handler(&server->hostconf->fallback_path, sizeof(*handler));
     if (handler == NULL)
         return SC_ERR_NO_MEMORY;
     handler->super.on_req = on_request;
@@ -437,10 +454,23 @@ static void drain_loop(sc_http_loop *loop)
 static void run_loop(void *arg)
 {
     sc_http_loop *loop = (sc_http_loop *)arg;
+    sc_http_server *server = loop->server;
+    const uint16_t index = loop->defer.loop_index;
 
-    while (!sc_quit_requested(loop->server->quit)) {
+    /* Into its cache group before anything is allocated, so what it allocates is local to the
+     * CPUs it will run on -- and the executor hands this loop's work to workers of the same
+     * group, found by the same function. */
+    if (server->topology != NULL)
+        (void)sc_topology_pin(
+            server->topology,
+            &server->topology
+                 ->groups[sc_topology_group_of(server->topology, index, server->thread_count)]);
+    sc_http_arena_thread_begin(index);
+
+    while (!sc_quit_requested(server->quit)) {
         if (h2o_evloop_run(loop->context.loop, SC_RUNTIME_TICK_MS) != 0) {
             loop->status = SC_ERR_NETWORK;
+            sc_http_arena_thread_end();
             return;
         }
     }
@@ -448,6 +478,7 @@ static void run_loop(void *arg)
      * to be let go of before anything is disposed. An error above skips this deliberately --
      * there is no reason to think a loop that failed will run again. */
     drain_loop(loop);
+    sc_http_arena_thread_end();
 }
 
 /*
@@ -509,12 +540,17 @@ static void deliver(sc_http_loop *loop, int32_t slot)
 {
     sc_http_req *req = NULL;
     void *work = NULL;
+    void *arena = NULL;
 
     /* The slot goes back before the callback runs, so a callback that defers again -- or one
-     * that takes its time -- does not hold a slot it no longer needs. Both values were copied
-     * out, so nothing here reads the slot afterwards. */
-    sc_defer_release(&loop->defer, slot, &req, &work);
+     * that takes its time -- does not hold a slot it no longer needs. Everything was copied
+     * out, so nothing here reads the slot afterwards. The arena comes back to this loop with
+     * the request, and is freed here after the callback, whether the client is still there or
+     * not. */
+    sc_defer_release(&loop->defer, slot, &req, &work, &arena);
+    sc_http_arena_enter(req, arena);
     loop->server->on_resume(req, work, loop->server->on_resume_data);
+    sc_http_arena_leave();
 }
 
 static void on_resume_message(h2o_multithread_receiver_t *receiver, h2o_linklist_t *messages)
@@ -570,9 +606,11 @@ sc_status sc_http_defer(sc_http_server *server, sc_http_req *req, void *work, sc
     if ((loop = loop_of(server, r)) == NULL)
         return SC_ERR_INVALID_ARGUMENT;
 
-    ticket = sc_defer_arm(&loop->defer, req, work);
+    ticket = sc_defer_arm(&loop->defer, req, work, sc_http_arena_peek());
     if (ticket == 0)
         return SC_ERR_QUEUE_FULL;
+    /* The request's arena now belongs to the slot, and through it to whoever holds the work. */
+    sc_http_arena_take();
 
     /* The generator is registered before the ticket leaves this function, which is the whole of
      * the rule in AGENTS.md section 6: a client that disconnects while the work runs must find

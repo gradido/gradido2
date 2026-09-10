@@ -80,3 +80,38 @@ Map lore abstractions to their real code concepts.
 | The runner takes the carrier's own road | both paths probe through the same libcurl — `Mailer.verify()` and `sc_mail_session_probe` |
 | One line on the board | `mail.relay.connected` at info, `mail.relay.failed` at warn — never fatal |
 | A city that was never given a carrier | `EMAIL=false`, reported as `mail.relay.disabled` |
+| The carters of Eporedon | the database workers of the C path — `fast-servers/service-core/include/service_core/db_exec.h` |
+| A clerk standing at the Archive's window | an event loop blocked in a synchronous libpq call, stalling every connection on it |
+| A clerk waits only at a door he can see from his desk | the Threading rule in `fast-servers/Architecture.md`: a wait with a file descriptor belongs on the event loop |
+| A note with a hook for each answer | asynchronous libpq on the loop, written as callbacks — measured and not chosen, for the cost it puts on every repository |
+| The exception written into the rule | PostgreSQL goes to workers instead of the loop — `Architecture.md`, *Threading* and *The executor* |
+| A blink against a thousand | the measured hand-over, 0.1–7.5 µs a unit, against 25–200 µs a query and about a millisecond a commit |
+| One cart and a bar across the door | the old `bc_context.db_lock` mutex around a single connection |
+| Whichever clerk was free pushed whichever cart | the short-lived connection pool the loops took turns holding, replaced by the executor |
+| A carter owns one cart for his whole life | each worker owns one connection for its whole life; its libpq buffers, TLS state and prepared statements stay on one core, and no lock guards it |
+| Forms stamped once stay stamped | prepared statements, prepared once per connection — `service_core/sql.h` |
+| As many carters as carts the Archive can load at once | `DB_POOL_SIZE`, sized from what the database server can do, never from the number of loops — `contracts/database-config.json`, `rules.pool` |
+| A sleeping carter costs nothing but his bed | a worker blocked on its socket costs no core; only loops are one per core |
+| The slate | the request's own arena, from `sc_http_alloc` — the unit of database work (`sc_db_unit`) lives on it; values in, rows out, nothing copied |
+| Written from the top down, nothing rubbed out in between | arena allocation: a pointer bump per allocation, no piece freed on its own |
+| Wiped once, all of it, when the answer has been read out | the arena goes back to the pool in one call after the handler returns, or after the resume callback of a parked request — the reply was already copied out by `sc_http_reply` |
+| The clerk's own stack of slates | the per-loop graded arena pool in `service-core/src/http_arena.c`, thread-local and lock-free; wiped slates stay in stock for the next request |
+| A slate comes back to the stack it was taken from | an arena is always freed on the loop that lent it, whichever worker wrote on it while it was parked |
+| Only whoever holds the slate writes on it | the loop until it parks the request, the worker while it holds the unit (`sc_db_unit_alloc`), the loop again in `done` |
+| A few sizes; the largest is the end of it | the grades 16 KiB, 64 KiB, 256 KiB and 1 MiB; a response that would not fit has to be paged |
+| The board on the wall behind the clerk | the thread-local scratch arena a route parses its request body in (`backend/src/user_routes.c`), reset for every request and never parked |
+| The bench | a parked request — `sc_http_defer` on the loop, `sc_http_resume` from the worker |
+| Back to the clerk who wrote it | the unit returns to the loop that submitted it, where the request's arena is freed |
+| Keep it, throw it away, once more with fresh numbers | `SC_DB_COMMIT`, `SC_DB_ROLLBACK`, `SC_DB_AGAIN` — transactions belong to the executor, never to a repository |
+| A number that was somebody else's already | a generated value (gradido id, verification code) that collided with a unique index |
+| A courtyard | a cache group: the CPUs one L3 serves; loops and workers are pinned per group — `service_core/topology.h` |
+| Seats on the bench | `SC_DB_QUEUE_PER_WORKER`, the bounded queue per cache group |
+| Come back in a moment | 503 `SERVICE_BUSY` with `Retry-After` — `contracts/errors/api.json`; nothing of the request has run |
+| The sand in the glass | `SC_DB_QUEUE_WAIT_MS`, five seconds |
+| The glass turned only when a carter came by | the first deadline check, made only when a worker took a unit: with the database stuck, queued requests waited as long as it did |
+| The warden who only turns the glass | the sweeper thread in `db_exec.c`, answering expired units even while every worker is stuck |
+| His own bucket | a SQLite read runs on the loop itself, on that loop's own read connection |
+| The well has one rope | the single SQLite writer thread |
+| The book that began again after its last page | `sqlite3_step` restarts a finished statement; the cursor in `sql_sqlite.c` now stays at its end |
+| Sirodunon's bench, glass and sign | the `DatabaseGate` in `packages/backend-core/src/database/gate.ts`, answering the same 503 |
+| One tireless man who leaves a note at the window | the TypeScript path's single event loop: PostgreSQL queries are asynchronous and do not block it; `bun:sqlite` is synchronous, so the well is the one place he waits himself |

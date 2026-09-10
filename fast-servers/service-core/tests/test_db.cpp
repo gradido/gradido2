@@ -42,8 +42,9 @@ constexpr const char *kDeadHost = "127.0.0.1";
 constexpr const char *kDeadPort = "1";
 
 /* Every variable sc_db_config_load reads, plus the one it consults for the production rule. */
-constexpr const char *kVariables[] = {"DB_TYPE",     "DB_HOST",     "DB_PORT", "DB_USER",
-                                      "DB_PASSWORD", "DB_DATABASE", "DB_FILE", "NODE_ENV"};
+constexpr const char *kVariables[] = {"DB_TYPE",      "DB_HOST",     "DB_PORT",
+                                      "DB_USER",      "DB_PASSWORD", "DB_DATABASE",
+                                      "DB_POOL_SIZE", "DB_FILE",     "NODE_ENV"};
 
 void set_env(const char *name, const char *value)
 {
@@ -100,6 +101,9 @@ TEST_F(DbConfigTest, DefaultsAreTheTypeScriptDefaults)
     EXPECT_STREQ(config.user, "gradido");
     EXPECT_STREQ(config.password, "");
     EXPECT_STREQ(config.database, "gradido_community");
+    /* bun's SQL client opens ten by default, and the two implementations hold the same number
+     * against one database until somebody decides otherwise -- see SC_DB_POOL_SIZE_DEFAULT. */
+    EXPECT_EQ(config.pool_size, 10);
     EXPECT_STREQ(config.file, "./gradido_community.sqlite");
 }
 
@@ -113,6 +117,7 @@ TEST_F(DbConfigTest, ReadsEveryVariable)
     set_env("DB_USER", "someone");
     set_env("DB_PASSWORD", "a password with spaces");
     set_env("DB_DATABASE", "another");
+    set_env("DB_POOL_SIZE", "48");
     set_env("DB_FILE", "/tmp/somewhere.sqlite");
 
     ASSERT_EQ(sc_db_config_load(&config), SC_OK);
@@ -122,7 +127,26 @@ TEST_F(DbConfigTest, ReadsEveryVariable)
     EXPECT_STREQ(config.user, "someone");
     EXPECT_STREQ(config.password, "a password with spaces");
     EXPECT_STREQ(config.database, "another");
+    EXPECT_EQ(config.pool_size, 48);
     EXPECT_STREQ(config.file, "/tmp/somewhere.sqlite");
+}
+
+/* A pool that holds nothing serves nothing, and a number with something after it is a typo that
+ * would otherwise start with a pool nobody asked for. Above zero, the size is the operator's. */
+TEST_F(DbConfigTest, APoolSizeThatIsNotACountIsRefused)
+{
+    sc_db_config config{};
+
+    for (const char *wrong : {"0", "-4", "ten", "10x", "65536"}) {
+        set_env("DB_POOL_SIZE", wrong);
+        EXPECT_EQ(sc_db_config_load(&config), SC_ERR_MALFORMED) << "DB_POOL_SIZE=" << wrong;
+    }
+    set_env("DB_POOL_SIZE", "1");
+    ASSERT_EQ(sc_db_config_load(&config), SC_OK);
+    EXPECT_EQ(config.pool_size, 1);
+    set_env("DB_POOL_SIZE", "");
+    ASSERT_EQ(sc_db_config_load(&config), SC_OK);
+    EXPECT_EQ(config.pool_size, 10);
 }
 
 TEST_F(DbConfigTest, AnEmptyTypeIsTheDefault)
