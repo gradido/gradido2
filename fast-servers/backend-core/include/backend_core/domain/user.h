@@ -13,9 +13,11 @@
 #include <stdint.h>
 
 #include "backend_core/database/sql.h"
+#include "backend_core/domain/community.h"
 #include "backend_core/language.h"
 #include "backend_core/uuid.h"
 #include "service_core/db.h"
+#include "service_core/db_exec.h"
 #include "service_core/status.h"
 
 /** contracts/db/user_contacts.json -- `email varchar(255)`, and the terminator. */
@@ -166,9 +168,14 @@ typedef struct bc_create_account_result {
  *
  * Three statements, because the two rows point at each other: the member exists before the
  * contact can name them, and `users.email_id` -- which of several addresses mail goes to -- can
- * only be written once the contact has an id. Inside one transaction, so an account without an
- * address cannot survive a failure halfway through, and so the member row written before a
- * conflict is discovered goes away again.
+ * only be written once the contact has an id.
+ *
+ * **Inside the caller's transaction, and it opens none.** The unit that calls this is a write
+ * unit, run by the executor between a BEGIN and an end it chooses: COMMIT for
+ * BC_ACCOUNT_CREATED, ROLLBACK for the address being taken -- which takes the member row
+ * written before the conflict was known back out -- and AGAIN for a collision, which rolls back
+ * and draws fresh values. So an account without an address cannot survive a failure halfway
+ * through. service_core/db_exec.h.
  *
  * Answers SC_OK for all three outcomes. A non-OK status is the database having gone wrong.
  */
@@ -177,26 +184,72 @@ sc_status bc_user_create_account(sc_db *db, const bc_new_account *account,
 
 /* --- interaction ----------------------------------------------------------------------------- */
 
-struct bc_context;
+/** How many times a registration draws before the draw itself is taken to be broken. */
+#define BC_REGISTER_MAX_ATTEMPTS 5
+
+/** How a registration ended, once it has. */
+typedef enum bc_registration_outcome {
+    /** Not run yet, or the executor did not run it -- see the unit's status. */
+    BC_REGISTRATION_PENDING = 0,
+    /** Two rows written. */
+    BC_REGISTRATION_CREATED,
+    /** The address is somebody's; nothing written, and the caller answers as if it were new. */
+    BC_REGISTRATION_ADDRESS_TAKEN,
+    /** The database refused, or every draw collided. `error` says which. */
+    BC_REGISTRATION_FAILED
+} bc_registration_outcome;
 
 /**
- * Somebody signs up. See register_account.c for what it does and what it deliberately does not.
+ * Somebody signs up: the unit of database work that does it, and what it found.
  *
- * The four values are the contracted request minus the fields no interaction reads yet, and they
- * arrive already checked and trimmed -- validating a body is what the route owns, and doing it
- * twice would be two places for the rule to live. @p language may be NULL or unknown; it becomes
- * the default, which is the contract's ignore_and_warn policy.
+ * Built in the request's own memory by the route, prepared on the loop, run by the executor on
+ * a worker, and read back on the loop in the unit's `done` -- see register_account.c for what it
+ * does and what it deliberately does not, and service_core/db_exec.h for how a unit travels.
+ */
+typedef struct bc_registration {
+    /** First, so the executor's unit and this are one address. */
+    sc_db_unit unit;
+    bc_new_account account;
+    bc_registration_outcome outcome;
+    /** `users.id` of the account written, or of the member who holds the address. */
+    uint64_t user_id;
+    char error[BC_SQL_ERROR_MAX];
+} bc_registration;
+
+/**
+ * Fills @p registration from the request, on the loop: the address normalized, the names and
+ * language checked against their columns, the community set. Nothing is drawn here -- the
+ * generated values are drawn by the work, once per attempt.
+ *
+ * The four values are the contracted request minus the fields no interaction reads yet, and
+ * they arrive already checked and trimmed -- validating a body is what the route owns. @p
+ * language may be NULL or unknown; it becomes the default, which is the contract's
+ * ignore_and_warn policy.
+ *
+ * Sets the unit's access and work; the caller sets `done` and submits it. Answers
+ * SC_ERR_TOO_LONG for a value that does not fit its column, with @p error saying which.
+ */
+sc_status bc_registration_prepare(bc_registration *registration, const bc_home_community *home,
+                                  const char *first_name, const char *last_name, const char *email,
+                                  const char *language, char *error, size_t error_size);
+
+/**
+ * Writes the log line a finished registration is contracted to leave -- created, or denied for
+ * an address in use -- and nothing for one that did not finish. On the loop, from `done`: only
+ * there is it known that the transaction the work asked for actually committed.
+ */
+void bc_registration_report(const bc_registration *registration);
+
+/**
+ * The whole of it, right here on @p db: prepare, run, report. For the setup command and for
+ * tests, which have a connection and no executor.
  *
  * Answers SC_OK for a registration that was written **and** for one that was answered as if it
  * had been: the silence rule is that the caller cannot tell, and that starts here rather than at
- * the route. A generated value that was already taken is neither -- it is drawn again, and only
- * a run of those long enough to mean the draw itself is broken becomes SC_ERR_UNAVAILABLE.
- *
- * Takes @p context's database lock for its whole length, which is why the context is not const
- * here -- see bc_context.db_lock for what that lock is and what it is standing in for.
+ * the route.
  */
-sc_status bc_register_account(struct bc_context *context, const char *first_name,
-                              const char *last_name, const char *email, const char *language,
-                              char *error, size_t error_size);
+sc_status bc_register_account_on(sc_db *db, const bc_home_community *home, const char *first_name,
+                                 const char *last_name, const char *email, const char *language,
+                                 char *error, size_t error_size);
 
 #endif /* BACKEND_CORE_USER_H */

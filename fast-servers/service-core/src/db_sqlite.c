@@ -13,9 +13,10 @@
  *                        TypeScript path sets it on the same connection, for the same reason.
  *   foreign_keys = ON    off by default in SQLite, and per connection rather than per database.
  *                        A build that forgets it enforces no constraint the schema declares.
- *   busy_timeout         several role threads share this process. Without it a write that meets
- *                        another write answers SQLITE_BUSY immediately rather than waiting the
- *                        moment out.
+ *   busy_timeout         every loop reads on a connection of its own and one thread writes, so
+ *                        writes never meet each other -- but a checkpoint, or a reader opening
+ *                        its snapshot at the wrong instant, can still ask for a moment, and
+ *                        without this that moment is SQLITE_BUSY rather than a short wait.
  *
  * The compile-time options the amalgamation is built with are in build.zig, beside the reason
  * for each. SQLITE_DQS=0 is the one worth knowing from here: a double-quoted string is a string
@@ -42,9 +43,9 @@
  * because nothing has measured it; when something does, it belongs in sc_db_config beside the
  * connect timeouts.
  *
- * It is also five seconds of stopped event loop the day a request writes on its own thread,
- * which is why Architecture.md, *Threading*, puts writes on one dedicated thread instead: with
- * a single writer there is no contention to wait out and this number stops meaning anything.
+ * It would also be five seconds of stopped event loop if a loop ever wrote, which is why no loop
+ * does: writes go to the one writer thread (service_core/db_exec.h), where there is no write
+ * contention to wait out and this number only covers the rare checkpoint.
  */
 #define SQLITE_BUSY_TIMEOUT_MS 5000
 
@@ -110,22 +111,19 @@ sc_status sc_db_sqlite_open(const sc_db_config *cfg, sc_db *db)
     sc_status status;
     int rc;
 
-    /* FULLMUTEX because the roles are threads and one connection may be reached from more than
-     * one of them. SQLITE_OPEN_CREATE because a community's first start has no file yet, which
-     * is what "download and start" means. */
     /*
-     * FULLMUTEX is right for what this is today -- one handle that several role threads share
-     * -- and it is also the ceiling: every statement serialises on that handle's mutex, so WAL's
-     * readers-beside-a-writer holds at the file level and is given back inside the process.
+     * NOMUTEX: every connection has exactly one user at a time -- a loop's own read connection,
+     * the one writer thread, or a startup that runs before either -- so SQLite's per-connection
+     * mutex would guard against something that cannot happen and be paid on every call.
+     * service_core/db_exec.h is what makes that true, and Architecture.md, *SQLite: read where
+     * you are, write on one thread*, is the design. A connection shared between threads at the
+     * same time would now be a data race; nothing hands one out that way.
      *
-     * What replaces it is in Architecture.md, *SQLite: read where you are, write on one thread*:
-     * one connection per loop thread opened SQLITE_OPEN_NOMUTEX for reads, and a single writer
-     * thread for writes. Do not drop FULLMUTEX before the connections are per-thread -- on its
-     * own that is not an optimisation, it is a data race. The busy_timeout below has the same
-     * condition attached to it.
+     * SQLITE_OPEN_CREATE because a community's first start has no file yet, which is what
+     * "download and start" means.
      */
     rc = sqlite3_open_v2(cfg->file, &handle,
-                         SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, NULL);
+                         SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX, NULL);
     if (rc != SQLITE_OK) {
         /* sqlite3_open_v2 hands back a handle even when it failed, and it is the only thing
          * that knows why. */
@@ -174,8 +172,10 @@ sc_status sc_db_sqlite_probe(sc_db *db)
 
 void sc_db_sqlite_close(sc_db *db)
 {
-    /* close_v2 rather than close: it lets go of a handle that still has statements on it
-     * instead of answering SQLITE_BUSY and leaking the connection. */
+    /* The prepared statements first, then the handle. close_v2 rather than close all the same:
+     * it lets go of a handle that still has a statement on it instead of answering SQLITE_BUSY
+     * and leaking the connection. */
+    sc_sql_sqlite_forget(db);
     (void)sqlite3_close_v2((sqlite3 *)db->native);
     db->native = NULL;
 }

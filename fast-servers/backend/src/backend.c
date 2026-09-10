@@ -75,8 +75,11 @@ sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit)
 {
     sc_db_config db_config;
     sc_mail_env mail;
+    /* Static: 32 KiB of CPU sets is not something to put on a role thread's stack, and the loops
+     * and workers borrow it for as long as they run. One backend role per process. */
+    static sc_topology topology;
     bc_context context;
-    sc_http_config http_config;
+    sc_http_config http_config = {0};
     sc_http_server *server;
     backend_cors_policy cors;
     const char *node_env;
@@ -112,27 +115,35 @@ sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit)
     }
     sc_mail_env_log(&mail);
 
-    /* Everything that has to be true before a request can be served: the database answers, its
-     * schema is current, and this instance knows which community it is. Nothing here asks
-     * anybody anything -- a database with no community stops the start and names the setup
-     * command. Each failure is already a line of its own by the time this returns -- see
-     * bc_context_open -- so the role only has to stop. */
-    status = bc_context_open(&db_config, quit, &context);
-    if (status != SC_OK) {
-        backend_core_shutdown();
-        return status;
-    }
+    /* Where this machine's caches are, read once and shared by the loops and the database
+     * workers: both place themselves with the same function, so a loop and the workers it
+     * hands work to share an L3. On a machine with one L3 it pins nothing. */
+    (void)sc_topology_load(&topology);
 
     http_config.host = cfg->listen_host;
     http_config.port = cfg->backend_port;
     http_config.role = "backend";
     http_config.threads = cfg->server_threads;
+    http_config.topology = &topology;
 
+    /* Created before the database is opened, though it listens only after: how many loops it
+     * runs is what caps the pool, and nothing about creating it touches the network. */
     server = sc_http_server_create(&http_config);
     if (server == NULL) {
-        bc_context_close(&context);
         backend_core_shutdown();
         return SC_ERR_NO_MEMORY;
+    }
+
+    /* Everything that has to be true before a request can be served: the database answers, its
+     * schema is current, and this instance knows which community it is. Nothing here asks
+     * anybody anything -- a database with no community stops the start and names the setup
+     * command. Each failure is already a line of its own by the time this returns -- see
+     * bc_context_open -- so the role only has to stop. */
+    status = bc_context_open(&db_config, server, &topology, quit, &context);
+    if (status != SC_OK) {
+        sc_http_server_destroy(server);
+        backend_core_shutdown();
+        return status;
     }
 
     /* Registration, and only here. Everything contracted in contracts/server/backend/ joins this
@@ -183,8 +194,10 @@ sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit)
                      sc_status_name(status));
     }
 
-    sc_http_server_destroy(server);
+    /* The executor before the server: its workers drain what is still queued and hand every
+     * unit back through the server, which has to exist until they have. */
     bc_context_close(&context);
+    sc_http_server_destroy(server);
     backend_core_shutdown();
     return status;
 }

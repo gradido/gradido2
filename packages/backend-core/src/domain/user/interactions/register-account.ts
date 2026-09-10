@@ -45,6 +45,14 @@ export async function registerAccount(
   context: BackendContext,
   request: UserCreateRequest,
 ): Promise<void> {
+  /* One place at the database for the whole of it, retries included: a registration that has to
+     queue again between two attempts would be answered later for having been unlucky. A request
+     that gets no place in time is a DatabaseBusy, which the app answers 503 -- before anything
+     was written, so trying again is safe. */
+  return context.gate.run(() => register(context, request))
+}
+
+async function register(context: BackendContext, request: UserCreateRequest): Promise<void> {
   const users = new UserRepository(context.db)
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {

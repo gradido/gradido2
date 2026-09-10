@@ -179,8 +179,18 @@ this document.
 
 That is why the numbers in *Where a query's time goes* do not lead where they appear to. Of the
 48.1 µs a query costs, 3.6 are user CPU and most of the rest is waiting for the server — and the
-answer to that is not more threads to cover the wait, it is `PQsocket` on the loop, where the
-wait costs no thread at all.
+answer to that is not more threads to cover the wait *on a loop*.
+
+**PostgreSQL is the one fd this rule does not put on the loop, and that is a decision, not an
+oversight** — *The executor*, under *Databases*, has it in full. Asynchronous libpq on the loop is
+the cheapest way to wait, and it is paid for in every repository: each statement split into a
+send and a callback, every local variable moved into a struct, a retry loop turned into a state
+machine — two to four times the code, for hundreds of statements, written by hand. What the rule
+exists to prevent is a loop that waits, and a loop that parks its request and hands the work to a
+thread that owns the connection does not wait either. The hand-over was measured: 7.5 µs when
+both sides have to be woken, 0.1–1.8 µs per unit when they are busy, against 25–200 µs for a
+query and a millisecond for a commit. And a thread per connection is needed anyway, for the work
+that no event loop makes cheaper — hashing a password is milliseconds of CPU.
 
 ### The map
 
@@ -189,12 +199,15 @@ main thread        config, log, sodium, signal handlers, then it joins and nothi
 role thread        one per selected role -- src/main.c, and see One binary, three roles
   loop threads     an HTTP role scales here: N h2o contexts, N evloops, SO_REUSEPORT
 mail workers       1..worker_max, shared, queue-fed. See Mail
-sqlite writer      one, shared, queue-fed. See Databases
+database workers   DB_POOL_SIZE, per cache group, each owning one PostgreSQL connection
+                   for its whole life. See Databases, The executor
+sqlite writer      one, queue-fed, owning the one write connection. See Databases
+sweeper            one per executor: answers the units that waited too long
 dht-node           tokio, inside the Rust module, reached only through drain
 ```
 
-Everything below the role line is a consequence of the rule and not a preference, and the two
-entries that are not built yet are marked in their own sections rather than dated here.
+Everything below the role line is a consequence of the rule and not a preference -- the
+database workers included, which are the exception the rule names.
 
 ### h2o is thread-per-loop, and that is the whole reason for the rule
 
@@ -261,26 +274,32 @@ Two things it does not do, and both have bitten every project that has tried thi
   so which one to send to is part of what the worker was handed.
 
 Per-thread state on an HTTP role hangs off the handler, not off a global: `on_context_init` /
-`on_context_dispose` and `h2o_context_get_handler_context()`. That is where a per-loop SQLite read
-connection lives.
+`on_context_dispose` and `h2o_context_get_handler_context()`. Two things per loop live
+elsewhere, indexed by the loop's number rather than hung off a context, because both have to be
+reached from code that is not a handler: the pool its request arenas come from
+(`http_arena.c`), and its SQLite read connection (the executor).
 
 ### What this means for each kind of work
 
 ```text
 CPU, request-shaped     the request thread. Routing, session lookup, JSON, domain logic.
-PostgreSQL              the loop, asynchronously. PQsocket / PQconsumeInput / PQisBusy.
-SQLite reads            the request thread, one connection per loop thread.
-SQLite writes           one dedicated writer thread, queue-fed.
+PostgreSQL              a database worker of the loop's cache group. The loop parks the
+                        request and is handed the unit back.
+SQLite reads            the request thread, on that loop's own connection.
+SQLite writes           the one writer thread, queue-fed.
 Mail                    the mail workers. Never the request thread, at any queue depth.
 Peer discovery          the Rust module's own thread, drained, never waited on.
 ```
 
 **What is worth controlling separately is the number of connections, not the number of threads.**
-This is the whole case against a database thread pool. Postgres has a `max_connections` and its
-own best concurrency, which has nothing to do with how many cores serve HTTP — and asynchronous
-libpq lets those two numbers be set independently, because a connection is an fd and not a thread.
-A pool ties them back together: a blocking connection needs a thread to block, so the connection
-count becomes the thread count and neither can be tuned without moving the other.
+Postgres has a `max_connections` and its own best concurrency, which has nothing to do with how
+many cores serve HTTP. This used to be the case against a database thread pool: a blocking
+connection needs a thread to block, so the connection count becomes the thread count. It does —
+and that is harmless as long as the thread it becomes is not a loop. A worker blocked in `recv`
+costs the kernel a wait queue entry and no core; there are DB_POOL_SIZE of them because there are
+DB_POOL_SIZE connections, and the loops stay at one per core. What must never happen is the
+connection count becoming the *loop* count, and that is exactly what a connection per loop, or a
+pool the loops took turns holding, did.
 
 The `fsync` is the exception the rule was written for, and it is the next section.
 
@@ -295,11 +314,11 @@ because SQLite's own concurrency does.
 wakeup costs several, plus what it does to both caches. Handing a read to another thread spends
 more than the read.
 
-What that requires is one connection per loop thread, opened `SQLITE_OPEN_NOMUTEX`. Today
-`db_sqlite.c` opens one handle `SQLITE_OPEN_FULLMUTEX` and shares it, which is correct and is
-also the ceiling: every statement serialises on that handle's mutex, so WAL's readers-and-a-writer
-holds at the file level and is given back inside the process. One connection per thread removes
-the mutex rather than contending on it, because no connection is then seen by two threads.
+What that requires is one connection per loop thread, opened `SQLITE_OPEN_NOMUTEX` — which is
+what the executor opens, one per loop, each touched by that loop alone. The handle used to be one
+`SQLITE_OPEN_FULLMUTEX` connection that every loop shared, which was correct and was also the
+ceiling: every statement serialised on that handle's mutex, so WAL's readers-and-a-writer held at
+the file level and was given back inside the process.
 
 **Writes go to a single dedicated writer thread** holding the one write connection, fed by a
 queue, answering through the loop's receiver. Four reasons, and the last is the one that pays:
@@ -322,6 +341,12 @@ It is the mailer's shape with a different ceiling, and deliberately so: *The wor
 worker is a connection and grows the count to what the relay rewards. Here the count is one,
 because that is what the database permits — same structure, and the resource sets the number in
 both cases, which is the rule.
+
+Built: the writer is the executor's one SQLite worker, and every write unit runs in a
+transaction the executor opens. Not built yet: group commit, the fourth reason above. It needs
+nothing from the units — they already leave BEGIN and COMMIT to the executor, which is what lets
+it put several of them in one transaction, each in its own SAVEPOINT, without any of them
+knowing.
 
 ### The write must be answered, not acknowledged
 
@@ -396,14 +421,20 @@ nobody is delivered with a null request rather than into freed memory.
   the home community live on the `bc_context` that role holds. When a second role opens one, the
   answer is process-wide for both: two roles in one process talking to one relay and one database
   file should hold one queue and one writer between them, not two of each competing.
-- **The database is serialised by a lock on the request path, and that is an interim.** One
-  connection and one loop per core means a mutex around the whole of an interaction — a PGconn
-  used from two threads is a data race, and two `BEGIN … COMMIT` sequences on one SQLite handle
-  interleave into one transaction. It is correct and it blocks the loop it is taken on for the
-  length of one write. What replaces it is already specified above, in *The write must be
-  answered, not acknowledged*: the handler defers, a thread that owns the database does the work,
-  and the loop answers when it comes back. `sc_http_defer` and `sc_http_resume` exist for it and
-  nothing uses them yet. `bc_context.db_lock` says the same thing where the lock is.
+- **Whether a worker hand-over is ever worth replacing.** The executor hands every PostgreSQL
+  unit to a worker, at 0.1–7.5 µs a unit (*The executor*). Coroutines on the loop would make that
+  about 13 ns and keep the repositories as they are — every statement already goes through
+  `service_core/sql.h`, which is the one place a yield would have to be added. That is a
+  measurement on the target hardware first, and on a Raspberry Pi, not a rewrite waiting to
+  happen.
+- **A statement that never ends holds its worker.** The queue in front of the workers is bounded
+  and its wait is swept, so a stuck database costs a waiting request five seconds and a 503. A
+  worker already inside a statement waits for as long as the statement does; PostgreSQL's
+  `statement_timeout` is what would bound that, and choosing it is a decision about which
+  statements may legitimately run long.
+- **Cache groups are measured on one L3.** Loops and workers are pinned per L3 group
+  (*The executor*); the grouping is tested with the shapes of larger machines, and has run only
+  on one with a single L3, where it pins nothing.
 - **Nothing here is in CI yet.** The integration suite drives both backends over four loops and
   both come back clean under TSan and UBSan, which is the check being described — it is run by
   hand today and *Safety net* already says where it belongs.
@@ -418,8 +449,8 @@ nobody is delivered with a null request rather than into freed memory.
 ## Databases
 
 ```text
-PostgreSQL   libpq, asynchronous on h2o's loop via PQsocket / PQconsumeInput / PQisBusy
-SQLite       in process, called directly
+PostgreSQL   libpq, on database workers that each own a connection -- The executor
+SQLite       in process, called directly: reads on the loop, writes on one writer
 ```
 
 Both are C calling a C library, and that is not a preference — it is what the measurements
@@ -427,7 +458,8 @@ leave room for.
 
 ### What is built, and what is not
 
-`service-core/src/db*.c` behind `service_core/db.h`. Both drivers are compiled into every
+`service-core/src/db*.c` and `sql*.c` behind `service_core/db.h`, `sql.h` and `db_exec.h`. Both
+drivers are compiled into every
 default build, because *which* database a community runs is read from `DB_TYPE` at startup and
 is not a property of the binary — `-Dpostgres=false` and `-Dsqlite=false` exist for a
 deployment that knows it will never see one of them, and asking such a build for that database
@@ -443,29 +475,106 @@ sqlite     sqlite.org's amalgamation, compiled by build.zig. Every target
 What the surface carries is opening, probing, waiting and closing — the questions that are
 genuinely the same asked twice — plus the environment they are configured from, which is the
 TypeScript path's `DB_TYPE`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_DATABASE`,
-`DB_FILE`, down to the defaults. Waiting is what a database and its server starting together
+`DB_POOL_SIZE`, `DB_FILE`, down to the defaults. Waiting is what a database and its server starting together
 need, and it turns on one distinction: a connection that was refused, unresolvable or timed out
 is tried again, while a server that answered and *refused* ends the startup at once. libpq
 publishes no SQLSTATE for a connection failure, so `PQping` stands in for the SQLSTATE classes
 the TypeScript path reads.
 
-Two things are deliberately absent, and each has a reason rather than a date:
+**Every statement goes through `service_core/sql.h`, and nothing else sees a driver.** A
+statement is an object that carries its PostgreSQL text and its SQLite text side by side, written
+by the repository and reviewed as a pair -- the dialects still differ, and a repository still
+says which one it is writing. What the two share is everything that is not dialect: binding six
+value types, stepping rows, reading columns, and telling a unique violation from a dead
+connection. A statement is prepared once per connection -- `PQprepare` under the name of its
+slot, a persistent `sqlite3_stmt` -- and after that only executed.
 
-```text
-no query surface     the dialects differ; a repository that has to know which one it is
-                     talking to should have to say so. Statements are written against the
-                     driver, reached through sc_db_native() — see *The mapping is generated*.
-no async path        sc_db_open blocks, which is right for a startup and wrong for a request.
-                     PQsocket / PQconsumeInput / PQisBusy on h2o's loop is a second entry
-                     point beside it, and arrives with the first repository that needs it.
-```
+This used to be the other way round, and deliberately: repositories called the drivers
+themselves. What changed the decision is what that costs once there are hundreds of them. A
+repository that calls `PQexecParams` decides at its call site that the statement is parsed and
+planned on every call, that it blocks the thread it is on, and that its failure is read out of
+libpq's own error fields -- and none of the three can be changed later without visiting every
+call site. Behind `sql.h` they are one file each. The build enforces it: backend-core is not
+given the driver headers.
 
 TLS to the database is not on that list: libpq is built with `ssl = .LibreSSL`, the same
 package h2o is built against, so a database on another machine is reached over an encrypted
 connection. The Unix socket this section prescribes needs none of it.
 
-The backend opens one at startup, migrates the schema out of `contracts/migrations` and reads the
-home community off it; federation still opens none. `--version` reports which drivers are in.
+The backend opens one connection at startup to wait for the database, migrate the schema out of
+`contracts/migrations` and read the home community, closes it, and then opens the executor;
+federation still opens none. `--version` reports which drivers are in.
+
+### The executor
+
+`service_core/db_exec.h`; `contracts/database-config.json`, `rules.pool`, for the rule both
+implementations follow. It is the answer to three questions at once -- which thread runs a
+statement, which thread owns a connection, and what happens when there is more work than the
+database can take -- and every answer comes from the same rule: **data stays on the thread it
+lives on, and only the least of it crosses.**
+
+```text
+a request's data     the loop that parsed it, in the request's own arena
+a connection         one worker, for its whole life: libpq's buffers, the TLS state and
+                     the prepared statements stay in that core's cache, and no lock guards it
+what crosses         a unit -- the request's values in, its rows out, once each way. It
+                     lives in the request's arena, and whoever holds the unit owns the
+                     arena; nothing is copied, and the loop's pool never leaves the loop
+```
+
+A route builds its unit with `sc_http_alloc`, sets whether it reads or writes, the work and the
+answer, and submits it (`service_core/db_http.h`). The loop parks the request with
+`sc_http_defer` and goes on serving; a worker of the loop's cache group runs the work and resumes
+the request; the loop calls the unit's `done`, which answers, and the request's arena is freed
+when that returns. A SQLite read runs where it was submitted instead, on the loop's own
+connection, because a read from a warm page cache costs less than any hand-over.
+
+**Transactions belong to the executor.** A write unit runs between a BEGIN and an end the work
+chooses -- COMMIT, ROLLBACK, or AGAIN, which rolls back and runs the work once more with fresh
+values: a generated value that collided draws again that way. No repository writes BEGIN or
+COMMIT, which is what leaves SQLite's group commit to be added inside the executor alone.
+
+```text
+DB_POOL_SIZE      workers on PostgreSQL, one connection each, all opened at startup:
+                  a database that cannot hold them stops the start with its own refusal and
+                  "took 2 of the 4". Sized from what the database server can do -- how many
+                  loops there are does not enter into it
+cache groups      the CPUs one L3 serves, read from sysfs and restricted to the CPUs the
+                  process may use. Loops and workers are pinned per group and spread over
+                  groups by the same function, so a loop hands its work to workers under
+                  the same cache. One L3 is one group and pins nothing
+the queue         per group, SC_DB_QUEUE_PER_WORKER units a worker. Full: 503 at once.
+                  Waited 5 s: 503, handed back by a sweeper even while every worker is
+                  stuck -- SERVICE_BUSY with Retry-After, and nothing of the work has run
+a dead connection read before every unit until it is quiet -- a terminated session's FATAL
+                  goes to libpq's notice processor and leaves its status alone; only the
+                  read after it sees the end -- and redialled then, prepared statements
+                  forgotten with the session
+```
+
+What was measured, on this machine (16 threads, one L3, PostgreSQL 15 on the Unix socket,
+`synchronous_commit` on, wrk on the same machine) -- relative numbers, for the mechanism and not
+for a deployment:
+
+```text
+hand-over, loop -> worker -> loop     7.5 us    both sides asleep
+                                      1.8 us    per unit, 4 per wake-up
+                                      0.1 us    per unit, 64 per wake-up
+reading 256 B / 4 KiB / 32 KiB another core wrote     +15 / +80 / +400 ns
+registration, same day, same database:
+  one connection behind a mutex (the code before)     484-495 req/s
+  executor, 1 worker                                   501-541 req/s
+  executor, 4 / 8 / 16 / 32 workers         1 288 / 2 427 / 4 415 / 8 232 req/s
+database held by a lock for 12 s, 300 requests at once
+  4 running        committed when the lock went, after 11.5 s
+  296 others       503, the last of them after 5.1 s
+all four worker sessions terminated     0 failed requests afterwards
+```
+
+Linear in the workers and not yet flat at thirty-two: a registration spends most of its time
+waiting for the commit's `fsync`, not on a core, and PostgreSQL writes concurrent commits
+together. Where it stops rising is a property of the database server, which is what
+`DB_POOL_SIZE` is set from.
 
 ### Where a query's time goes
 

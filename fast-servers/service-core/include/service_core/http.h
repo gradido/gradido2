@@ -25,6 +25,8 @@
 #include "service_core/runtime.h"
 #include "service_core/status.h"
 
+struct sc_topology;
+
 typedef struct sc_http_server sc_http_server;
 /* Opaque, and it lives exactly as long as the call: everything reachable from it comes out of
  * the request pool, which h2o clears when the response is written. Nothing the answer outlives
@@ -62,6 +64,12 @@ typedef struct sc_http_config {
      * The fallback backend serves on one thread whatever this says, and logs that it did.
      */
     uint16_t threads;
+    /*
+     * Where the loops run: loop i is pinned to the cache group sc_topology_group_of(i, threads)
+     * names, the same function the database executor uses to find a loop's workers, so a loop
+     * and the workers it hands to share an L3. NULL pins nothing.
+     */
+    const struct sc_topology *topology;
 } sc_http_config;
 
 /**
@@ -89,6 +97,16 @@ const char *sc_http_backend_name(void);
 
 sc_http_server *sc_http_server_create(const sc_http_config *cfg);
 void sc_http_server_destroy(sc_http_server *server);
+
+/**
+ * How many loops @p server will run -- SC_HTTP_THREADS_MAX-clamped, one per core for 0, and 1 on
+ * the fallback backend whatever it was asked for.
+ *
+ * Known from creation, before anything listens, because what a role opens for its loops is sized
+ * by it: the database executor opens a SQLite read connection per loop and places every loop in
+ * a cache group -- see service_core/db_exec.h.
+ */
+uint16_t sc_http_server_threads(const sc_http_server *server);
 
 /**
  * Registers @p fn for exactly @p path, query string excluded from the match. Startup only --
@@ -209,6 +227,38 @@ sc_status sc_http_defer(sc_http_server *server, sc_http_req *req, void *work, sc
  * second resume of the same ticket is.
  */
 sc_status sc_http_resume(sc_http_server *server, sc_http_ticket ticket);
+
+/* --- the request's own memory ----------------------------------------------------------- */
+
+/*
+ * Memory that lives exactly as long as the request: until the handler returns, or -- for a
+ * request that was parked with sc_http_defer -- until its resume callback has returned. It comes
+ * from an arena lent by the loop's own pool, so taking it is a pointer bump and giving it back
+ * is one call when the request is done; nothing is freed piece by piece and nothing locks.
+ *
+ * It is what a handler puts a unit of database work in (service_core/db_exec.h): the unit, the
+ * values it carries in and the rows it brings back all live here, and while the request is
+ * parked the arena belongs to whoever holds the unit. Nothing is copied on the way there or
+ * back.
+ *
+ * Only the request the calling thread is currently handling can be asked, and only from inside
+ * its handler or its resume callback; anything else answers NULL.
+ */
+
+/** @p size bytes, 8-byte aligned, zeroing not included. NULL when the request's arena cannot
+ *  hold them -- it is at most 1 MiB, the ceiling on what one request may hold. */
+void *sc_http_alloc(sc_http_req *req, size_t size);
+
+/** Chooses the arena's size before anything is allocated, for a handler that knows it will need
+ *  more than the smallest. SC_ERR_TOO_LONG past the ceiling. */
+sc_status sc_http_reserve(sc_http_req *req, size_t capacity);
+
+/** The arena itself, opaque here -- what the executor binding hands to a unit so that work on
+ *  another thread can allocate its results beside the request's data. */
+void *sc_http_request_arena(sc_http_req *req);
+
+/** Which of the server's loops the calling thread is. 0 outside any loop. */
+uint16_t sc_http_current_loop(void);
 
 /* --- inside a handler ------------------------------------------------------------------ */
 

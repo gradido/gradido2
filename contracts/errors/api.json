@@ -74,6 +74,16 @@
       "parameters": [{ "name": "route", "type": "string" }],
       "httpStatus": 501,
       "note": "A route this deployment's implementation does not serve yet. Distinct from 3004 and from a plain 404: the route exists in the contract, this server does not have it. A deployment runs one implementation and never proxies to the other, so the frontend must surface this rather than expect a retry to land elsewhere. Invented by gradido2; legacy had no counterpart."
+    },
+    {
+      "code": 3009,
+      "name": "SERVICE_BUSY",
+      "legacyName": null,
+      "messageTemplate": "service busy, retry after {retryAfter} seconds",
+      "parameters": [{ "name": "retryAfter", "type": "uint32" }],
+      "httpStatus": 503,
+      "headers": { "Retry-After": "{retryAfter}" },
+      "note": "The database has all the work this process may give it: every connection is in use and the queue in front of them is full, or the request's work waited there longer than five seconds and was not run. Nothing was written. Not a failure of this request and nothing the client did -- the same request a moment later is expected to work, which is what Retry-After says, and what an HTTP client that honours it will do on its own. See database-config.json, rules.pool. Invented by gradido2; legacy had no counterpart."
     }
   ]
 }

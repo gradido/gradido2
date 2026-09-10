@@ -1,4 +1,9 @@
-import type { BackendContext, DatabaseConnection, HomeCommunity } from '@gradido/backend-core'
+import type {
+  BackendContext,
+  DatabaseConnection,
+  DatabaseGate,
+  HomeCommunity,
+} from '@gradido/backend-core'
 import type { Logger, ServiceContext } from '@gradido/service-core'
 
 /**
@@ -27,6 +32,7 @@ export class AppContext implements ServiceContext, BackendContext {
     public readonly logger: Logger,
     public readonly db: DatabaseConnection,
     public readonly homeCommunity: HomeCommunity,
+    public readonly gate: DatabaseGate,
   ) {}
 
   /** Releases what the process holds. Called by the shutdown handler, not per request. */

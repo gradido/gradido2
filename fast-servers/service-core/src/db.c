@@ -13,9 +13,9 @@
 #include <string.h>
 
 #include "db_internal.h"
-#include "service_core/secret.h"
 #include "service_core/log/log.h"
 #include "service_core/runtime.h"
+#include "service_core/secret.h"
 
 /* The TypeScript path's defaults, from packages/backend-core/src/database/schema.ts. They are
  * mirrored rather than chosen: backend and federation reach the same database from two
@@ -67,6 +67,30 @@ static sc_status read_port(uint16_t *out, const char *name, uint16_t fallback)
     if (*end != '\0' || parsed == 0 || parsed > 65535) {
         sc_log_fatal(SC_CAT_STARTUP, "config.port_invalid",
                      "%s is '%s', which is not a port between 1 and 65535", name, value);
+        return SC_ERR_MALFORMED;
+    }
+    *out = (uint16_t)parsed;
+    return SC_OK;
+}
+
+/* The same shape as read_port and the same bound, which is the column's type in
+ * contracts/database-config.json rather than a number chosen here: zero is refused because a pool
+ * that holds nothing serves nothing, and everything above it is the operator's to decide. */
+static sc_status read_pool_size(uint16_t *out, const char *name, uint16_t fallback)
+{
+    const char *value = getenv(name);
+    char *end;
+    unsigned long parsed;
+
+    if (value == NULL || value[0] == '\0') {
+        *out = fallback;
+        return SC_OK;
+    }
+    parsed = strtoul(value, &end, 10);
+    if (*end != '\0' || value[0] == '-' || parsed == 0 || parsed > 65535) {
+        sc_log_fatal(SC_CAT_STARTUP, "config.pool_size_invalid",
+                     "%s is '%s', which is not a number of connections between 1 and 65535", name,
+                     value);
         return SC_ERR_MALFORMED;
     }
     *out = (uint16_t)parsed;
@@ -160,6 +184,9 @@ sc_status sc_db_config_load(sc_db_config *out)
     status = read_port(&out->port, "DB_PORT", DEFAULT_PORT);
     if (status != SC_OK)
         return status;
+    status = read_pool_size(&out->pool_size, "DB_POOL_SIZE", SC_DB_POOL_SIZE_DEFAULT);
+    if (status != SC_OK)
+        return status;
 
     /*
      * "an empty database password is not acceptable in production" -- the same rule, read from
@@ -200,9 +227,9 @@ void sc_db_config_log(const sc_db_config *cfg)
     /* The password is reported as present or absent. Printing it would put the database's
      * credentials into every log aggregator the operator happens to run. */
     sc_log_info(SC_CAT_STARTUP, "config.database",
-                "postgresql, host %s, port %u, database %s, user %s, password %s", cfg->host,
-                (unsigned)cfg->port, cfg->database, cfg->user,
-                cfg->password[0] != '\0' ? "set" : "(unset)");
+                "postgresql, host %s, port %u, database %s, user %s, password %s, pool %u",
+                cfg->host, (unsigned)cfg->port, cfg->database, cfg->user,
+                cfg->password[0] != '\0' ? "set" : "(unset)", (unsigned)cfg->pool_size);
 }
 
 void sc_db_set_error(sc_db *db, const char *message)
@@ -362,7 +389,8 @@ sc_status sc_db_open_waiting(const sc_db_config *cfg, const sc_quit_flag *quit, 
          * db.connection.failed. Nothing is logged on success: the contract has no event for it,
          * and startup.server.started already reports which database this process opened. */
         {
-            sc_log_value data[2] = {SC_LOG_UINT("attempt", attempt), SC_LOG_UINT("attempts", attempts)};
+            sc_log_value data[2] = {SC_LOG_UINT("attempt", attempt),
+                                    SC_LOG_UINT("attempts", attempts)};
             sc_log_context context = {0};
 
             context.data = data;

@@ -1,4 +1,5 @@
 export * from './connect'
+export * from './gate'
 export * from './migrate'
 export * from './schema'
 export * from './tables'

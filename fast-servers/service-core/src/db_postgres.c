@@ -17,10 +17,11 @@
  *   One round trip per request -- user row and roles in one statement, not two. That is query
  *   construction, it is business logic wearing SQL, and it arrives with the first repository.
  *
- * What is genuinely missing is the asynchronous form: PQsocket / PQconsumeInput / PQisBusy on
- * h2o's loop, which is how a request will reach the database without occupying a thread while
- * it waits. The calls below block, which is correct for the one caller they have -- a startup
- * that has nothing else to do until the database answers.
+ * The calls below block, and every caller is a thread for which that is right: a startup that
+ * has nothing else to do until the database answers, and the database workers, each of which
+ * owns one connection and exists to wait on it (service_core/db_exec.h). No event loop ever
+ * calls into libpq -- Architecture.md, *Threading*, says why the asynchronous form on the loop
+ * was measured and not chosen.
  */
 #include "service_core/db.h"
 
@@ -28,6 +29,7 @@
 
 #if defined(SC_DB_WITH_POSTGRESQL)
 
+#include <poll.h>
 #include <stdio.h>
 
 #include <libpq-fe.h>
@@ -70,8 +72,16 @@ static void fill_params(const sc_db_config *cfg, const char **keys, const char *
      * which of them is holding a connection is worth being able to see without guessing. */
     keys[6] = "application_name";
     values[6] = "fast-servers";
-    keys[7] = NULL;
-    values[7] = NULL;
+    /* The session every statement is read in: timestamps come back in UTC and in ISO form,
+     * which is the one shape sql.c parses, and text is UTF-8 whatever the server's locale is.
+     * Set at connect rather than with a SET afterwards, so it costs no round trip and holds
+     * again after a reset. */
+    keys[7] = "options";
+    values[7] = "-c TimeZone=UTC -c DateStyle=ISO";
+    keys[8] = "client_encoding";
+    values[8] = "UTF8";
+    keys[9] = NULL;
+    values[9] = NULL;
 }
 
 /**
@@ -116,8 +126,8 @@ static void discard_notice(void *arg, const char *message)
 
 sc_status sc_db_postgres_open(const sc_db_config *cfg, sc_db *db)
 {
-    const char *keys[8];
-    const char *values[8];
+    const char *keys[10];
+    const char *values[10];
     char port_text[6];
     char timeout_text[16];
     PGconn *conn;
@@ -177,6 +187,72 @@ sc_status sc_db_postgres_probe(sc_db *db)
     return status;
 }
 
+/** Whether the socket has anything to read, without waiting for it. */
+static int has_input(PGconn *conn)
+{
+    struct pollfd p;
+
+    p.fd = PQsocket(conn);
+    p.events = POLLIN;
+    p.revents = 0;
+    return p.fd >= 0 && poll(&p, 1, 0) > 0;
+}
+
+/* A server that keeps talking to a connection nobody is using is not one this waits out. */
+#define REVIVE_READS_MAX 8
+
+/*
+ * A connection the server closed is not known to be closed until something reads from it --
+ * PQstatus says CONNECTION_OK right up to the statement that fails. After a PostgreSQL restart
+ * that would be one failed request per pooled connection, each of them a 500 for a database that
+ * is by then perfectly fine.
+ *
+ * So it is read before it is handed out, and the reading has to go on until the socket is quiet,
+ * because one read is not enough -- measured, not assumed: a terminated session sends its FATAL
+ * message and then closes, and on an idle connection libpq hands that message to the notice
+ * processor and leaves the status alone. Only the read *after* it meets the end of the stream,
+ * and with one read that was the request's own: "SSL connection has been closed unexpectedly".
+ *
+ * An idle connection has nothing to say, so a socket that is readable at all is a server that
+ * said something, and it is read out: PQconsumeInput to take it in, PQisBusy to parse it. Neither
+ * blocks -- libpq keeps the socket non-blocking whatever PQsetnonblocking says -- and on a healthy
+ * connection the whole check is one poll() that answers "nothing".
+ *
+ * A connection that came out of that CONNECTION_BAD is dialled again, once. This does not wait
+ * for a server that is still coming back up: that is a failure for the one request that met it,
+ * and the next hand-out tries again.
+ */
+sc_status sc_db_postgres_revive(sc_db *db, int *revived)
+{
+    PGconn *conn = (PGconn *)db->native;
+    int reads = 0;
+
+    *revived = 0;
+    if (conn == NULL) {
+        sc_db_set_error(db, "no connection");
+        return SC_ERR_NETWORK;
+    }
+    while (PQstatus(conn) == CONNECTION_OK && reads++ != REVIVE_READS_MAX && has_input(conn)) {
+        if (!PQconsumeInput(conn))
+            break;
+        (void)PQisBusy(conn);
+    }
+    if (PQstatus(conn) == CONNECTION_OK)
+        return SC_OK;
+
+    PQreset(conn);
+    if (PQstatus(conn) != CONNECTION_OK) {
+        sc_db_set_error(db, PQerrorMessage(conn));
+        return SC_ERR_NETWORK;
+    }
+    /* A reset connection is a new session on the same connection object. The notice processor
+     * belongs to the object and survives; the prepared statements belonged to the session and
+     * did not, so the table that remembers them is emptied with it. */
+    sc_sql_postgres_forget(db);
+    *revived = 1;
+    return SC_OK;
+}
+
 void sc_db_postgres_close(sc_db *db)
 {
     PQfinish((PGconn *)db->native);
@@ -208,6 +284,13 @@ sc_status sc_db_postgres_open(const sc_db_config *cfg, sc_db *db)
 
 sc_status sc_db_postgres_probe(sc_db *db)
 {
+    sc_db_set_error(db, "this build has no PostgreSQL driver");
+    return SC_ERR_UNAVAILABLE;
+}
+
+sc_status sc_db_postgres_revive(sc_db *db, int *revived)
+{
+    *revived = 0;
     sc_db_set_error(db, "this build has no PostgreSQL driver");
     return SC_ERR_UNAVAILABLE;
 }

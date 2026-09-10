@@ -22,6 +22,7 @@
 
 #include <uv.h>
 
+#include "http_arena.h"
 #include "http_defer.h"
 #include "picohttpparser.h"
 #include "service_core/log/log.h"
@@ -567,7 +568,7 @@ static enum decode decode_chunked(struct conn *c)
  * The query string is not part of the match. Neither backend gives a route a pattern: a path is
  * a path, and everything variable about a request is in its body.
  */
-static void dispatch(struct conn *c, struct sc_http_req *req)
+static void route_request(struct conn *c, struct sc_http_req *req)
 {
     const char *query = memchr(req->path, '?', req->path_len);
     size_t path_len = query != NULL ? (size_t)(query - req->path) : req->path_len;
@@ -586,14 +587,22 @@ static void dispatch(struct conn *c, struct sc_http_req *req)
         if (route->fn(req, route->user_data) == 0)
             return;
     }
-    if (c->server->default_fn != NULL &&
-        c->server->default_fn(req, c->server->default_data) == 0)
+    if (c->server->default_fn != NULL && c->server->default_fn(req, c->server->default_data) == 0)
         return;
     req->replied = 1;
     req->status = 404;
     req->content_type = "text/plain";
     req->reply_len = 0;
     req->reply_ptr = NULL;
+}
+
+/* The request's own memory lives from here to the end of the handler -- or, when the handler
+ * parks it, to the end of its resume callback. http_arena.h. */
+static void dispatch(struct conn *c, struct sc_http_req *req)
+{
+    sc_http_arena_enter(req, NULL);
+    route_request(c, req);
+    sc_http_arena_leave();
 }
 
 static void process(struct conn *c)
@@ -780,11 +789,16 @@ static void deliver(sc_http_server *server, int32_t slot)
 {
     sc_http_req *req = NULL;
     void *work = NULL;
+    void *arena = NULL;
     struct conn *c;
     int keep;
 
-    sc_defer_release(&server->defer, slot, &req, &work);
+    sc_defer_release(&server->defer, slot, &req, &work, &arena);
+    /* The arena comes back with the request and is freed after the callback, whether the
+     * client is still there or not. */
+    sc_http_arena_enter(req, arena);
     server->on_resume(req, work, server->on_resume_data);
+    sc_http_arena_leave();
 
     /* NULL is a client that left while the work ran. The connection is already on its way out
      * and the work has been handed back, which is all that was owed. */
@@ -838,9 +852,11 @@ sc_status sc_http_defer(sc_http_server *server, sc_http_req *req, void *work, sc
     if (server->on_resume == NULL)
         return SC_ERR_UNAVAILABLE;
 
-    ticket = sc_defer_arm(&server->defer, req, work);
+    ticket = sc_defer_arm(&server->defer, req, work, sc_http_arena_peek());
     if (ticket == 0)
         return SC_ERR_QUEUE_FULL;
+    /* The request's arena now belongs to the slot, and through it to whoever holds the work. */
+    sc_http_arena_take();
 
     c = conn_of(req);
     c->deferred = 1;
@@ -864,6 +880,12 @@ sc_status sc_http_resume(sc_http_server *server, sc_http_ticket ticket)
 }
 
 /* --- the sc_http surface ---------------------------------------------------------------- */
+
+uint16_t sc_http_server_threads(const sc_http_server *server)
+{
+    /* One loop, one thread -- the backend's defining limit, and why it says so at startup. */
+    return server != NULL ? 1 : 0;
+}
 
 sc_http_server *sc_http_server_create(const sc_http_config *cfg)
 {
@@ -1020,7 +1042,11 @@ sc_status sc_http_run(sc_http_server *server, const sc_quit_flag *quit)
     server->quit_timer.data = server;
     uv_timer_start(&server->quit_timer, on_quit_tick, SC_RUNTIME_TICK_MS, SC_RUNTIME_TICK_MS);
 
+    /* One loop, loop 0, on the role's thread -- which is where its arena pool lives. Not
+     * pinned: one loop is one group, whatever the machine's caches are. */
+    sc_http_arena_thread_begin(0);
     (void)uv_run(&server->loop, UV_RUN_DEFAULT);
+    sc_http_arena_thread_end();
     sc_log_info(SC_CAT_STARTUP, "server.stop", "%s stopped", server->role);
     return SC_OK;
 }
@@ -1090,8 +1116,7 @@ sc_status sc_http_header_add(sc_http_req *req, const char *name, const char *val
     written = snprintf(req->extra_headers + req->extra_headers_len,
                        sizeof(req->extra_headers) - req->extra_headers_len, "%s: %.*s\r\n", name,
                        (int)value_len, value);
-    if (written <= 0 ||
-        (size_t)written >= sizeof(req->extra_headers) - req->extra_headers_len) {
+    if (written <= 0 || (size_t)written >= sizeof(req->extra_headers) - req->extra_headers_len) {
         req->extra_headers[req->extra_headers_len] = '\0';
         return SC_ERR_TOO_LONG;
     }

@@ -75,6 +75,9 @@ export function connectDatabase(env: DatabaseConfig): DatabaseConnection {
       user: env.DB_USER,
       password: env.DB_PASSWORD,
       database: env.DB_DATABASE,
+      /* bun opens these on demand, up to this many, and queues a query when all are busy -- the
+         same limit the C path opens up front. contracts/database-config.json, rules.pool. */
+      max: env.DB_POOL_SIZE,
     },
   })
 

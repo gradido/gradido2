@@ -6,7 +6,7 @@
 
 sc_status federation_run(const sc_config *cfg, const sc_quit_flag *quit)
 {
-    sc_http_config http_config;
+    sc_http_config http_config = {0};
     sc_http_server *server;
     sc_status status;
 

@@ -1,15 +1,11 @@
 /*
- * Running a statement that has no parameters and returns no rows, and saying what went wrong.
+ * Running text that has no parameters and returns no rows, and saying what went wrong in one
+ * line.
  *
- * That is the whole of what the two dialects genuinely share, and it is why this exists where
- * `service_core/db.h` deliberately has no query surface: DDL and transaction control are the
- * same statement text on both databases, so writing `BEGIN` twice would be a copy rather than a
- * decision. Everything else -- every statement with a parameter or a result -- stays in the
- * repository, in a branch that says which dialect it is in. Architecture.md, *Databases*, is the
- * rule; this is the one exception to it, and it is not allowed to grow a second query function.
- *
- * The migrations use it because a migration is exactly this shape: text from the contract, no
- * parameters, no rows.
+ * What is left here after service_core/sql.h took over every statement with a parameter or a
+ * row: DDL out of a migration and the transaction control a migration wraps around it, both of
+ * which are the same text on both databases and run once. Repositories do not use this -- a
+ * repository runs sc_sql_statement objects and leaves transactions to the executor.
  */
 #ifndef BACKEND_CORE_SQL_H
 #define BACKEND_CORE_SQL_H
@@ -43,31 +39,5 @@ sc_status bc_sql_exec(sc_db *db, const char *sql, char *error, size_t error_size
  * to someone.
  */
 void bc_sql_set_error(char *error, size_t error_size, const char *message);
-
-/* --- PostgreSQL's text formats ------------------------------------------------------------ */
-
-/*
- * Parameters go to PostgreSQL as text and results come back as text, uniformly: a mixed format
- * is per statement rather than per column, so a query selecting a name and a key would have to
- * pick one for both. Text costs a hex encoding on the key and nothing measurable on a path that
- * runs at startup; what it buys is one shape for every statement in this component.
- *
- * SQLite needs none of this -- its driver takes the C types as they are.
- */
-
-/** `2026-09-02T13:45:12.345Z` plus the terminator. What timestamptz(3) is written with. */
-#define BC_TIMESTAMP_TEXT_MAX 32
-
-/** Renders @p unix_ms as the ISO 8601 instant PostgreSQL parses into a timestamptz. UTC, with
- *  milliseconds, because the column has precision 3 and the TypeScript path writes the same. */
-void bc_sql_timestamp_text(int64_t unix_ms, char *out, size_t out_size);
-
-/** Bytes to `\x` followed by lowercase hex -- PostgreSQL's own input and output form for bytea.
- *  Answers 0 when @p out_size is too small; a buffer of 2 * @p length + 3 always fits. */
-int bc_sql_bytea_text(const uint8_t *bytes, size_t length, char *out, size_t out_size);
-
-/** The inverse, for a bytea read back as text. Answers the number of bytes written, or 0 for a
- *  value that is not `\x` and an even number of hex digits, or one that would not fit. */
-size_t bc_sql_bytea_parse(const char *text, uint8_t *out, size_t out_size);
 
 #endif /* BACKEND_CORE_SQL_H */

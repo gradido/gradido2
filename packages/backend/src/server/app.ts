@@ -1,3 +1,4 @@
+import { DatabaseBusy } from '@gradido/backend-core'
 import { ErrorCode, errorBody, errorStatus } from '@gradido/shared/errors'
 import { Elysia } from 'elysia'
 import type { AppContext } from '../AppContext'
@@ -37,6 +38,15 @@ export const createBackendApp = (context: AppContext) =>
       if (code === 'NOT_FOUND') {
         set.status = errorStatus(ErrorCode.RouteNotImplemented)
         return errorBody(ErrorCode.RouteNotImplemented, path)
+      }
+
+      /* The database had no place for this request in time, and nothing of its work ran --
+         SERVICE_BUSY, with the wait in the header where an HTTP client that retries will read
+         it. Not logged as a failure: it is load, and a burst of it would bury the log. */
+      if (error instanceof DatabaseBusy) {
+        set.status = errorStatus(ErrorCode.ServiceBusy)
+        set.headers['retry-after'] = String(error.retryAfter)
+        return errorBody(ErrorCode.ServiceBusy, error.retryAfter)
       }
 
       /* The shape is contracted: contracts/logging.json fixes http.request.failed at method,

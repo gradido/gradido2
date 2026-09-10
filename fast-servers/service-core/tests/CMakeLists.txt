@@ -28,6 +28,29 @@ target_link_libraries(test_db PRIVATE service_core GTest::gtest)
 # refusal, and SQLite, which is a file.
 add_test(NAME service_core.db COMMAND test_db)
 
+add_executable(test_sql test_sql.cpp)
+target_include_directories(test_sql PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_link_libraries(test_sql PRIVATE service_core GTest::gtest)
+
+# Statements: every value type through both databases, the refusals, the cursor. SQLite on a
+# file it removes again; PostgreSQL when SC_DB_TEST_PG_HOST is set.
+add_test(NAME service_core.sql COMMAND test_sql)
+
+add_executable(test_db_exec test_db_exec.cpp)
+target_include_directories(test_db_exec PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_link_libraries(test_db_exec PRIVATE service_core GTest::gtest)
+
+# The executor: where a unit runs, how its transaction ends, a full queue and a late unit. One
+# test waits out SC_DB_QUEUE_WAIT_MS on purpose. PostgreSQL when SC_DB_TEST_PG_HOST is set.
+add_test(NAME service_core.db_exec COMMAND test_db_exec)
+
+add_executable(test_topology test_topology.cpp)
+target_include_directories(test_topology PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_link_libraries(test_topology PRIVATE service_core GTest::gtest)
+
+# Cache groups: the kernel's CPU lists, the CPUs a process may use, proportional spreading.
+add_test(NAME service_core.topology COMMAND test_topology)
+
 add_executable(test_env_file test_env_file.cpp)
 target_include_directories(test_env_file PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 target_link_libraries(test_env_file PRIVATE service_core GTest::gtest)

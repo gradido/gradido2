@@ -78,6 +78,7 @@ export async function openTestDatabase(kind: DatabaseConnection['kind']): Promis
     DB_USER: process.env.DB_USER ?? 'gradido',
     DB_PASSWORD: process.env.DB_PASSWORD ?? '',
     DB_DATABASE: database,
+    DB_POOL_SIZE: 10,
     DB_FILE: '',
   })
   /* Always true — connectDatabase was just told which database this is — but the union is
@@ -98,6 +99,7 @@ const emptyPostgresEnv = {
   DB_USER: '',
   DB_PASSWORD: '',
   DB_DATABASE: '',
+  DB_POOL_SIZE: 1,
 } as const
 
 /**

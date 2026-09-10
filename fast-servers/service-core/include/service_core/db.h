@@ -21,19 +21,23 @@
  * question asked twice. A statement is written against the driver, reached through
  * sc_db_native(), by code that already knows the dialect it is in.
  *
+ * service_core/sql.h is where statements are run, and it keeps the part of this that matters: a
+ * statement carries its text for each dialect, written by the repository, and what the two
+ * share is binding, stepping and reading -- not the SQL.
+ *
  * The row mapping under that is generated from the table contracts in `contracts/db/` rather
  * than written by hand -- 330 columns across 29 tables, where a wrong column index is a silent
  * wrong amount rather than a compile error. `Architecture.md`, *The mapping is generated, not
  * written*, is normative for it, and nothing in this header anticipates its shape beyond
  * keeping the driver reachable.
  *
- * ### Startup only, so far
+ * ### One connection here, statements in sql.h, where they run in db_exec.h
  *
- * sc_db_open() and sc_db_probe() block. That is right for startup and wrong for the request
- * path: `Architecture.md`, *Databases*, has PostgreSQL asynchronous on h2o's loop through
- * PQsocket / PQconsumeInput / PQisBusy, and none of that is here yet. The first repository that
- * reads a row on a request is what brings it, and it will be a second entry point beside these
- * rather than a change to them.
+ * This header opens *a* connection, which is what startup, migrations and the setup command
+ * need. Statements are service_core/sql.h. A serving role reaches the database through
+ * service_core/db_exec.h, whose workers each own one of these connections for their whole life
+ * and run the requests' work on it -- so everything here may block, and does, on a thread that
+ * is not an event loop.
  *
  * ### A driver the build left out
  *
@@ -72,6 +76,18 @@
  *  the host that answers nothing at all, where the socket would otherwise sit for minutes. */
 #define SC_DB_CONNECT_TIMEOUT_DEFAULT_MS 5000
 
+/**
+ * DB_POOL_SIZE when nothing sets it -- the same ten bun's SQL client opens by default, so the two
+ * implementations hold the same number against one database until somebody decides otherwise.
+ *
+ * Ten is not a measurement of anything, and it cannot be one: how many statements a PostgreSQL
+ * server can usefully run at once is a property of *that* server, which this process knows
+ * nothing about. What ten is, is safe -- a stock server allows 100 connections, and ten per
+ * serving process leaves room for both roles, the other implementation and an administrator.
+ * A database that can do more is told so. contracts/database-config.json, rules.pool.
+ */
+#define SC_DB_POOL_SIZE_DEFAULT 10
+
 typedef enum sc_db_kind {
     /* The reference. DB_TYPE=postgresql, which is also the default. */
     SC_DB_POSTGRESQL = 0,
@@ -102,6 +118,10 @@ typedef struct sc_db_config {
     char password[SC_DB_PASSWORD_MAX]; /* DB_PASSWORD, default empty */
     char database[SC_DB_NAME_MAX];     /* DB_DATABASE, default "gradido_community" */
 
+    /* PostgreSQL only: how many connections a serving process holds, one per worker -- see
+     * db_exec.h. */
+    uint16_t pool_size; /* DB_POOL_SIZE, default SC_DB_POOL_SIZE_DEFAULT */
+
     /* SQLite only. Relative paths are resolved against the working directory. */
     char file[SC_DB_FILE_MAX]; /* DB_FILE, default "./gradido_community.sqlite" */
 
@@ -129,9 +149,9 @@ const char *sc_db_drivers(void);
 /**
  * Fills @p out from the environment, applying the documented defaults.
  *
- * Answers SC_ERR_MALFORMED for a DB_TYPE that is neither database and for a DB_PORT that is not
- * a port, SC_ERR_TOO_LONG for a value that would not fit, in every case having logged which
- * variable it was.
+ * Answers SC_ERR_MALFORMED for a DB_TYPE that is neither database, for a DB_PORT that is not a
+ * port and for a DB_POOL_SIZE that is not a count of at least one, SC_ERR_TOO_LONG for a value
+ * that would not fit, in every case having logged which variable it was.
  */
 sc_status sc_db_config_load(sc_db_config *out);
 

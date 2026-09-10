@@ -29,6 +29,9 @@ export enum ErrorCode {
   Unknown = 3001,
   /** `errors/api.json`. This deployment's implementation does not serve that route. */
   RouteNotImplemented = 3008,
+  /** `errors/api.json`. The database has all the work this process may give it; nothing was
+   *  run, and the same request a moment later is expected to work. Sent with `Retry-After`. */
+  ServiceBusy = 3009,
 }
 
 /**
@@ -54,6 +57,7 @@ const ERROR_NAMES: Record<ErrorCode, string> = {
   [ErrorCode.ValidationFailed]: 'VALIDATION_FAILED',
   [ErrorCode.Unknown]: 'UNKNOWN',
   [ErrorCode.RouteNotImplemented]: 'ROUTE_NOT_IMPLEMENTED',
+  [ErrorCode.ServiceBusy]: 'SERVICE_BUSY',
 }
 
 /**
@@ -67,6 +71,7 @@ type ErrorParameters = {
   [ErrorCode.ValidationFailed]: [field: string, reason: string]
   [ErrorCode.Unknown]: []
   [ErrorCode.RouteNotImplemented]: [route: string]
+  [ErrorCode.ServiceBusy]: [retryAfter: number]
 }
 
 /**
@@ -84,6 +89,7 @@ const ERROR_MESSAGES: { [Code in ErrorCode]: (...parameters: ErrorParameters[Cod
   [ErrorCode.ValidationFailed]: (field, reason) => `validation failed for ${field}: ${reason}`,
   [ErrorCode.Unknown]: () => 'unknown error',
   [ErrorCode.RouteNotImplemented]: (route) => `route not implemented on this server: ${route}`,
+  [ErrorCode.ServiceBusy]: (retryAfter) => `service busy, retry after ${retryAfter} seconds`,
 }
 
 /** The HTTP status the contract gives each code, kept beside the code it belongs to. */
@@ -91,6 +97,7 @@ const ERROR_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.ValidationFailed]: 400,
   [ErrorCode.Unknown]: 500,
   [ErrorCode.RouteNotImplemented]: 501,
+  [ErrorCode.ServiceBusy]: 503,
 }
 
 export function errorStatus(code: ErrorCode): number {

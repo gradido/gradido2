@@ -62,6 +62,7 @@ void sc_defer_table_init(sc_defer_table *table, uint8_t loop_index)
     for (i = 0; i != SC_HTTP_DEFER_MAX; ++i) {
         table->slots[i].req = NULL;
         table->slots[i].work = NULL;
+        table->slots[i].arena = NULL;
         table->slots[i].next_free = i + 1 == SC_HTTP_DEFER_MAX ? -1 : i + 1;
         /* Generation 0, phase free. The first arm makes it 1, which is what keeps a real
          * ticket from ever being zero: loop 0, slot 0, generation 0 would be. */
@@ -69,7 +70,7 @@ void sc_defer_table_init(sc_defer_table *table, uint8_t loop_index)
     }
 }
 
-sc_http_ticket sc_defer_arm(sc_defer_table *table, sc_http_req *req, void *work)
+sc_http_ticket sc_defer_arm(sc_defer_table *table, sc_http_req *req, void *work, void *arena)
 {
     int32_t index = table->free_head;
     sc_defer_slot *slot;
@@ -82,6 +83,7 @@ sc_http_ticket sc_defer_arm(sc_defer_table *table, sc_http_req *req, void *work)
     slot->next_free = -1;
     slot->req = req;
     slot->work = work;
+    slot->arena = arena;
 
     /* An atomic load even though this slot is free and no claim can succeed against it: a stale
      * ticket may still attempt the compare and swap, and a plain read racing a failed atomic
@@ -111,14 +113,17 @@ int sc_defer_claim(sc_defer_table *table, sc_http_ticket ticket, int32_t *slot_o
     return 1;
 }
 
-void sc_defer_release(sc_defer_table *table, int32_t slot, sc_http_req **req_out, void **work_out)
+void sc_defer_release(sc_defer_table *table, int32_t slot, sc_http_req **req_out, void **work_out,
+                      void **arena_out)
 {
     sc_defer_slot *entry = &table->slots[slot];
 
     *req_out = entry->req;
     *work_out = entry->work;
+    *arena_out = entry->arena;
     entry->req = NULL;
     entry->work = NULL;
+    entry->arena = NULL;
 
     /* The generation is not bumped here but at the next arm. Between the two the slot holds
      * its old generation with the free phase, and a stale ticket asking for the armed phase

@@ -35,6 +35,7 @@ typedef struct sc_defer_slot {
      * is still holding the ticket and something has to hand its work back. */
     sc_http_req *req;
     void *work;             /* loop thread only */
+    void *arena;            /* loop thread only: the request's arena, while it is parked */
     int32_t next_free;      /* loop thread only; -1 ends the list */
     volatile int32_t state; /* generation << 2 | phase -- the one field two threads share */
 } sc_defer_slot;
@@ -52,7 +53,7 @@ void sc_defer_table_init(sc_defer_table *table, uint8_t loop_index);
  * Loop thread. Takes a slot for @p req and returns its ticket, or 0 when the table is full --
  * which is the caller's cue to answer 503 rather than to wait.
  */
-sc_http_ticket sc_defer_arm(sc_defer_table *table, sc_http_req *req, void *work);
+sc_http_ticket sc_defer_arm(sc_defer_table *table, sc_http_req *req, void *work, void *arena);
 
 /**
  * Any thread. Moves exactly the slot @p ticket names from armed to resuming, and answers
@@ -66,7 +67,8 @@ int sc_defer_claim(sc_defer_table *table, sc_http_ticket ticket, int32_t *slot_o
  * Loop thread. Takes the request and the work out of a resuming slot and gives the slot back.
  * @p req_out is NULL when the client went away while the work was running.
  */
-void sc_defer_release(sc_defer_table *table, int32_t slot, sc_http_req **req_out, void **work_out);
+void sc_defer_release(sc_defer_table *table, int32_t slot, sc_http_req **req_out, void **work_out,
+                      void **arena_out);
 
 /**
  * Loop thread. The client is gone: forget the request but keep the slot, because the worker

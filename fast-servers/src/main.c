@@ -161,7 +161,9 @@ static void print_usage(FILE *out)
     fprintf(out, "  %-14s FEDERATION_DHT_TOPIC, FEDERATION_DHT_SEED, SERVER_THREADS\n", "");
     fprintf(out, "  %-14s DB_TYPE (sqlite or postgresql), DB_FILE, and for postgresql\n",
             "database");
-    fprintf(out, "  %-14s DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE\n", "");
+    fprintf(out, "  %-14s DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE,\n", "");
+    fprintf(out, "  %-14s DB_POOL_SIZE (default %d: connections, one database worker each)\n", "",
+            SC_DB_POOL_SIZE_DEFAULT);
     fprintf(out, "  %-14s a DB_HOST beginning with / is a unix socket directory\n", "");
     fprintf(out, "  %-14s EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, EMAIL_SMTP_TLS,\n", "email");
     fprintf(out, "  %-14s EMAIL_USERNAME, EMAIL_PASSWORD, EMAIL_SENDER,\n", "");
@@ -219,8 +221,9 @@ int main(int argc, char **argv)
         for (r = 0; r < FS_COMMAND_COUNT; ++r) {
             if (strcmp(arg, kCommands[r].name) == 0) {
                 if (command != NULL && command != &kCommands[r]) {
-                    fprintf(stderr, "gradido2-fast: %s and %s are both commands; the process "
-                                    "does one thing or the other\n\n",
+                    fprintf(stderr,
+                            "gradido2-fast: %s and %s are both commands; the process "
+                            "does one thing or the other\n\n",
                             command->name, kCommands[r].name);
                     print_usage(stderr);
                     return 2;
@@ -247,8 +250,9 @@ int main(int argc, char **argv)
         }
     }
     if (command != NULL && any_selected) {
-        fprintf(stderr, "gradido2-fast: %s is a command, not a role; it serves nothing and "
-                        "cannot be combined with one\n\n",
+        fprintf(stderr,
+                "gradido2-fast: %s is a command, not a role; it serves nothing and "
+                "cannot be combined with one\n\n",
                 command->name);
         print_usage(stderr);
         return 2;

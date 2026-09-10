@@ -348,7 +348,7 @@ static int handle_path(sc_http_req *req, void *user_data)
 
 int main(int argc, char **argv)
 {
-    sc_http_config http_config;
+    sc_http_config http_config = {0};
     sc_log_config log_cfg;
     sc_http_server *server;
     unsigned long port;
