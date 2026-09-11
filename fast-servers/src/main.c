@@ -257,8 +257,9 @@ int main(int argc, char **argv)
         print_usage(stderr);
         return 2;
     }
-    if (!any_selected)
-        selected[0] = 1; /* --backend, the default */
+    /* --backend, the default -- of a start, and only of one: a command selects no role. */
+    if (!any_selected && command == NULL)
+        selected[0] = 1;
 
     /*
      * The `.env` before anything reads a variable, LOG_LEVEL included, and before any thread
@@ -311,9 +312,19 @@ int main(int argc, char **argv)
         sc_log_shutdown();
         return 1;
     }
-    sc_config_log(&cfg);
-    sc_log_info(SC_CAT_STARTUP, "process.start", "gradido2-fast %s, http backend %s", FS_VERSION,
-                sc_http_backend_name());
+    /*
+     * What a start was configured to serve, and with what -- for a start only. A command serves
+     * nothing: setup and migrate-down open a database and stop, and each says which one in its
+     * own config.database line. Ports, threads and an HTTP backend written in front of a setup
+     * conversation read as a backend that came up, which is exactly what did not happen. The
+     * configuration is loaded and checked all the same, the way the reference path's CONFIG is
+     * for every command -- an unusable one stops a command too.
+     */
+    if (command == NULL) {
+        sc_config_log(&cfg);
+        sc_log_info(SC_CAT_STARTUP, "process.start", "gradido2-fast %s, http backend %s",
+                    FS_VERSION, sc_http_backend_name());
+    }
 
     /* libsodium wants to be initialised once, from one thread, before anything asks it for a
      * digest. Here is that thread and this is that moment: no role has started yet. And curl
