@@ -55,6 +55,11 @@ typedef struct backend_setup_answers {
     char email_sender[SC_MAIL_ADDR_MAX];
     char email_sender_name[SC_MAIL_SENDER_NAME_MAX];
 
+    /** Set when the database the environment names already was kept as it is. Then none of
+     *  the db_ fields above is filled in and none of the DB_ variables is written -- the
+     *  environment still holds them, which is where backend_setup() reads them back from. */
+    int database_kept;
+
     /** The variables to write, in the order they were decided. */
     sc_env_entry entries[BACKEND_SETUP_ENTRY_MAX];
     size_t entry_count;

@@ -1325,6 +1325,9 @@ pub fn build(b: *std.Build) void {
             .{ .name = "test_register_account", .dir = "backend-core/tests", .src = "test_register_account.cpp", .lib = backend_core, .deps = &.{service_core}, .includes = &.{"service-core/include"} },
             .{ .name = "test_field_rules", .dir = "backend/tests", .src = "test_field_rules.cpp", .sources = &.{"backend/src/field_rules.c"}, .includes = &.{"backend/src"} },
             .{ .name = "test_static_sites", .dir = "backend/tests", .src = "test_static_sites.cpp", .sources = &.{"backend/src/static_sites.c"}, .includes = &.{"service-core/include"} },
+            // Compiled in like the two above, and linked against libuv because that is all the
+            // probe reaches -- the role's socket is libuv's, and so is the test's listener.
+            .{ .name = "test_postgres_probe", .dir = "backend/tests", .src = "test_postgres_probe.cpp", .sources = &.{"backend/src/postgres_probe.c"}, .includes = &.{"backend/src"}, .deps = &.{uv} },
         };
 
         for (unit_tests) |unit_test| {

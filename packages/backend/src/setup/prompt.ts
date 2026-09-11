@@ -144,16 +144,21 @@ export async function askText<TSchema extends v.GenericSchema<string, unknown>>(
  * and is visible, because a setup that cannot ask for a password at all is worse than one
  * that asks for it in the open. An empty line keeps whatever is configured now, so a rerun
  * of `setup` does not have to retype it.
+ *
+ * The parentheses say `none` or `unchanged` rather than the value. @p shown replaces that for
+ * a fallback that is no secret to anybody — the password `docker-compose.yml` starts its
+ * container with is printed in that file and in `README.md`, and `unchanged` would claim that
+ * something is configured when it is only being proposed.
  */
-export async function askSecret(label: string, fallback: string): Promise<string> {
-  const shown = fallback === '' ? 'none' : 'unchanged'
+export async function askSecret(label: string, fallback: string, shown?: string): Promise<string> {
+  const said = shown ?? (fallback === '' ? 'none' : 'unchanged')
   const stdin = process.stdin
   if (!isTerminal() || typeof stdin.setRawMode !== 'function') {
-    const typed = await readLine(`${label} (${shown}): `)
+    const typed = await readLine(`${label} (${said}): `)
     return typed === '' ? fallback : typed
   }
 
-  process.stdout.write(`${label} (${shown}): `)
+  process.stdout.write(`${label} (${said}): `)
   return new Promise<string>((resolve) => {
     let typed = ''
     stdin.setRawMode(true)
@@ -211,6 +216,14 @@ async function readLine(query: string): Promise<string> {
   /* One interface per question, because `askChoice` and `askSecret` read the same stdin
      directly and two readers on one stream take a keystroke each. */
   const io = createInterface({ input: process.stdin, output: process.stdout })
+  /* readline turns Ctrl-C into this event rather than into a signal, and without a listener it
+     only closes the interface: the question never resolves, the event loop runs dry, and the
+     process ends with 0 — an abandoned setup reported as a finished one. Ended the way the
+     choices end it instead. */
+  io.on('SIGINT', () => {
+    process.stdout.write('\n')
+    process.exit(130)
+  })
   try {
     return (await io.question(query)).trim()
   } finally {

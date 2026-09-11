@@ -16,9 +16,15 @@
  * standing at the terminal, and losing eleven correct answers because the twelfth had a typo
  * would be gratuitous.
  *
- * The first question decides how many of the others are asked. A development installation is a
- * known thing -- this machine, one SQLite file, the MailDev container of the repository's
- * docker-compose.yml -- so it is proposed as a block and taken with one Enter.
+ * **The database is asked first**, because it is the one answer that depends on this machine
+ * rather than on the person at it: SQLite needs nothing, PostgreSQL needs a server that is
+ * already running. So the conversation looks before it asks -- see postgres_probe.h -- and a
+ * database that is configured already is offered as it stands, so that a rerun of setup to
+ * change the relay does not end up somewhere else.
+ *
+ * The question after it decides how many of the others are asked. A development installation is
+ * a known thing -- this machine and the MailDev container of the repository's docker-compose.yml
+ * -- so it is proposed as a block and taken with one Enter.
  */
 #include "setup.h"
 
@@ -27,6 +33,7 @@
 #include <string.h>
 
 #include "field_rules.h"
+#include "postgres_probe.h"
 #include "service_core/secret.h"
 #include "prompt.h"
 #include "service_core/email/transport.h"
@@ -39,6 +46,27 @@
 #define MAILDEV_SMTP_PORT "1026"
 /** And the web interface that shows what arrived -- MAILDEV_WEB_PORT. */
 #define MAILDEV_WEB_PORT "1081"
+
+/* The database defaults of packages/backend-core/src/database/schema.ts, which
+ * service-core/src/db.c mirrors for a start. Mirrored again rather than read through
+ * sc_db_config_load: that one refuses a configuration a setup is here to repair, and says so as a
+ * fatal log line. What a question proposes and what a start would use must not differ. */
+#define DEFAULT_DB_FILE "./gradido_community.sqlite"
+#define DEFAULT_DB_HOST "/var/run/postgresql"
+#define DEFAULT_DB_PORT "5432"
+#define DEFAULT_DB_DATABASE "gradido_community"
+#define DEFAULT_DB_USER "gradido"
+
+/** The password docker-compose.yml starts its PostgreSQL with when the environment names none --
+ *  ${DB_PASSWORD:-gradido} there. User and database have the same defaults as the configuration,
+ *  so they need no constant of their own. */
+#define DOCKER_COMPOSE_POSTGRES_PASSWORD "gradido"
+
+/** What the start refuses an empty password over TCP in production with --
+ *  DATABASE_PASSWORD_MESSAGE on the reference path. */
+#define DATABASE_PASSWORD_MESSAGE                                                                  \
+    "an empty database password is not acceptable in production over TCP; it is correct over a "   \
+    "Unix socket, which is what a DB_HOST beginning with \"/\" selects"
 
 /** The rules of packages/shared/src/schemas/community.ts and of the mail configuration, in the
  *  order the pipes that define them apply. */
@@ -309,26 +337,86 @@ static void report_relay(const backend_setup_answers *setup, int maildev)
     }
 }
 
+/** The value of @p name, or @p fallback when it is unset or empty. What a rerun of setup
+ *  offers in the parentheses after a label. */
+static const char *current(const char *name, const char *fallback)
+{
+    const char *value = getenv(name);
+
+    return value != NULL && value[0] != '\0' ? value : fallback;
+}
+
+/** Whether @p name is among the variables to write already. */
+static int decided(const backend_setup_answers *setup, const char *name)
+{
+    size_t i;
+
+    for (i = 0; i != setup->entry_count; ++i) {
+        if (strcmp(setup->entries[i].name, name) == 0)
+            return 1;
+    }
+    return 0;
+}
+
 /**
- * What a developer's machine is, without asking.
+ * Whether the environment names a database already -- out of `.env`, where setup wrote it the
+ * last time, or out of whatever started the process.
  *
- * `http://localhost` and SQLite because that is what a checkout runs as, and the MailDev
- * container because it is the mail sink this repository ships: nothing is delivered, every mail
- * is readable at http://localhost:1081, and there are no credentials because the container is
- * started without any.
+ * Any variable that says *which* database counts. The password and the pool size do not: on
+ * their own they describe no database, only how to talk to one.
+ */
+static int is_database_configured(void)
+{
+    static const char *const kNames[] = {"DB_TYPE", "DB_FILE",     "DB_HOST",
+                                         "DB_PORT", "DB_DATABASE", "DB_USER"};
+    size_t i;
+
+    for (i = 0; i != sizeof(kNames) / sizeof(kNames[0]); ++i) {
+        if (current(kNames[i], NULL) != NULL)
+            return 1;
+    }
+    return 0;
+}
+
+/**
+ * The database @p setup names, on one line: what keeping it says, and what the development block
+ * shows.
+ *
+ * The configured one while nothing was answered yet or when it was kept, the answered one
+ * otherwise -- which is the same database backend_setup() goes on to open.
+ */
+static void describe_database(const backend_setup_answers *setup, char *out, size_t out_size)
+{
+    const int configured = setup->database_kept || setup->db_type[0] == '\0';
+    const char *type = configured ? current("DB_TYPE", "sqlite") : setup->db_type;
+
+    if (strcmp(type, "postgresql") != 0) {
+        (void)snprintf(out, out_size, "sqlite in %s",
+                       configured ? current("DB_FILE", DEFAULT_DB_FILE) : setup->db_file);
+        return;
+    }
+    (void)snprintf(out, out_size, "postgresql, %s on %s:%s as %s",
+                   configured ? current("DB_DATABASE", DEFAULT_DB_DATABASE) : setup->db_database,
+                   configured ? current("DB_HOST", DEFAULT_DB_HOST) : setup->db_host,
+                   configured ? current("DB_PORT", DEFAULT_DB_PORT) : setup->db_port,
+                   configured ? current("DB_USER", DEFAULT_DB_USER) : setup->db_user);
+}
+
+/**
+ * What a developer's machine is, without asking -- beyond the database, which was asked.
+ *
+ * `http://localhost` because that is what a checkout runs as, and the MailDev container because
+ * it is the mail sink this repository ships: nothing is delivered, every mail is readable at
+ * http://localhost:1081, and there are no credentials because the container is started without
+ * any.
  */
 static void development_setup(backend_setup_answers *setup)
 {
-    const char *db_file = getenv("DB_FILE");
-
     set(setup->community.name, sizeof(setup->community.name), DEVELOPMENT_COMMUNITY_NAME);
     setup->community.has_description = 0;
     set(setup->community.url, sizeof(setup->community.url), DEVELOPMENT_COMMUNITY_URL);
 
     set(setup->node_env, sizeof(setup->node_env), "development");
-    set(setup->db_type, sizeof(setup->db_type), "sqlite");
-    set(setup->db_file, sizeof(setup->db_file),
-        db_file != NULL && db_file[0] != '\0' ? db_file : "./gradido_community.sqlite");
     set(setup->email, sizeof(setup->email), "true");
     set(setup->email_host, sizeof(setup->email_host), "localhost");
     set(setup->email_port, sizeof(setup->email_port), MAILDEV_SMTP_PORT);
@@ -341,8 +429,6 @@ static void development_setup(backend_setup_answers *setup)
     set(setup->email_sender_name, sizeof(setup->email_sender_name), DEVELOPMENT_COMMUNITY_NAME);
 
     add(setup, "NODE_ENV", setup->node_env);
-    add(setup, "DB_TYPE", setup->db_type);
-    add(setup, "DB_FILE", setup->db_file);
     add(setup, "EMAIL", setup->email);
     add(setup, "EMAIL_SMTP_HOST", setup->email_host);
     add(setup, "EMAIL_SMTP_PORT", setup->email_port);
@@ -354,79 +440,210 @@ static void development_setup(backend_setup_answers *setup)
     add(setup, "EMAIL_SENDER_NAME", setup->email_sender_name);
 }
 
+/**
+ * Takes the development proposal back, so that asking field by field starts from nothing --
+ * except the database, which was asked rather than proposed. Its variables are the first
+ * @p decided_count entries, and so are all that stay.
+ */
+static void forget_proposal(backend_setup_answers *setup, size_t decided_count)
+{
+    setup->entry_count = decided_count;
+    memset(&setup->community, 0, sizeof(setup->community));
+    setup->node_env[0] = '\0';
+    setup->email[0] = '\0';
+    setup->email_host[0] = '\0';
+    setup->email_port[0] = '\0';
+    setup->email_tls[0] = '\0';
+    setup->email_user[0] = '\0';
+    setup->email_pass[0] = '\0';
+    setup->email_sender[0] = '\0';
+    setup->email_sender_name[0] = '\0';
+}
+
 static void describe(const backend_setup_answers *setup)
 {
+    char database[SC_DB_HOST_MAX + SC_DB_NAME_MAX + SC_DB_USER_MAX + 32];
+
+    describe_database(setup, database, sizeof(database));
     bk_say("\nThese are the development settings:\n");
     bk_say("  community name  %s", setup->community.name);
     bk_say("  public URL      %s", setup->community.url);
-    bk_say("  database        %s in %s", setup->db_type, setup->db_file);
+    bk_say("  database        %s", database);
     bk_say("  mail relay      %s:%s, no TLS, no login", setup->email_host, setup->email_port);
     bk_say("  sender          %s <%s>", setup->email_sender_name, setup->email_sender);
 }
 
-/** The value of @p name, or @p fallback when it is unset or empty. What a rerun of setup
- *  offers in the parentheses after a label. */
-static const char *current(const char *name, const char *fallback)
+/**
+ * Says which of the two ports a PostgreSQL answers on, and answers how many do. @p container is
+ * set when the one that does is the port docker-compose.yml publishes.
+ *
+ * Something that answers and is not PostgreSQL is said as well: it is the reason a server
+ * pointed at that port would fail, and finding that out now is cheaper than at the first start.
+ */
+static int report_postgres(int *container)
 {
-    const char *value = getenv(name);
+    static const int kPorts[] = {BK_POSTGRES_DEFAULT_PORT, BK_POSTGRES_COMPOSE_PORT};
+    int found = 0;
+    size_t i;
 
-    return value != NULL && value[0] != '\0' ? value : fallback;
+    *container = 0;
+    bk_say("\nLooking for PostgreSQL on this machine \xe2\x80\xa6");
+    for (i = 0; i != sizeof(kPorts) / sizeof(kPorts[0]); ++i) {
+        const bk_postgres_answer answer =
+            bk_postgres_probe(BK_POSTGRES_LOOPBACK, kPorts[i], BK_POSTGRES_PROBE_TIMEOUT_MS);
+        char where[32];
+
+        (void)snprintf(where, sizeof(where), "localhost:%d", kPorts[i]);
+        bk_say("  %-16s %s \xe2\x80\x94 %s", where,
+               answer == BK_POSTGRES_FOUND   ? "PostgreSQL answers"
+               : answer == BK_POSTGRES_OTHER ? "something answers, and it is not PostgreSQL"
+                                             : "nothing answers",
+               kPorts[i] == BK_POSTGRES_DEFAULT_PORT
+                   ? "the port PostgreSQL listens on unless told otherwise"
+                   : "the port docker-compose.yml publishes it on");
+        if (answer == BK_POSTGRES_FOUND) {
+            ++found;
+            if (kPorts[i] == BK_POSTGRES_COMPOSE_PORT)
+                *container = 1;
+        }
+    }
+    return found;
 }
 
-static int ask_for_database(backend_setup_answers *setup, int production)
+/**
+ * The questions for PostgreSQL, with what they propose depending on what was found.
+ *
+ * What is configured, when it is PostgreSQL already -- somebody who chose it over keeping it is
+ * changing one value. Otherwise, when the container of docker-compose.yml answers, what that
+ * container was started with: its port, and the user, password and database it reads from the
+ * same variables -- or their defaults. A server on 5432 changes nothing about the proposal: the
+ * default is already the socket directory of a server on this machine, which is where that one
+ * is fastest, see contracts/database-config.json, rules.connection.
+ */
+static int ask_for_postgres(backend_setup_answers *setup, int container_found)
 {
-    static const char *const kLabels[] = {"sqlite", "postgresql"};
-    static const char *const kHints[] = {"one file, no service to run",
-                                         "the reference, for a community with an administrator"};
-    const char *type = current("DB_TYPE", "sqlite");
-    int chosen = bk_prompt_choose("Which database?", kLabels, kHints, 2,
-                                  strcmp(type, "postgresql") == 0 ? 1 : 0);
+    const int container =
+        strcmp(current("DB_TYPE", "sqlite"), "postgresql") != 0 && container_found;
+    const char *configured_password = current("DB_PASSWORD", "");
+    const char *proposed_password = container && configured_password[0] == '\0'
+                                        ? DOCKER_COMPOSE_POSTGRES_PASSWORD
+                                        : configured_password;
+    char compose_port[8];
+    char shown[64];
 
-    if (chosen < 0)
-        return 0;
-    set(setup->db_type, sizeof(setup->db_type), kLabels[chosen]);
-    add(setup, "DB_TYPE", setup->db_type);
+    (void)snprintf(compose_port, sizeof(compose_port), "%d", BK_POSTGRES_COMPOSE_PORT);
+    (void)snprintf(shown, sizeof(shown), "%s, what docker-compose.yml sets", proposed_password);
 
-    if (chosen == 0) {
-        if (!ask("Database file", current("DB_FILE", "./gradido_community.sqlite"), ANSWER_REQUIRED,
-                 setup->db_file, sizeof(setup->db_file)))
-            return 0;
-        add(setup, "DB_FILE", setup->db_file);
-        return 1;
-    }
-
-    if (!ask("Database host", current("DB_HOST", "localhost"), ANSWER_REQUIRED, setup->db_host,
-             sizeof(setup->db_host)))
+    if (!ask("Database host", container ? "localhost" : current("DB_HOST", DEFAULT_DB_HOST),
+             ANSWER_REQUIRED, setup->db_host, sizeof(setup->db_host)))
         return 0;
-    if (!ask("Database port", current("DB_PORT", "5432"), ANSWER_PORT, setup->db_port,
-             sizeof(setup->db_port)))
+    add(setup, "DB_HOST", setup->db_host);
+    if (!ask("Database port", container ? compose_port : current("DB_PORT", DEFAULT_DB_PORT),
+             ANSWER_PORT, setup->db_port, sizeof(setup->db_port)))
         return 0;
-    if (!ask("Database name", current("DB_DATABASE", "gradido_community"), ANSWER_REQUIRED,
+    add(setup, "DB_PORT", setup->db_port);
+    if (!ask("Database name", current("DB_DATABASE", DEFAULT_DB_DATABASE), ANSWER_REQUIRED,
              setup->db_database, sizeof(setup->db_database)))
         return 0;
-    if (!ask("Database user", current("DB_USER", "gradido"), ANSWER_REQUIRED, setup->db_user,
+    add(setup, "DB_DATABASE", setup->db_database);
+    if (!ask("Database user", current("DB_USER", DEFAULT_DB_USER), ANSWER_REQUIRED, setup->db_user,
              sizeof(setup->db_user)))
         return 0;
-    while (!keeps_its_own_secret("DB_PASSWORD")) {
-        if (!bk_prompt_secret("Database password", current("DB_PASSWORD", ""), setup->db_password,
-                              sizeof(setup->db_password)))
-            return 0;
-        /* The rule sc_db_config_load applies at every start, applied here instead -- a password
-         * refused now costs one more question, and refused at the next start it costs a server
-         * that will not come up. */
-        if (!production || setup->db_password[0] != '\0')
-            break;
-        (void)fprintf(stderr, "  an empty database password is not acceptable in production\n");
-    }
-    add(setup, "DB_HOST", setup->db_host);
-    add(setup, "DB_PORT", setup->db_port);
-    add(setup, "DB_DATABASE", setup->db_database);
     add(setup, "DB_USER", setup->db_user);
     /* Only where the environment is the source. Writing an empty line for a secret that comes
      * from elsewhere would put a password nobody chose into the file. */
-    if (!keeps_its_own_secret("DB_PASSWORD"))
-        add(setup, "DB_PASSWORD", setup->db_password);
+    if (keeps_its_own_secret("DB_PASSWORD"))
+        return 1;
+    if (!bk_prompt_secret("Database password", proposed_password,
+                          proposed_password == configured_password ? NULL : shown,
+                          setup->db_password, sizeof(setup->db_password)))
+        return 0;
+    add(setup, "DB_PASSWORD", setup->db_password);
     return 1;
+}
+
+/**
+ * Which database, and where -- its variables among the entries, or none at all when what is
+ * configured already is kept.
+ *
+ * Kept means not written: the lines that configure it stay exactly as they are, wherever they
+ * came from, and backend_setup() reads them back out of the environment.
+ */
+static int ask_for_database(backend_setup_answers *setup)
+{
+    static const char *const kLabels[] = {"as configured", "sqlite", "postgresql"};
+    static const char *const kHints[] = {"the database above", "one file, nothing to install",
+                                         "a server that has to be installed and running"};
+    enum { KEEP, SQLITE, POSTGRESQL };
+    const int configured = is_database_configured();
+    /* The list starts at "as configured" only when there is something to keep. */
+    const int first = configured ? KEEP : SQLITE;
+    int container = 0;
+    const int found = report_postgres(&container);
+    int proposed;
+    int chosen;
+
+    if (configured) {
+        char database[SC_DB_HOST_MAX + SC_DB_NAME_MAX + SC_DB_USER_MAX + 32];
+
+        describe_database(setup, database, sizeof(database));
+        bk_say("\nThe database is configured already:");
+        bk_say("  %s", database);
+    }
+    bk_say("\nSQLite keeps the whole database in one file beside the server and needs nothing");
+    bk_say("else. PostgreSQL is the reference, for a community with an administrator; it is a");
+    bk_say("server of its own, and it has to be installed and running before this one starts.");
+
+    /* What is configured before what is running: a rerun is somebody changing one thing, and a
+     * server that happens to be up is not a reason to move their data somewhere else. */
+    proposed = configured ? KEEP : found != 0 ? POSTGRESQL : SQLITE;
+    chosen = bk_prompt_choose("Which database?", kLabels + first, kHints + first, 3 - first,
+                              proposed - first);
+    if (chosen < 0)
+        return 0;
+    chosen += first;
+
+    if (chosen == KEEP) {
+        setup->database_kept = 1;
+        return 1;
+    }
+    set(setup->db_type, sizeof(setup->db_type), kLabels[chosen]);
+    add(setup, "DB_TYPE", setup->db_type);
+    if (chosen == POSTGRESQL)
+        return ask_for_postgres(setup, container);
+
+    if (!ask("Database file", current("DB_FILE", DEFAULT_DB_FILE), ANSWER_REQUIRED, setup->db_file,
+             sizeof(setup->db_file)))
+        return 0;
+    add(setup, "DB_FILE", setup->db_file);
+    return 1;
+}
+
+/**
+ * The rule sc_db_config_load applies at every start, applied here instead: a password refused now
+ * costs one more question, refused at the next start it costs a server that will not come up.
+ * Asked of the database as it will be -- answered or kept -- because a kept one is held to the
+ * same rule, and only a production installation is asked it at all.
+ */
+static int insist_on_production_password(backend_setup_answers *setup)
+{
+    for (;;) {
+        const int kept = setup->database_kept;
+        const char *type = kept ? current("DB_TYPE", "sqlite") : setup->db_type;
+        const char *host = kept ? current("DB_HOST", DEFAULT_DB_HOST) : setup->db_host;
+        const char *password =
+            decided(setup, "DB_PASSWORD") ? setup->db_password : current("DB_PASSWORD", "");
+
+        if (strcmp(type, "postgresql") != 0 || sc_db_host_is_unix_socket(host) ||
+            password[0] != '\0' || keeps_its_own_secret("DB_PASSWORD"))
+            return 1;
+        (void)fprintf(stderr, "  %s\n", DATABASE_PASSWORD_MESSAGE);
+        if (!bk_prompt_secret("Database password", "", NULL, setup->db_password,
+                              sizeof(setup->db_password)))
+            return 0;
+        if (!decided(setup, "DB_PASSWORD"))
+            add(setup, "DB_PASSWORD", setup->db_password);
+    }
 }
 
 static int ask_for_email(backend_setup_answers *setup)
@@ -474,8 +691,8 @@ static int ask_for_email(backend_setup_answers *setup)
     if (setup->email_user[0] == '\0')
         setup->email_pass[0] = '\0';
     else if (!keeps_its_own_secret("EMAIL_PASSWORD") &&
-             !bk_prompt_secret("SMTP password", current("EMAIL_PASSWORD", ""), setup->email_pass,
-                               sizeof(setup->email_pass)))
+             !bk_prompt_secret("SMTP password", current("EMAIL_PASSWORD", ""), NULL,
+                               setup->email_pass, sizeof(setup->email_pass)))
         return 0;
     if (!ask("Sender address", current("EMAIL_SENDER", ""), ANSWER_EMAIL, setup->email_sender,
              sizeof(setup->email_sender)))
@@ -518,8 +735,6 @@ static int ask_every_field(backend_setup_answers *setup, int production)
 
     set(setup->node_env, sizeof(setup->node_env), production ? "production" : "development");
     add(setup, "NODE_ENV", setup->node_env);
-    if (!ask_for_database(setup, production))
-        return 0;
     if (!ask_for_email(setup))
         return 0;
 
@@ -527,33 +742,30 @@ static int ask_every_field(backend_setup_answers *setup, int production)
     return 1;
 }
 
-int backend_ask_for_setup(backend_setup_answers *setup)
+static int hold_conversation(backend_setup_answers *setup)
 {
     static const char *const kLabels[] = {"development", "production"};
-    static const char *const kHints[] = {"localhost, SQLite, mail into the MailDev container",
+    static const char *const kHints[] = {"localhost, mail into the MailDev container",
                                          "every value is asked for"};
     const char *node_env = getenv("NODE_ENV");
+    size_t database_entries;
     int production;
-
-    if (setup == NULL)
-        return 0;
-    memset(setup, 0, sizeof(*setup));
-
-    /* Without a terminal there is nobody to answer, and a command that blocked on a prompt
-     * nobody can see would look like a hang rather than an unfinished setup. The caller turns
-     * this into a line that says what to do instead. */
-    if (!bk_prompt_is_terminal())
-        return 0;
 
     bk_say("\nThis database has no community yet.\n");
     bk_say("What follows is written once and becomes this instance's identity: other");
     bk_say("communities will know it by these answers and by a key pair generated here.");
     bk_say("The database and the mail relay are written to .env beside it.");
 
+    if (!ask_for_database(setup))
+        return 0;
+
     production = bk_prompt_choose("What kind of installation is this?", kLabels, kHints, 2,
                                   node_env != NULL && strcmp(node_env, "production") == 0 ? 1 : 0);
     if (production < 0)
         return 0;
+    if (production && !insist_on_production_password(setup))
+        return 0;
+    database_entries = setup->entry_count;
 
     if (!production) {
         int take;
@@ -566,9 +778,28 @@ int backend_ask_for_setup(backend_setup_answers *setup)
             return 0;
         if (take)
             return 1;
-        /* Asked again, one field at a time, so the proposal leaves nothing behind. */
-        memset(setup, 0, sizeof(*setup));
+        forget_proposal(setup, database_entries);
     }
 
     return ask_every_field(setup, production);
+}
+
+int backend_ask_for_setup(backend_setup_answers *setup)
+{
+    int answered;
+
+    if (setup == NULL)
+        return 0;
+    memset(setup, 0, sizeof(*setup));
+
+    /* Without a terminal there is nobody to answer, and a command that blocked on a prompt
+     * nobody can see would look like a hang rather than an unfinished setup. The caller turns
+     * this into a line that says what to do instead. */
+    if (!bk_prompt_is_terminal())
+        return 0;
+
+    bk_prompt_begin();
+    answered = hold_conversation(setup);
+    bk_prompt_end();
+    return answered;
 }
