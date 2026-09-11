@@ -4,6 +4,7 @@
  */
 #include "prompt.h"
 
+#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -64,11 +65,28 @@ static int read_key(void)
     return KEY_EOF;
 }
 
+/* There is no terminal state of ours to put back, so ending is all there is to do. */
+static void on_interrupt(int signal_number)
+{
+    (void)signal_number;
+    _exit(130);
+}
+
 #else
 
 static struct termios g_saved;
 
-/** Turns off echo and line buffering, so that a keystroke arrives as it is pressed. */
+/** Whether the terminal is in raw mode now -- what on_interrupt reads to know that it has
+ *  something to put back. */
+static volatile sig_atomic_t g_raw;
+
+/**
+ * Turns off echo and line buffering, so that a keystroke arrives as it is pressed -- and turns
+ * off the signal keys, so that Ctrl-C arrives as a keystroke too, byte 3, and is answered where
+ * the terminal is being read rather than in a handler. That is what raw mode means to Node's
+ * setRawMode, which the reference path uses; without ISIG off, Ctrl-C would still be a SIGINT,
+ * and the handler the process has for it while serving only raises a flag nobody here reads.
+ */
 static int raw_begin(void)
 {
     struct termios raw;
@@ -76,15 +94,39 @@ static int raw_begin(void)
     if (tcgetattr(fileno(stdin), &g_saved) != 0)
         return 0;
     raw = g_saved;
-    raw.c_lflag &= (tcflag_t) ~(ICANON | ECHO);
+    raw.c_lflag &= (tcflag_t) ~(ICANON | ECHO | ISIG);
     raw.c_cc[VMIN] = 1;
     raw.c_cc[VTIME] = 0;
-    return tcsetattr(fileno(stdin), TCSANOW, &raw) == 0;
+    if (tcsetattr(fileno(stdin), TCSANOW, &raw) != 0)
+        return 0;
+    g_raw = 1;
+    return 1;
 }
 
 static void raw_end(void)
 {
+    g_raw = 0;
     (void)tcsetattr(fileno(stdin), TCSANOW, &g_saved);
+}
+
+/**
+ * SIGINT while the conversation is held -- see bk_prompt_begin().
+ *
+ * Only what may be done in a handler: tcsetattr, write and _exit are all async-signal-safe.
+ * Raw mode is put back for the case where a signal arrives anyway -- somebody sending one with
+ * kill rather than with the keyboard -- because a shell left without echo is worse than any
+ * setup that did not finish.
+ */
+static void on_interrupt(int signal_number)
+{
+    ssize_t written;
+
+    (void)signal_number;
+    if (g_raw)
+        (void)tcsetattr(STDIN_FILENO, TCSANOW, &g_saved);
+    written = write(STDOUT_FILENO, "\n", 1);
+    (void)written;
+    _exit(130);
 }
 
 /** Whether another byte of the same escape sequence is already there. */
@@ -130,6 +172,22 @@ static int read_key(void)
 }
 
 #endif
+
+/** What SIGINT did before bk_prompt_begin(), for bk_prompt_end() to put back. */
+static void (*g_previous_interrupt)(int) = SIG_DFL;
+
+void bk_prompt_begin(void)
+{
+    void (*previous)(int) = signal(SIGINT, on_interrupt);
+
+    if (previous != SIG_ERR)
+        g_previous_interrupt = previous;
+}
+
+void bk_prompt_end(void)
+{
+    (void)signal(SIGINT, g_previous_interrupt);
+}
 
 static void render(const char *const *labels, const char *const *hints, int count, int index)
 {
@@ -205,8 +263,9 @@ int bk_prompt_choose(const char *question, const char *const *labels, const char
             return -1;
         }
         if (key == KEY_INTERRUPT) {
-            /* Ctrl-C, which raw mode does not turn into a signal. 130 is what a shell reports
-             * for a program that ended on SIGINT, and setup has written nothing at this point. */
+            /* Ctrl-C, which raw mode does not turn into a signal -- see raw_begin. 130 is what a
+             * shell reports for a program that ended on SIGINT, and setup has written nothing at
+             * this point. */
             raw_end();
             (void)fputc('\n', stdout);
             exit(130);
@@ -282,16 +341,19 @@ int bk_prompt_text(const char *label, const char *fallback, char *out, size_t ou
     }
 }
 
-int bk_prompt_secret(const char *label, const char *fallback, char *out, size_t out_size)
+int bk_prompt_secret(const char *label, const char *fallback, const char *shown, char *out,
+                     size_t out_size)
 {
     char typed[BK_ANSWER_MAX];
 
     if (fallback == NULL)
         fallback = "";
+    if (shown == NULL)
+        shown = fallback[0] == '\0' ? "none" : "unchanged";
     for (;;) {
         size_t length = 0;
 
-        (void)fprintf(stdout, "%s (%s): ", label, fallback[0] == '\0' ? "none" : "unchanged");
+        (void)fprintf(stdout, "%s (%s): ", label, shown);
         (void)fflush(stdout);
 
         if (!bk_prompt_is_terminal() || !raw_begin()) {

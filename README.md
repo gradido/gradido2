@@ -103,21 +103,44 @@ a machine six months from now.
 ./build/gradido2 setup            # or: turbo @gradido/backend#start -- setup
 ```
 
-`setup` is the one command that asks questions, and it asks them once. The first is what kind
-of installation this is:
+`setup` is the one command that asks questions, and it asks them once. The first is the
+database, because it is the one answer that depends on the machine: SQLite is a file and needs
+nothing, PostgreSQL is a server that has to be installed and running. So before it asks, it
+looks — on 5432, where PostgreSQL listens unless told otherwise, and on 15432, where
+`docker-compose.yml` publishes its container:
+
+```text
+Looking for PostgreSQL on this machine …
+  localhost:5432   nothing answers — the port PostgreSQL listens on unless told otherwise
+  localhost:15432  PostgreSQL answers — the port docker-compose.yml publishes it on
+
+Which database?
+  sqlite      — one file, nothing to install
+❯ postgresql  — a server that has to be installed and running
+```
+
+A PostgreSQL that answers makes `postgresql` the proposal; the container's makes its port, user
+and password the proposal as well. The check is the first eight bytes a PostgreSQL client sends,
+which only PostgreSQL answers, so something else on the port is reported as something else. A
+database the environment or `.env` already names is offered first, as *as configured*, and
+shown — a rerun of `setup` to change the relay stays where the data is.
+
+The second question is what kind of installation this is:
 
 ```text
 What kind of installation is this?
-❯ development  — localhost, SQLite, mail into the MailDev container
+❯ development  — localhost, mail into the MailDev container
   production   — every value is asked for
 ```
 
 **Development is a proposal, not a mode.** It puts the whole block on screen — `Gradido Dev
-Community` at `http://localhost`, SQLite in a file, the MailDev container of
+Community` at `http://localhost`, the database just chosen, the MailDev container of
 `docker-compose.yml` as the relay — asks that relay whether it is running, and says how to
 start it if it is not. Then it asks whether to take it. Answering *no*, or choosing
 *production*, asks for every field one at a time, each with what is configured now in
-parentheses; Enter takes that, anything else replaces it.
+parentheses; Enter takes that, anything else replaces it. Production also holds the database
+to the rule a start applies — no empty password over TCP — and asks again rather than writing
+a configuration that would not start.
 
 The answers go two places, and the split is the point. The community's name, description and
 URL are its **identity** and become a row, together with the key pair generated for it — they
@@ -184,12 +207,14 @@ reaches nothing, because the daemon has a network namespace of its own and the h
 are not in it. To browse a SQLite file, uncomment the volume in `docker-compose.yml` and give
 its path as the Server field.
 
-User, password and database are the defaults of `packages/backend/.env.dist`; the port is
-not. **The container publishes 15432, not 5432**, so pointing a server at it is three lines
-in `.env`:
+User and database are the defaults of `packages/backend/.env.dist`; the host, the port and
+the password are not. **The container publishes 15432, not 5432**, and it is reached over TCP
+rather than over the socket directory the default names, so pointing a server at it is four
+lines in `.env` — which `setup` writes itself when it finds the container running:
 
 ```sh
 DB_TYPE=postgresql
+DB_HOST=localhost
 DB_PORT=15432
 DB_PASSWORD=gradido
 ```
@@ -207,7 +232,7 @@ different things.
 `DB_PASSWORD`, `DB_DATABASE`, `ADMINER_PORT`, `MAILDEV_WEB_PORT` and `MAILDEV_SMTP_PORT`
 work the same way.
 
-The mail sink is what a development setup is pointed at: answer *development* to the first
+The mail sink is what a development setup is pointed at: answer *development* to the second
 question of `setup` and it writes `EMAIL_SMTP_HOST=localhost`, `EMAIL_SMTP_PORT=1026` and
 `EMAIL_SMTP_TLS=none` — no TLS and no login, because the container is started with neither.
 Every mail then lands at <http://localhost:1081> instead of at a person. The mail *tests* are

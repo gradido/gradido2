@@ -22,3 +22,13 @@ target_link_libraries(test_static_sites PRIVATE GTest::gtest)
 # Which site a path belongs to and which file of it -- the two decisions made before anything is
 # answered, against a table this test writes rather than the one the build generates.
 add_test(NAME backend.static_sites COMMAND test_static_sites)
+
+# postgres_probe.c is compiled in for the same reason: it is a leaf of the setup command, and it
+# reaches nothing but libuv, which the test links as the role does.
+add_executable(test_postgres_probe test_postgres_probe.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../src/postgres_probe.c)
+target_include_directories(test_postgres_probe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(test_postgres_probe PRIVATE uv_a GTest::gtest)
+
+# Which of three things a port on loopback is -- PostgreSQL, something else, nothing -- against
+# listeners the test starts, so that no server on the machine decides the outcome.
+add_test(NAME backend.postgres_probe COMMAND test_postgres_probe)

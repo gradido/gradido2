@@ -24,6 +24,22 @@
 /** Whether there is somebody at the other end to answer. */
 int bk_prompt_is_terminal(void);
 
+/**
+ * From here until bk_prompt_end(), Ctrl-C ends the process: with the terminal put back, a
+ * newline, and 130, which is what a shell reports for a program that ended on SIGINT.
+ *
+ * Around the conversation and nothing else. The process has a SIGINT handler of its own, and it
+ * only raises the quit flag -- right for a server, and for the database wait that follows the
+ * questions, which notices the flag. Nothing between two questions reads it, so without this a
+ * Ctrl-C at a typed answer, or during the probes between two questions, would be noticed by
+ * nobody. The reference path gets the same from Node, where Ctrl-C ends a process that has not
+ * said otherwise. Nothing has been written by then, so ending is all there is to do.
+ */
+void bk_prompt_begin(void);
+
+/** Gives SIGINT back to whatever handled it before bk_prompt_begin(). */
+void bk_prompt_end(void);
+
 /** A sentence that is part of the conversation rather than part of the log. */
 void bk_say(const char *fmt, ...);
 
@@ -56,7 +72,13 @@ int bk_prompt_text(const char *label, const char *fallback, char *out, size_t ou
  * Echoed as asterisks where there is raw mode to do it with, and in the open where there is
  * not -- a setup that cannot ask for a password at all is worse than one that asks for it
  * visibly. An empty line keeps @p fallback, so a rerun does not have to retype it.
+ *
+ * The parentheses say `none` or `unchanged` rather than the value. @p shown, when it is not
+ * NULL, replaces that for a fallback that is no secret to anybody -- the password
+ * docker-compose.yml starts its container with is printed in that file and in README.md, and
+ * `unchanged` would claim that something is configured when it is only being proposed.
  */
-int bk_prompt_secret(const char *label, const char *fallback, char *out, size_t out_size);
+int bk_prompt_secret(const char *label, const char *fallback, const char *shown, char *out,
+                     size_t out_size);
 
 #endif /* BACKEND_PROMPT_H */
