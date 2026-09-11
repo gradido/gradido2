@@ -1,7 +1,7 @@
 import { Database as SqliteDatabase } from 'bun:sqlite'
 import { sql } from 'drizzle-orm'
-import { type BunSQLDatabase, drizzle as drizzlePostgres } from 'drizzle-orm/bun-sql'
-import { type BunSQLiteDatabase, drizzle as drizzleSqlite } from 'drizzle-orm/bun-sqlite'
+import { type BunSQLDatabase, drizzle as drizzlePostgres } from 'drizzle-orm/bun-sql/postgres'
+import { drizzle as drizzleSqlite, type SQLiteBunDatabase } from 'drizzle-orm/bun-sqlite'
 import { type DatabaseConfig, isUnixSocketHost } from './schema'
 
 /**
@@ -23,7 +23,7 @@ export type DatabaseConnection =
     }
   | {
       readonly kind: 'sqlite'
-      readonly drizzle: BunSQLiteDatabase
+      readonly drizzle: SQLiteBunDatabase
       readonly probe: () => Promise<void>
       readonly close: () => Promise<void>
     }
@@ -35,6 +35,13 @@ export type DatabaseConnection =
  * is a separate question, asked by `waitForDatabase` at startup, because the answer may
  * be "not yet" and that is worth waiting for. The choice of database is a startup
  * decision and cannot change while running.
+ *
+ * **drizzle's `jit` stays off, on both.** It compiles a row mapper with `new Function` for
+ * every query built, which pays back on a prepared statement or a large result and costs
+ * on everything else — and everything else is what this package does: a few rows per
+ * query, built where it runs. Measured on drizzle 1.0.0-rc.4, one joined row out of SQLite
+ * took 64 µs without it and 80 µs with it; only a 1000-row select got faster. Turn it on
+ * together with `.prepare()`, not instead of it.
  */
 export function connectDatabase(env: DatabaseConfig): DatabaseConnection {
   if (env.DB_TYPE === 'sqlite') {

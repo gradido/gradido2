@@ -14,8 +14,8 @@
   "dependencies": {
     "@gradido/service-core": "workspace:*",
     "@gradido/shared": "workspace:*",
-    "drizzle-orm": "0.45.2",
-    "valibot": "1.4.2"
+    "drizzle-orm": "1.0.0-rc.4",
+    "valibot": "1.5.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.16",

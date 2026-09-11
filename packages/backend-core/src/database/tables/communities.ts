@@ -1,7 +1,7 @@
 import {
-  customType,
   bigint as pgBigint,
   boolean as pgBoolean,
+  bytea as pgBytea,
   pgTable,
   timestamp as pgTimestamp,
   uuid as pgUuid,
@@ -19,6 +19,11 @@ import { blob, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
  * A subset of the contracted table, on the same terms as `users`: what a community needs in
  * order to *be* one. `authenticated_at`, the GMS and JWT keys, `hiero_topic_id` and
  * `location` arrive with the features that read them — see the migration.
+ *
+ * The keys are `bytea` and `BLOB`, which is what the contract's `bytes(n)` means, and both
+ * dialects hand them back as a Buffer. Never `text` or `varchar`: the first would store
+ * `\x6b65...` and give a C reader a string where a key belongs, the second would apply a
+ * collation to a key. `tables.test.ts` notices a key that comes back as anything else.
  *
  * **`private_key` is a secret and must never leave this file's neighbourhood.** It is not in
  * the row shape the application carries around (`community.data.ts`), it is not selected by
@@ -63,24 +68,3 @@ export const communitiesSqlite = sqliteTable('communities', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
 })
-
-/**
- * `bytea`, as bytes rather than as the hex string the driver hands over.
- *
- * drizzle's pg-core has no bytea column, and the alternatives both end badly: `text` would
- * store `\x6b65...` and a C reader would get a string where a key belongs, and `varchar`
- * would silently apply a collation to a key. The contract says `bytes(n)` is `bytea` in
- * PostgreSQL and `BLOB` in SQLite, and this is what makes both sides return a Buffer.
- */
-function pgBytea(name: string) {
-  return customType<{ data: Buffer; driverData: Buffer | Uint8Array | string }>({
-    dataType: () => 'bytea',
-    fromDriver: (value) =>
-      typeof value === 'string'
-        ? /* Bun's driver may hand back PostgreSQL's hex form, `\x` then two characters
-             per byte. Parsed rather than stored that way. */
-          Buffer.from(value.startsWith('\\x') ? value.slice(2) : value, 'hex')
-        : Buffer.from(value),
-    toDriver: (value) => value,
-  })(name)
-}
