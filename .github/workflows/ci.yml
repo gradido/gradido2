@@ -1,0 +1,42 @@
+# Both implementations on every pull request: the reference path's checks, the fast path's build
+# and unit tests, and the two against each other -- the interop test is the gate that keeps the
+# peer network nodes of the two paths talking (AGENTS.md section 4), and the setup test the one
+# that keeps a fresh installation able to start.
+#
+# Zig is not installed here: `bun run zig` fetches the toolchain c-cpp-zig-build pins, and the
+# libp2p-ffi prebuild comes out of fast-servers/build.zig.zon, checksum and all.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  reference:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run test
+
+  fast:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run zig build -Dtests test
+      # Builds the binary itself before it runs anything against it.
+      - run: bun run test:interop
+      - run: bun run test:e2e

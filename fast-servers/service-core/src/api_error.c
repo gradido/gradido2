@@ -22,6 +22,8 @@ static const sc_api_error_entry kErrors[] = {
     {SC_API_ROUTE_NOT_IMPLEMENTED, "ROUTE_NOT_IMPLEMENTED", 501,
      "route not implemented on this server: %.*s"},
     {SC_API_SERVICE_BUSY, "SERVICE_BUSY", 503, "service busy, retry after %u seconds"},
+    {SC_API_PEER_NETWORK_UNAVAILABLE, "PEER_NETWORK_UNAVAILABLE", 503,
+     "this server runs no peer network node"},
 };
 
 #define SC_API_ERROR_COUNT ((size_t)(sizeof(kErrors) / sizeof(kErrors[0])))
@@ -165,4 +167,11 @@ sc_status sc_http_reply_busy(sc_http_req *req, unsigned retry_after_seconds)
         (void)sc_http_header_add(req, "retry-after", seconds, (size_t)length);
     (void)snprintf(message, sizeof(message), entry->format, retry_after_seconds);
     return reply(req, entry, message);
+}
+
+sc_status sc_http_reply_peer_network_unavailable(sc_http_req *req)
+{
+    const sc_api_error_entry *entry = find(SC_API_PEER_NETWORK_UNAVAILABLE);
+
+    return reply(req, entry, entry->format);
 }

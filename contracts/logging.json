@@ -156,6 +156,10 @@
       {
         "name": "mail",
         "description": "outbound mail: the session to the relay, and what was sent through it"
+      },
+      {
+        "name": "dht",
+        "description": "the peer network node: its identity, what it listens on, the calls and announcements that reach it. Not federation, which answers the calls"
       }
     ]
   },
@@ -246,10 +250,10 @@
           {
             "name": "reason",
             "type": "string",
-            "description": "closed vocabulary: no-terminal, not-set-up, config-unwritable"
+            "description": "closed vocabulary: no-terminal, not-set-up, config-unwritable, master-seed-invalid"
           }
         ],
-        "note": "The process exits with 1 after this line. Distinct from startup.database.failed on purpose: the database answered, what is missing is a setup step nobody has taken. not-set-up is a serving start against a database with no community \u2014 serving never asks, it names the `setup` command and stops. no-terminal is that command itself, run where there is nobody to answer it. config-unwritable is that command again, with the answers given and the .env they belong in refused by the file system \u2014 nothing was written and nothing was migrated. See db/communities.json."
+        "note": "The process exits with 1 after this line. Distinct from startup.database.failed on purpose: the database answered, what is missing is a setup step nobody has taken. not-set-up is a serving start against a database with no community \u2014 serving never asks, it names the `setup` command and stops. no-terminal is that command itself, run where there is nobody to answer it. config-unwritable is that command again, with the answers given and the .env they belong in refused by the file system \u2014 nothing was written and nothing was migrated. master-seed-invalid is that command finding a MASTER_SEED that is not 64 hex digits, or one whose named source cannot be read: it is the root of the instance's keys, so setup does not replace it. See db/communities.json."
       },
       {
         "event": "auth.login.succeeded",
@@ -602,6 +606,196 @@
         "level": "info",
         "data": [],
         "note": "EMAIL is false, so nothing was probed and nothing will be sent. Said rather than left silent, because an operator asking why no mail arrives needs one line that answers it."
+      },
+      {
+        "event": "dht.node.started",
+        "cat": "dht",
+        "level": "info",
+        "data": [
+          {
+            "name": "nodeKey",
+            "type": "string",
+            "description": "the node's ed25519 public key, hex -- the same on both paths for one MASTER_SEED"
+          },
+          {
+            "name": "port",
+            "type": "uint32"
+          },
+          {
+            "name": "reachability",
+            "type": "string",
+            "description": "public | private -- DHT_REACHABILITY"
+          }
+        ],
+        "note": "Both paths: fast-servers/dht-node/src/dht_node_server.c and packages/dht-node."
+      },
+      {
+        "event": "dht.node.stopped",
+        "cat": "dht",
+        "level": "info",
+        "data": [
+          {
+            "name": "complete",
+            "type": "bool",
+            "description": "false when the node was left to the process exit: js-libp2p does not finish stopping when the peer closes the same connection at the same moment, so the reference path waits five seconds at most. Always true on the fast path."
+          }
+        ],
+        "note": "Both paths: fast-servers/dht-node/src/dht_node_server.c and packages/dht-node."
+      },
+      {
+        "event": "dht.node.failed",
+        "cat": "dht",
+        "level": "fatal",
+        "data": [
+          {
+            "name": "reason",
+            "type": "string",
+            "description": "closed vocabulary: topic-missing, master-seed-missing, master-seed-invalid, delegation-missing, delegation-invalid, delegation-foreign, identity, no-memory, network, poll"
+          }
+        ],
+        "note": "The role stops after this line, and with it the process. The first six say what to configure and each names `setup`; identity, no-memory and poll are the fast path's, network is the node that did not start on either path. Both paths: fast-servers/dht-node/src/dht_node_server.c and packages/dht-node."
+      },
+      {
+        "event": "dht.listener.started",
+        "cat": "dht",
+        "level": "info",
+        "data": [
+          {
+            "name": "address",
+            "type": "string",
+            "description": "a multiaddr the node listens on, or the relayed one a relay took a reservation for"
+          }
+        ],
+        "note": "Both paths: fast-servers/dht-node/src/dht_node_server.c and packages/dht-node."
+      },
+      {
+        "event": "dht.announcement.received",
+        "cat": "dht",
+        "level": "info",
+        "data": [
+          {
+            "name": "bytes",
+            "type": "uint32",
+            "description": "the payload, the frame around it not counted"
+          }
+        ],
+        "note": "Reported, not stored: an announcement is a hint until the handshake. Only one whose delegation verified, from a community not blocked, within the rate per source. Both paths: fast-servers/dht-node/src/dht_node_server.c and packages/dht-node."
+      },
+      {
+        "event": "dht.call.refused",
+        "cat": "dht",
+        "level": "warn",
+        "data": [
+          {
+            "name": "protocol",
+            "type": "string",
+            "description": "the operation the call named"
+          }
+        ],
+        "note": "A call with a valid delegation, naming an operation the node takes, within the limits, refused because there is no federation role to hand it to yet. A call naming an operation the node does not take is dropped without an event -- libp2p-ffi drops it inside the module, and the reference path does the same; neither path takes any operation yet. Refusing closes the stream at once, which the caller's failover moves on from. Both paths: fast-servers/dht-node/src/dht_node_server.c and packages/dht-node."
+      },
+      {
+        "event": "dht.call.denied",
+        "cat": "dht",
+        "level": "debug",
+        "data": [
+          {
+            "name": "reason",
+            "type": "string",
+            "description": "closed vocabulary: peer, prefix, global -- the scope whose limit had no token left -- or blocked"
+          }
+        ],
+        "note": "Debug: a refused flood is the limits working, and every line of it would be the flood again, in the log. Both paths: fast-servers/dht-node/src/dht_node_server.c and packages/dht-node."
+      },
+      {
+        "event": "dht.event.dropped",
+        "cat": "dht",
+        "level": "error",
+        "data": [
+          {
+            "name": "count",
+            "type": "uint64"
+          }
+        ],
+        "note": "libp2p-ffi's event queue overflowed and dropped this many. Fast path only: the reference path has no queue between itself and js-libp2p."
+      },
+      {
+        "event": "dht.event.ignored",
+        "cat": "dht",
+        "level": "debug",
+        "data": [
+          {
+            "name": "type",
+            "type": "uint32"
+          }
+        ],
+        "note": "An event type the role does not handle. Expected, not an error: libp2p-ffi's interface only grows. Fast path only."
+      },
+      {
+        "event": "dht.event.refused",
+        "cat": "dht",
+        "level": "error",
+        "data": [],
+        "note": "A record from libp2p-ffi that does not fit its own length. Fast path only."
+      },
+      {
+        "event": "dht.limit.refused",
+        "cat": "dht",
+        "level": "error",
+        "data": [
+          {
+            "name": "peerClass",
+            "type": "uint32"
+          },
+          {
+            "name": "scope",
+            "type": "string"
+          }
+        ],
+        "note": "libp2p-ffi refused a limit the role set from const.json. Fast path only: the reference path applies its limits itself."
+      },
+      {
+        "event": "dht.provider.failed",
+        "cat": "dht",
+        "level": "debug",
+        "data": [],
+        "note": "Publishing the provider record under the community key failed, usually for want of peers; it is tried again when the next one connects. Reference path only: libp2p-ffi republishes on its own."
+      },
+      {
+        "event": "dht.bootstrap.applied",
+        "cat": "dht",
+        "level": "info",
+        "data": [
+          {
+            "name": "url",
+            "type": "string",
+            "description": "DHT_BOOTSTRAP_URL, the community whose peer.bootstrap was asked"
+          },
+          {
+            "name": "peers",
+            "type": "uint32",
+            "description": "how many of the nodes in the answer, the answering node included, were reached"
+          }
+        ],
+        "note": "Both paths. Asked at start and again every minute while the node has no connection."
+      },
+      {
+        "event": "dht.bootstrap.failed",
+        "cat": "dht",
+        "level": "warn",
+        "data": [
+          {
+            "name": "url",
+            "type": "string",
+            "description": "DHT_BOOTSTRAP_URL"
+          },
+          {
+            "name": "reason",
+            "type": "string",
+            "description": "closed vocabulary: unreachable, invalid-answer, delegation-invalid"
+          }
+        ],
+        "note": "Both paths. delegation-invalid: self.delegation does not verify, or does not name the key of self.peerId -- the answer is dropped whole, peers included."
       }
     ]
   },

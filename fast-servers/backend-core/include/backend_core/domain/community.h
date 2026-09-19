@@ -99,11 +99,18 @@ void bc_community_new_keys(uint8_t public_key[BC_PUBLIC_KEY_SIZE],
  * cope with, and it is reported rather than tolerated.
  *
  * @p found is set to 0 for an empty database and 1 when @p out was filled. `private_key` is not
- * selected: it is a secret with exactly one future reader, and until that exists nothing loads
- * it.
+ * selected: the value is held for the life of the process. bc_community_find_home_signing_key
+ * alone reads it.
  */
 sc_status bc_community_find_home(sc_db *db, bc_home_community *out, int *found, char *error,
                                  size_t error_size);
+
+/**
+ * The home community's private key, 64 bytes -- seed, then public key -- for a caller that signs
+ * with it and wipes it afterwards. @p found as for bc_community_find_home.
+ */
+sc_status bc_community_find_home_signing_key(sc_db *db, uint8_t out[BC_PRIVATE_KEY_SIZE],
+                                             int *found, char *error, size_t error_size);
 
 /* --- interaction --------------------------------------------------------------------------- */
 
@@ -120,5 +127,18 @@ sc_status bc_community_find_home(sc_db *db, bc_home_community *out, int *found, 
  */
 sc_status bc_create_home_community(sc_db *db, const bc_home_community_setup *setup,
                                    bc_home_community *out, char *error, size_t error_size);
+
+/**
+ * The community vouches for this instance's dht node: its key, derived from @p master_seed along
+ * `dht`, signed by the community key into @p out, 136 bytes.
+ *
+ * Signed by `setup`, the one place that has both -- the key is in the community row and the
+ * dht-node role reads no database. Never expires: a delegation is replaced by running `setup`
+ * again. SC_ERR_UNAVAILABLE when there is no home community to sign with.
+ * `packages/backend-core/src/domain/community/interactions/sign-dht-delegation.ts` is the
+ * reference.
+ */
+sc_status bc_sign_dht_delegation_for(sc_db *db, const uint8_t master_seed[32], uint8_t out[136],
+                                     char *error, size_t error_size);
 
 #endif /* BACKEND_CORE_COMMUNITY_H */

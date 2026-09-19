@@ -38,7 +38,9 @@ typedef enum sc_api_error {
     /** errors/api.json. This deployment's implementation does not serve that route. */
     SC_API_ROUTE_NOT_IMPLEMENTED = 3008,
     /** errors/api.json. The database has all the work this process may give it. */
-    SC_API_SERVICE_BUSY = 3009
+    SC_API_SERVICE_BUSY = 3009,
+    /** errors/api.json. peer.bootstrap on a process without a dht-node role. */
+    SC_API_PEER_NETWORK_UNAVAILABLE = 3010
 } sc_api_error;
 
 /** The name the contract gives @p code, for the response body and for a log line's `err`.
@@ -89,6 +91,10 @@ sc_status sc_http_reply_unknown(sc_http_req *req);
  * which is what the header says. service_core/db_exec.h, *Too much work*.
  */
 sc_status sc_http_reply_busy(sc_http_req *req, unsigned retry_after_seconds);
+
+/** `this server runs no peer network node` -- contracts/errors/api.json. 503, and no
+ *  `Retry-After`: the node is not running here, which a retry does not change. */
+sc_status sc_http_reply_peer_network_unavailable(sc_http_req *req);
 
 /** Longest message this build will put into an error body. */
 #define SC_API_ERROR_MESSAGE_MAX 512

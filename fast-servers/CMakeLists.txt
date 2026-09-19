@@ -120,18 +120,16 @@ endif()
 # brings is what service-core's jwt.c links against.
 #
 # The commit and not the tag: a tag can be moved, and this build has no business taking whatever
-# it resolves to today. It is v0.20.0, which lives on the map_complete_transaction_json branch
-# rather than on master -- master is still v0.17.1, and this build wants the JSON mapping that
-# was written against arnm 0.7.5.
+# it resolves to today. It is the commit build.zig.zon pins, v0.21.0.
 #
-# **That pin is also this build's arnm**, and service-core/src/log is written against 0.8.0 --
-# the graded arena pool, the byte buffer and the JSON writer that carries a key's length. So
-# this file cannot raise arnm on its own: the core is where it comes from, and moving it means
-# moving the commit above. build.zig.zon says the same thing from the other side.
+# **That pin is also this build's arnm** -- 0.8.1 at this commit, which service-core/src/log is
+# written against: the graded arena pool, the byte buffer and the JSON writer that carries a key's
+# length. So this file cannot raise arnm on its own: the core is where it comes from, and moving it
+# means moving the commit above. build.zig.zon says the same thing from the other side.
 set(USE_SODIUM ON CACHE BOOL "" FORCE)
 FetchContent_Declare(blockchain_core
   GIT_REPOSITORY https://github.com/gradido/gradido-blockchain-core.git
-  GIT_TAG ca061e76d1a11804866630c196324602c9b6c4ea
+  GIT_TAG a8730082e7efcbfffc51bb8e23ec415b09d298ca
 )
 FetchContent_MakeAvailable(blockchain_core)
 
@@ -377,9 +375,88 @@ file(WRITE "${FS_STATIC_GEN}"
 file(GLOB BACKEND_SRC "backend/src/*.c")
 list(APPEND BACKEND_SRC "${FS_STATIC_GEN}")
 file(GLOB FEDERATION_SRC "federation/src/*.c")
-# dht-node's Rust half does not exist yet; src/ holds the C stand-in behind the same extern "C"
-# header. When the crate lands, this is where cargo gets invoked and the stub drops out.
 file(GLOB DHT_NODE_SRC "dht-node/src/*.c")
+
+# libp2p-ffi: the dht-node role's network module, as the prebuilt object its repository releases
+# -- dht-node/Architecture.md, *The prebuild*. The same release and the same archives as
+# build.zig.zon, pinned here by the SHA-256 the release publishes; when one moves, both move.
+#
+#   prebuilt   the archive for this target, where one is published; the stub otherwise
+#   stub       dht-node/src/libp2p_ffi_stub.c, which reaches nobody
+#   <dir>      a local build, as libp2p-ffi's scripts/localize.sh leaves it in dist/<triple>
+#
+# Windows means MSVC: the Rust object expects MSVC's CRT and exception handling.
+set(FS_LIBP2P_FFI "prebuilt" CACHE STRING "The dht-node network module: prebuilt, stub, or a directory holding a local build of it")
+set(FS_LIBP2P_FFI_RELEASE https://github.com/gradido/libp2p-ffi/releases/download/v0.1.2/libp2p-ffi-0.1.2)
+
+set(FS_LIBP2P_FFI_DIR "")
+if(FS_LIBP2P_FFI STREQUAL "prebuilt")
+  string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _fs_cpu)
+  if(_fs_cpu MATCHES "^(x86_64|amd64)$")
+    set(_fs_cpu x86_64)
+  elseif(_fs_cpu MATCHES "^(aarch64|arm64)$")
+    set(_fs_cpu aarch64)
+  endif()
+  set(_fs_triple "")
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(_fs_triple ${_fs_cpu}-unknown-linux-gnu)
+  elseif(APPLE)
+    set(_fs_triple ${_fs_cpu}-apple-darwin)
+  elseif(WIN32 AND MSVC)
+    set(_fs_triple ${_fs_cpu}-pc-windows-msvc)
+  endif()
+  set(_fs_sha256_x86_64-unknown-linux-gnu 59999634cd99cc17becc025639542e97c6bc567a30c0f8f23b89acf4aec40c45)
+  set(_fs_sha256_aarch64-unknown-linux-gnu 3b0482ebe4110ef47791fe6477ea4cbc6d7387844e5a71e38c8114353fa2937f)
+  set(_fs_sha256_x86_64-apple-darwin a13c0b4057a68336831df297dd67f2b389554f270e17aa38782c0d7064a9171c)
+  set(_fs_sha256_aarch64-apple-darwin 1d4ebeb24c0dd72d45338c40d0efd23bae4dfdb5e0ce788974d70d15c72ad386)
+  set(_fs_sha256_x86_64-pc-windows-msvc 3e0642bb4877331d22829688b01b550a93d1141146a7dd4fc69c6a13fcf93a0f)
+  set(_fs_sha256_aarch64-pc-windows-msvc ebc610bd4ff1567f2ed6b702177693ff4ef655e85e104929b4f2f95c19ae95dd)
+  if(DEFINED _fs_sha256_${_fs_triple})
+    FetchContent_Declare(libp2p_ffi
+      URL ${FS_LIBP2P_FFI_RELEASE}-${_fs_triple}.tar.gz
+      URL_HASH SHA256=${_fs_sha256_${_fs_triple}}
+      SOURCE_SUBDIR does-not-exist
+    )
+    FetchContent_MakeAvailable(libp2p_ffi)
+    set(FS_LIBP2P_FFI_DIR ${libp2p_ffi_SOURCE_DIR})
+  endif()
+elseif(NOT FS_LIBP2P_FFI STREQUAL "stub")
+  get_filename_component(FS_LIBP2P_FFI_DIR "${FS_LIBP2P_FFI}" ABSOLUTE)
+endif()
+
+if(FS_LIBP2P_FFI_DIR)
+  list(FILTER DHT_NODE_SRC EXCLUDE REGEX "libp2p_ffi_stub\\.c$")
+  message(STATUS "libp2p-ffi: ${FS_LIBP2P_FFI_DIR}")
+else()
+  message(STATUS "libp2p-ffi: the stub -- the dht-node role reaches nobody")
+endif()
+
+# Links the module and every library its NATIVE_LIBS.txt names. That file is rustc's own list for
+# the target, and this build uses the host's toolchain, so its entries go on the link line as they
+# are -- only a framework is two words, and the CRT an MSVC link selects itself.
+function(fs_link_libp2p_ffi target)
+  if(WIN32)
+    target_link_libraries(${target} PRIVATE ${FS_LIBP2P_FFI_DIR}/libp2p_ffi.lib)
+    # The Windows archive carries an import library of a crate's beside the object.
+    target_link_directories(${target} PRIVATE ${FS_LIBP2P_FFI_DIR})
+  else()
+    target_link_libraries(${target} PRIVATE ${FS_LIBP2P_FFI_DIR}/libp2p_ffi.o)
+  endif()
+  file(READ "${FS_LIBP2P_FFI_DIR}/NATIVE_LIBS.txt" natives)
+  string(STRIP "${natives}" natives)
+  separate_arguments(natives UNIX_COMMAND "${natives}")
+  set(framework FALSE)
+  foreach(entry IN LISTS natives)
+    if(framework)
+      target_link_libraries(${target} PRIVATE "-framework ${entry}")
+      set(framework FALSE)
+    elseif(entry STREQUAL "-framework")
+      set(framework TRUE)
+    elseif(NOT entry MATCHES "^/defaultlib:")
+      target_link_libraries(${target} PRIVATE ${entry})
+    endif()
+  endforeach()
+endfunction()
 
 # Every component's public headers on every component's search path -- same as build.zig, and for
 # the same reason: what may depend on what is in Architecture.md, and a #include that breaks it is
@@ -412,7 +489,7 @@ fs_add_component(dht_node ${DHT_NODE_SRC})
 # sees a different header than the one that was compiled.
 # The roles are on this list as well as the two libraries: a request body is JSON, and the reader
 # that parses it is arnm's -- see AGENTS.md section 3a.
-foreach(target service_core backend_core backend federation)
+foreach(target service_core backend_core backend federation dht_node)
   target_compile_definitions(${target} PRIVATE USE_SODIUM)
   # uv_a and not uv: the static one, matching what the zig build links. The roles need it as
   # much as the two libraries do: they start and join threads through it, and the database
@@ -498,6 +575,9 @@ target_compile_definitions(gradido2-fast PRIVATE
   FS_OPTIMIZE="$<IF:$<BOOL:$<CONFIG>>,$<CONFIG>,unknown>")
 # main.c runs each role on a uv_thread_t; the rest arrives through service_core.
 target_link_libraries(gradido2-fast PRIVATE backend federation dht_node backend_core service_core uv_a)
+if(FS_LIBP2P_FFI_DIR)
+  fs_link_libp2p_ffi(gradido2-fast)
+endif()
 
 if(MSVC)
   # debug symbols for a parent project stepping into this one
@@ -511,6 +591,9 @@ if(FS_ENABLE_TESTS)
   add_subdirectory(service-core/tests)
   add_subdirectory(backend-core/tests)
   add_subdirectory(backend/tests)
+  if(FS_LIBP2P_FFI_DIR)
+    add_subdirectory(dht-node/tests)
+  endif()
   # The vector runners. Not under service-core/tests for the reason that file gives: they need
   # arnm's header and a component test may not see one.
   add_subdirectory(tests/contract)

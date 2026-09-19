@@ -84,6 +84,15 @@
       "httpStatus": 503,
       "headers": { "Retry-After": "{retryAfter}" },
       "note": "The database has all the work this process may give it: every connection is in use and the queue in front of them is full, or the request's work waited there longer than five seconds and was not run. Nothing was written. Not a failure of this request and nothing the client did -- the same request a moment later is expected to work, which is what Retry-After says, and what an HTTP client that honours it will do on its own. See database-config.json, rules.pool. Invented by gradido2; legacy had no counterpart."
+    },
+    {
+      "code": 3010,
+      "name": "PEER_NETWORK_UNAVAILABLE",
+      "legacyName": null,
+      "messageTemplate": "this server runs no peer network node",
+      "parameters": [],
+      "httpStatus": 503,
+      "note": "peer.bootstrap on a server whose process runs no dht-node role: the backend answers the route from the node beside it in the same process, and here there is none. A deployment decision rather than a failure -- the caller bootstraps from another community. Invented by gradido2; legacy had no counterpart."
     }
   ]
 }

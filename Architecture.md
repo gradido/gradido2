@@ -144,102 +144,382 @@ diverge.
 JSON, tested against both implementations. Automated tests make the gap visible — a failing
 or skipped test on the fast path documents a feature that is not implemented there yet.
 
-## Peer discovery
+## Peer network
 
-Peer discovery would be the **single-implementation** case above — one protocol, written
-once, called from both paths — if there were a language to write it in that both paths can
-reach. There is not.
+Communities reach each other through a libp2p network. The node that joins it — the
+**dht-node** role — does four things, and all four are transport rather than domain:
 
-What is needed is not a Kademlia routing table on its own. It is the routing table plus the
-transports, the multiplexing, the NAT traversal, the peer store and the identify handshake
-that make a node reachable from behind a home router at all. That system exists in exactly
-two places: **`rust-libp2p`** and **`js-libp2p`**. A C or C++ implementation is not a binding
-one afternoon away — it is the project instead of Gradido.
+```text
+find       a community whose key is known, without keeping a list of communities
+carry      RPC between communities: a handful of defined, idempotent operations
+relay      traffic for communities that nobody can dial directly
+announce   that a community exists, so others learn a key they were not told
+spread     what a community publishes to everyone following it, without being asked
+```
 
-So peer discovery is mirrored, and it is the **protocol-defined** row of the table above:
+What the node does not do is decide anything. It touches no database, knows no RPC operation
+and verifies no envelope: it hands bytes, verified keys and changes to the federation and
+backend roles, and those decide. That is what lets the node stay unchanged while the operations
+above it grow.
+
+### Two implementations, one protocol
+
+What is needed is not a Kademlia routing table on its own. It is the routing table with provider
+records, plus the transports, the multiplexing, the identify handshake and — because a community
+without a URL must be callable — circuit relay. That system is complete in **`rust-libp2p`** and
+**`js-libp2p`**. A C and a C++ implementation exist, `c-libp2p` and `cpp-libp2p`, and neither has
+circuit relay; `c-libp2p` has no Kademlia either. Completing one of them is not a module — it is
+the project instead of Gradido, maintained alone, and interoperable with js-libp2p by our own
+effort. [fast-servers/dht-node/Architecture.md](fast-servers/dht-node/Architecture.md), *Why not
+c-libp2p or cpp-libp2p*, has the comparison. So the node is the **protocol-defined** row of *Four
+kinds of code*:
 
 ```text
 packages/dht-node       js-libp2p, TypeScript. The reference path.
-fast-servers/dht-node   rust-libp2p, built as a static library behind an
-                        extern "C" header and linked like any other native module.
+fast-servers/dht-node   rust-libp2p through libp2p-ffi, prebuilt in that repository and
+                        linked statically behind an extern "C" header.
 ```
 
-Rust is a leaf language here in exactly the sense C++ already is on the fast path: one
-module, one `extern "C"` surface, no Rust type crossing the boundary, and no application
-logic on the other side of it. What crosses is a peer list and a change notification, not a
-libp2p object. The rules are in
-[fast-servers/dht-node/Architecture.md](fast-servers/dht-node/Architecture.md).
-
-**Each path runs its own node**, and that is what puts Rust in this repository at all — if
-the fast server could read rows a TypeScript process writes, neither this module nor the third
-toolchain would exist. It cannot, for the two cases the fast path is *for*. On the small
-server a second Node runtime beside the C one spends a whole process's worth of RAM on peer
-discovery, which is the figure that decides whether the thing runs beside its database. On the
+**Each path runs its own node**, for the reasons this document gives for the fast path at all.
+On a small server a second runtime beside the C one spends a whole process's worth of RAM on the
+network, which is the figure that decides whether the thing runs beside its database. On a
 high-load server, a fast path that needs a TypeScript process to reach the network is not
 droppable, only rearranged.
 
+**The Rust module is not built in this repository.** It is
+[`libp2p-ffi`](https://github.com/gradido/libp2p-ffi), built there with a release profile tuned for
+size, and it arrives here as a prebuilt static object per platform, pinned by version and checksum
+— the same arrangement as the Zig toolchain. It is not Gradido-specific: it speaks of *groups* and
+*nodes* where this document says communities and instances, so other projects link it too, for the
+same reason `arnm` is a repository of its own. There
+is no cargo and no Rust source in this repository. The module is designed to change rarely: it
+holds mechanism — transports, DHT, request and response, limits, relay — and every policy reaches
+it from outside, through its options and its calls.
+[fast-servers/dht-node/Architecture.md](fast-servers/dht-node/Architecture.md) holds the boundary,
+and why the prebuild is a symbol-localized object rather than a plain `staticlib`.
+
+**The TypeScript half starts on js-libp2p, and has a way out.** Keeping two libraries in step is
+the cost of mirroring, and here it is larger than it was for discovery alone: RPC framing, the
+announcement, the delegation and the limits all have to agree. If that proves too expensive, the
+TypeScript path loads the same prebuilt module through an addon, the way `shared-native` links
+`gradido-blockchain-core`, and the node becomes single-implementation. That is a decision to take
+on evidence — [packages/dht-node/Architecture.md](packages/dht-node/Architecture.md) names what
+counts as evidence — not a failure of the plan.
+
 **Two implementations that drift apart do not fail a test — they simply stop finding each
-other**, which is why the shared-code answer was the one to prefer and why giving it up needs
-saying out loud. What replaces the shared code is that libp2p is a specification with two
-conformant implementations, and that both halves speak it because of the specification rather
-than because two codebases were kept aligned by hand.
+other.** What keeps them together is the libp2p specification plus what is contracted on top of
+it. The values that can be compared are contract vectors: seed to key, the delegation, the signed
+envelope. Everything else is behavior between running processes, so the gate is an **interop
+test** in CI: the TypeScript node and the prebuilt Rust node discover each other and a third peer,
+call each other, and relay for each other. A second pairing runs beside it — the previous
+prebuild against the new one — because the network always runs mixed versions, and a module that
+rarely changes is exactly the one whose old releases stay out there longest. Both libraries are
+pinned, and neither is raised without both pairings green.
 
-That changes what has to be tested. Contract vectors are the wrong tool: there is no value to
-compare, only a behavior between two running processes. The gate is an **interop test** — start
-the TypeScript node and the Rust node, have each discover the other and a third peer, and fail
-the build if either cannot. It lives in CI beside the contract tests, not in
-`contracts/test-vectors`.
+### Communities and instances
 
-It also changes what a version bump means. Two libraries with their own release cycles can
-diverge on a protocol detail without either being wrong, so both are pinned, and neither is
-raised without the interop test being green on the pair.
+A community is its key, `communities.public_key`. A community may run on several servers, and
+that decides how the network addresses it:
 
-**The DHT node does not touch the database.** It discovers peers and reports them; the caller
-decides what to persist. Federation rows are written by an Interaction through a Repository,
-on whichever path is running — which keeps a network library out of the persistence layer and
-the persistence decisions in the domain, where the rest of this document puts them. This holds
-on both paths and is the reason the two nodes need no shared state: they hand out the same
-kind of answer, and everything that follows from it is domain code that already has a
-reference implementation.
+```text
+community key   identifies the community. Signs one delegation per instance and is not
+                needed on the instance itself.
+instance key    one per running node; its libp2p peer id.
+delegation      "instance key X belongs to community Y until T", signed by the community key.
+```
 
-The sweep is O(communities) every 20 seconds, which at a few thousand communities is real work
-rather than a poll. Both nodes therefore keep the peer state inside the library and report only
-what changed — on the fast path so the FFI boundary scales with the number of changes rather
-than the size of the network, on the TypeScript path for the same reason at the process
-boundary.
+**The instance key is derived, not stored.** Every instance has a master seed, `MASTER_SEED`: 32
+bytes the `setup` command makes on the first run, from the operating system's randomness with the
+clocks and whatever the operator types mixed in, and never replaces afterwards — every identity
+derived from it would change with it. The keys an instance needs are SLIP-10 children of the seed,
+through the same C function in `gradido-blockchain-core` on both paths. The instance key is the
+child at the path segment `dht`, whose index is the word's ASCII bytes (`MASTER_SEED_PATH_DHT` in
+`contracts/const.json`). `setup` signs the delegation too, because it is the one place that has
+both the community key, in the community row, and the seed. It writes the result as
+`DHT_DELEGATION`, and the dht-node role, which reads no database, starts from that.
+`contracts/test-vectors/master-seed.json` holds both paths to the same identity and to the same
+delegation bytes, which libp2p-ffi itself signed.
 
-Two decisions are settled here rather than per implementation, because settling them
-separately is the failure mode.
+**One key shared by several instances does not give failover.** libp2p treats a peer id as one
+node: requests to it are spread across whatever connections to that id exist, a failed request is
+not retried elsewhere, and Kademlia merges the instances' addresses into one routing entry. So
+every instance has its own key, and **no two running nodes ever share one**. On the TypeScript
+path that also means: of several `SO_REUSEPORT` processes, at most one runs the node per instance
+key.
 
-**Transports: TCP + QUIC, with circuit relay v2 as the fallback.** TCP is the floor and does
-not survive a home router without a forwarded port. QUIC does: it reaches an encrypted,
-multiplexed connection in one round trip instead of three, and its UDP bindings are what make
-hole punching work at all. WebRTC is deliberately not enabled — its two libp2p forms exist to
-make a *browser* a peer, and Gradido's peers are community servers; the frontend talks to its
-own backend over HTTP and never joins the DHT.
+**Finding a community is a lookup, not a list.** Every instance announces itself as a provider
+under its community key. A caller that wants community Y looks up the providers, checks each
+one's delegation when it connects, and tries them in order, the one that answered last first. A
+timeout, a failed dial or a closed connection moves on to the next instance; only when none
+answers does the call fail. A provider without a valid delegation costs one connection and is
+skipped — the same layering as bootstrap: being named is not being verified.
 
-**Bootstrap: one Gradido community URL, `gdd.gradido.net` by default.** libp2p, unlike
-legacy's hyperswarm, comes with no public network to join. A fresh community asks a running
-community over plain HTTP for a peer list, dials what comes back, and is in. Every community
-is a bootstrap node because every community already serves HTTP — no dedicated infrastructure,
-no hardcoded addresses to keep alive for a decade. The route is `peer.bootstrap` in
+Nothing on either path keeps a list of online communities for this. A node holds its routing
+table, on the order of k · log N entries however large the network grows, and the keys a
+community knows are in `federated_communities`, where they already were. Online means: the call
+went through.
+
+### With and without a URL
+
+A community either has a public URL or it does not, and both are first-class:
+
+```text
+with URL      reachable over HTTP and over the network. RPC may use either, and its node
+              can relay for others.
+without URL   behind NAT, no forwarded port, no domain. Reachable only through the
+              network: directly after hole punching, or through a relay. The lower setup
+              hurdle is the point -- such a community starts without an administrator.
+```
+
+**The difference is also a trust difference.** A community without a URL costs nothing to create,
+which makes a thousand of them a cheap way to generate load, so it gets stricter rate limits. A
+URL is a claim until it is checked: the higher class applies only after the community answered
+the federation handshake under that URL with the key it claims. The classes are applied by the
+node and decided outside it, by the federation role from the database:
+
+```text
+unknown         no delegation checked yet
+without URL     delegation valid, no verified URL
+with URL        delegation valid, the URL answered with the same community key
+own instance    delegated by this community's own key; may synchronise
+blocked
+```
+
+Rate limits apply per class — per peer, per IP prefix and globally — and the node enforces them
+before a request reaches the federation role. It cannot enforce them before the request is read:
+the class hangs on the group, and the group is known only from the delegation inside the request,
+so a refused request has cost its bytes, bounded by the request size limit. Peer ids are free to
+create, so a per-peer limit alone is not a limit; the IP prefix is not applied to relayed
+connections, whose visible address is the relay's. libp2p limits connection counts, concurrent streams and message sizes, but it has no
+per-peer request rate; that part is written in both nodes, and its numbers belong in
+`contracts/const.json`.
+
+**A node's own reachability comes from its own URL, unchecked.** `setup` writes
+`DHT_REACHABILITY`: public when the community URL names a domain or an address on the
+public internet, private for everything else, and private when nothing is written. The URL is the
+operator's claim about their own server. The two mistakes are not equal: a node wrongly started
+public announces addresses nobody can dial and stays unreachable until `private` is written, while
+one wrongly started private still works, over relays. Hence private whenever there is doubt.
+
+### RPC
+
+RPC carries a handful of defined operations between communities. The node knows none of them: it
+carries opaque bytes under a registered protocol name, one request and one response. There is no
+streaming.
+
+**Every operation is idempotent.** A call is repeatable by contract, because failover makes
+repetition normal: instance A may have executed a request whose answer was lost when the caller
+moved on to instance B. The nonce in the envelope is the request id, and a receiver that sees one
+again answers it again rather than doing it again.
+
+**Every call is signed**, by the sending instance's key, which its delegation ties to its
+community. libp2p connections are encrypted and mutually authenticated — Noise over TCP, TLS 1.3
+inside QUIC, end to end even through a relay — so on that path the sender's instance key is
+already proven. The signature is required anyway, for three reasons. Over HTTP, TLS proves
+the server's domain and nothing about the caller. A call may arrive forwarded by a node that is not
+the federation role answering it, and that role must not have to trust the forwarder. And one
+verification for every path is simpler than one per path. What is signed is the operation, the
+recipient community key, a timestamp and the nonce, so an envelope can be neither replayed later
+nor redirected to another community. The envelope has a field for encrypting the payload to the
+recipient; it stays unused while both transports encrypt, and exists for the day a message is
+stored or passes a proxy that terminates TLS.
+
+The federation role offers the same operations over HTTP. A community with a URL can be called
+either way; one without only through the network.
+
+### Communities nobody has named yet
+
+Finding a known key needs nothing running. Learning keys nobody has passed on is a separate and
+slower job, with three sources:
+
+```text
+announcement    on by default. A signed gossipsub message when a node starts and when its
+                payload changes -- no heartbeat, no online table. It arrives as an event;
+                whether the community is new is the database's decision.
+known list      on by default. A federation operation, "communities you know", asked of
+                the community a node bootstrapped from. It catches up what announcements
+                a node missed while it was offline. Plain RPC; the node has no part in it.
+random walk     optional, a call made from outside. Every peer it meets is reported. The
+                DHT runs under its own protocol name, so every peer in it is a community.
+```
+
+Whatever any of the three delivers is a hint until the handshake with that community confirms it.
+
+### Roles, and where a call goes
+
+The dht-node is a role of the single binary like backend and federation, and any combination of
+them runs in one process — see *The single binary*. How the roles reach each other depends only on
+whether they share one:
+
+```text
+federation + dht-node   in the process: an inbound call is handed to federation directly
+dht-node alone          relay, and inbound calls forwarded over HTTP to a federation
+                        running elsewhere; a socket transport follows later
+backend -> dht-node     in the process when both run, over the external interface otherwise
+```
+
+**The interfaces between roles are contracts in `contracts/server`, like every other route,**
+because a deployment may put the roles on different machines. They are designed so that they only
+grow: operations and fields are added, nothing is renamed, renumbered or reused. The socket
+transport that comes later carries the same interface and changes nothing above it.
+
+### Transports and relay
+
+**TCP + QUIC, with circuit relay v2 and hole punching.** TCP is the floor and does not survive a
+home router without a forwarded port. QUIC does: it reaches an encrypted, multiplexed connection in
+one round trip instead of three, and its UDP bindings are what make hole punching work at all.
+WebRTC is deliberately not enabled — its two libp2p forms exist to make a *browser* a peer, and
+Gradido's peers are community servers; the frontend talks to its own backend over HTTP and never
+joins the network.
+
+**A community with a URL relays by default, within limits that are all configurable:**
+reservations, concurrent circuits in total and per peer, circuit duration, bytes per circuit, and
+the rate of new circuits per peer and per IP. libp2p has no bytes-per-second cap for a relay; the
+bound is what those limits multiply to. A community without a URL cannot relay, since nobody can
+reach it, so the relays are exactly the public communities — and their limits protect the part of
+the network that keeps the rest of it reachable.
+
+### Bootstrap
+
+**One Gradido community URL, `gdd.gradido.net` by default.** libp2p, unlike legacy's hyperswarm,
+comes with no public network to join. A fresh community asks a running one over plain HTTP for
+peers, dials what comes back, and is in. Every community with a URL is a bootstrap node because it
+already serves HTTP — no dedicated infrastructure, no hardcoded addresses to keep alive for a
+decade. The route is `peer.bootstrap` in
 [`contracts/server/backend/peer.json`](contracts/server/backend/peer.json), and it is public
 because bootstrapping happens before any handshake exists.
 
-What it returns is a *sample* of peers that are current in the DHT sense — a few different
-entry points, not the full set and not the same handful every time, because Kademlia fans out
-from wherever it starts. That also keeps the route from being an enumeration endpoint by
-construction rather than by promise.
+What it returns is a *sample* of peers from the node's routing table — a few different entry
+points, not the full set and not the same handful every time, because Kademlia fans out from
+wherever it starts. That also keeps the route from being an enumeration endpoint by construction
+rather than by promise.
 
-And what it returns is a **hint, not a trust decision**. A peer is verified when it is
-contacted, not when it is named: the federation handshake against `communities.public_key`
-does that, exactly as before, so a poisoned list costs time rather than trust. The default
-being a community we operate makes the ordinary case safe without pretending to be a protocol
-guarantee, and the planned hardening — handshake with the bootstrap community first, list
-signed — removes the impostor at a hijacked URL without changing that layering.
+And what it returns is a **hint, not a trust decision**. A peer is verified when it is contacted,
+not when it is named, so a poisoned list costs time rather than trust. The default being a
+community we operate makes the ordinary case safe without pretending to be a protocol guarantee,
+and the planned hardening — handshake with the bootstrap community first, answer signed — removes
+the impostor at a hijacked URL without changing that layering.
 
-The reasoning behind both, and what has to be verified before the libraries are pinned, is in
-[fast-servers/dht-node/Architecture.md](fast-servers/dht-node/Architecture.md).
+### Instances of one community, and the blockchain
+
+**The network locates a community's instances; it does not store their data.** Kademlia records
+live at the twenty nodes closest to a key — other communities' nodes, publicly readable, gone after
+their TTL — so the DHT finds instances and never carries transactions.
+
+Hiero stays the authority for ordering, but receives only a transaction's hash or id. A shielded
+transfer is too large to put on Hiero at a sensible price: two actions in one proof are 9,851 bytes
+on the wire, as `gradido-blockchain-zk` measures it. The bytes therefore travel through this
+network. Instances of one community synchronise over RPC between `own instance` peers — range
+requests to catch up, a push for what is new — and other communities fetch the transactions that
+an ordered hash refers to.
+
+That makes the network a data-availability layer, which it was not before, and the question that
+comes with it is the last item under *Open* below.
+
+### Mirror nodes, and the topics they follow
+
+A **mirror** is a node that keeps other communities' transactions. It is the same binary in the
+same dht-node role, configured differently: its operator says which communities it mirrors and how
+much traffic it will carry, and nothing about it is special to the network — a mirror is a node
+that listens to more than its own affairs. What it gives back is availability. A community with
+one server that is down at the wrong moment has its transactions somewhere else, and a community
+that is only reachable through a relay is not the only copy of its own history.
+
+**What a mirror follows is a topic, not a community.** The module carries topics: 32 bytes the
+caller chooses, a gossipsub topic under the hood, best effort and unordered. Anything that has to
+arrive is an RPC; a topic is how something that was just written reaches whoever is listening,
+without any of them asking for it.
+
+Two kinds of topic, derived from keys nobody has to agree on because both sides compute them:
+
+```text
+shard topic       sha256("gradido/shard/v1/topic" || shard), shard a single byte
+                  shard = sha256("gradido/shard/v1" || community key)[0] & 0x3f, so 64 of them
+community topic   sha256("gradido/community/v1" || community key)
+```
+
+Every community publishes what it writes into **its shard topic**, always. That is the coarse
+grain: a mirror that wants "a reasonable share of the network" subscribes to a few shard topics
+and follows every community in them, including the ones that did not exist yet when it started.
+Subscribing to more shards costs nothing beyond the traffic they carry.
+
+A community publishes into **its own topic** as well, but only while somebody is following it —
+`lp2p_topic_peers` says whether the topic has a peer, and with none the publication is skipped.
+That is the fine grain: a mirror that wants exactly three communities subscribes to their three
+topics and receives nothing else. Nobody pays for the fine grain unless it is used, and no
+community has to be told who mirrors it.
+
+**Why a hash and not something meaningful.** Countries were the obvious cut and are the wrong one:
+their number moves — around forty states appeared in the last hundred years, several vanished —
+and their sizes differ by four orders of magnitude, so a per-country shard is a rewrite waiting to
+happen and a load distribution nobody chose. A hash of the community key is stable, needs no
+registry, and spreads communities evenly by construction. It spreads them *evenly*, not *equally*:
+with a few hundred communities over 64 shards the largest shard holds roughly twice the smallest,
+which is what a balls-in-bins distribution does and is well inside what an operator's byte limit
+absorbs. With thousands, the difference disappears.
+
+**64 shards, and no transition machinery.** Sixty-four is the whole range of a shard byte's six
+bits, and it is a ceiling, not a target: while there are only a few hundred communities, most
+shards hold a handful each, and a topic with a handful of members is exactly where gossip
+normally fails — gossipsub forwards between peers that are already connected and never dials to
+find more, so two members that never met stay silent at each other. The module solves that below
+this design: subscribing to a topic provides its key in the DHT and looks it up there, and the few
+providers it finds are dialed. A topic with two members works, which is what makes a fixed 64
+sufficient from the first community onwards.
+
+Should 64 ever become too coarse, the shard count moves by one bit at a time, carried as a signed
+network parameter with an overlap window in which both the old and the new topic are published,
+read by the federation role from its settings and falling back to the compiled default. The module
+needs no release for it: it never sees a shard, only a topic key. Nothing about that mechanism is
+built until there is a reason to build it.
+
+**What the operator sets is bytes, not communities** — and by default nothing at all. The four
+`dht.mirror_*` settings in `contracts/settings.json` keep the instance's own shard, which it
+follows anyway because it publishes there, at 64 KiB/s with a 1 MiB burst. Mirroring costs a default
+installation disk and no traffic, and every transaction has a copy at every community of its shard.
+A mirror's real limit is its uplink and its disk, and both are properties of the machine, not of the network. `lp2p_limit_set_bytes` gives a
+peer class a byte rate for published messages, beside the message rate that is already there:
+whichever runs out first stops the traffic, the message is not forwarded, and `lp2p_stats` counts
+what was stopped. A small mirror follows two shards with a modest rate; a large one follows twenty
+with a generous one. Neither has to guess how many communities that is.
+
+**Gossip catches what is new; RPC catches up the rest.** A mirror that was offline, or whose mesh
+had no peer at the moment something was published, has holes, and no amount of gossip closes them.
+The range requests that instances of one community already use to synchronise are the same
+operation a mirror uses against the community it mirrors — idempotent, signed, and rate-limited
+like every other call. A topic is a notification; the blockchain is fetched.
+
+### The database
+
+**The node does not touch the database, on either path.** It reports what it learns and carries
+what it is given. Federation rows are written by an Interaction through a Repository; peer classes
+and the announcement payload are pushed into the node from there. That keeps a network library out
+of the persistence layer and leaves the persistence decisions in the domain, where the rest of this
+document puts them — and it is why the two nodes need no shared state: they hand out the same kind
+of answer, and everything that follows from it is domain code that already has a reference
+implementation.
+
+### Open
+
+- The envelope on the wire. The delegation is settled by `libp2p-ffi`: 136 bytes — instance key,
+  community key, expiry, the community key's signature — carried in every request and response
+  frame, so no caller has to fetch one. `src/delegation.rs` and `src/wire.rs` there are the format
+  a mirror follows.
+- A byte limit across classes. The peer classes, the request limits, the relay limits and the
+  announcement bound are in `contracts/const.json`, and the mirror's byte rates are settings, applied
+  to published traffic per class. libp2p-ffi limits per class only, so the classes add up: a node
+  takes the configured rate once from every class. A total across them belongs in the module.
+- What a mirror stores and what it answers for: a mirrored community's transactions are held, but
+  a mirror is not one of that community's instances and must not be asked as if it were.
+- The signed bootstrap answer: what it looks like on the wire, and when it lands.
+- Data availability: what a community does when Hiero has ordered a hash whose transaction no
+  reachable instance hands out.
+- A second instance of one community. The seed is per `.env`, and the instance key is the one
+  child `dht`, so two instances started from the same `.env` are the same node — the thing
+  *Communities and instances* rules out. Either every instance gets its own seed and a delegation
+  signed by whoever holds the community key, or the path grows an instance number (`dht` for the
+  first, a second segment for the rest). Undecided, and nothing in the single-server case depends
+  on it.
 
 ## Amounts
 
@@ -304,18 +584,18 @@ packages/          TypeScript — reference implementation
                    It also compiles fast-servers' message and transport layers,
                    so both paths put the same bytes on the wire; the worker
                    pool above them is the fast path's alone
-  dht-node         peer discovery on js-libp2p. Mirrored, not shared — see
-                   Peer discovery above
+  dht-node         the network node on js-libp2p: finds communities, carries
+                   RPC, relays. Mirrored, not shared — see Peer network above
 
 fast-servers/      C — fast implementation, mirrors the domain structure
                    its own Architecture.md holds the C-specific design
-                   (plus one Rust module, dht-node, behind extern "C")
+                   (plus prebuilt Rust behind extern "C", see dht-node)
   backend
   backend-core
   federation
-  dht-node         peer discovery on rust-libp2p, built as a static library
-                   behind an extern "C" header. The one place Rust is used,
-                   and the one mirrored component with no shared code —
+  dht-node         the network role, and the boundary to rust-libp2p: a
+                   prebuilt static object from libp2p-ffi,
+                   behind an extern "C" header. No Rust source lives here —
                    its own Architecture.md holds the boundary rules
 
 contracts/         language-independent JSON contracts, see below
@@ -366,16 +646,17 @@ fast path is tested against.
 
 - TypeScript: `bun test`
 - C: google test
-- Rust: `cargo test`, for `fast-servers/dht-node` only
 - Contract tests read `contracts/` and run the same vectors against both implementations —
   `packages/contract-tests/` is the TypeScript runner, `fast-servers/tests/contract/` the C one,
   and neither is the authority: the file is. `contracts/AGENTS.md`, *test-vectors*, holds the
   shape; `contracts/test-vectors/jwt.json` is the worked example, and it is also where a
   disagreement the two cannot resolve today is written down rather than left out
 - Database tests run against both PostgreSQL and SQLite
-- One interop test, outside `contracts/`: the js-libp2p node and the rust-libp2p node
-  discover each other and a third peer. It is the only gate on the one mirrored component
-  that no contract vector can cover — see *Peer discovery*.
+- One interop test, outside `contracts/`: the js-libp2p node and the prebuilt rust-libp2p
+  node discover each other and a third peer, call each other and relay for each other; beside
+  it the previous prebuild against the new one. It is the gate on the one mirrored component
+  whose behavior no contract vector can cover — see *Peer network*. The Rust module's own
+  tests run in its own repository.
 
 A missing feature on the fast path should surface as a failing or explicitly skipped contract
 test, not as silence.
@@ -727,7 +1008,7 @@ Not carried over: the restriction to JPEG. The accepted content types are an ope
   *The self-provisioning build*
 - clang-format for linting C/C++ code
 - google test for testing C/C++ code
-- cargo for `fast-servers/dht-node`, and nowhere else
+- no cargo: the Rust modules arrive as prebuilds, pinned by version and checksum
 - docker only for the development services next to the code — a database, a database UI and a
   mail sink. Nothing this project ships is built or run in a container, and nothing in the
   build depends on one being there
@@ -735,12 +1016,17 @@ Not carried over: the restriction to JPEG. The accepted content types are an ope
 Which language is used for what, and the sanitizer and fuzzing requirements that come with
 native code, are in [fast-servers/Architecture.md](fast-servers/Architecture.md).
 
-Rust is the third toolchain and it is worth being honest about the cost: the fast path now
-needs zig *and* cargo, where before it needed zig. What it does not do is reach the
-TypeScript path — `bun install` and `turbo @gradido/backend#start` are unchanged, because
-`packages/dht-node` is js-libp2p and nothing in `packages/` links the Rust module. That is
-the droppability rule paying for itself: a toolchain the fast path needs is a toolchain the
-fallback must not.
+Rust is not a toolchain of this repository. The network module is built in a repository of its
+own and downloaded as a prebuilt object, so the fast path needs zig and nothing more, and the
+TypeScript path is untouched — `packages/dht-node` is js-libp2p and nothing in `packages/` links
+the Rust module. That is the droppability rule paying for itself: a toolchain the fast path
+needs is a toolchain the fallback must not.
+
+The cost moves rather than disappears, and it is worth naming. The fast path now depends on a
+release artifact being downloadable, the way the TypeScript path depends on `c-cpp-zig-build`:
+if the prebuild for a platform does not exist, that platform has no fast path. The mitigations
+are the same — the repository is under the gradido organisation, the checksum is pinned, and the
+module can still be built from its source by whoever has cargo.
 
 ### The self-provisioning build
 
@@ -851,12 +1137,21 @@ gradido                    the backend, serving. The default, because that is
 gradido backend serve      the same thing, spelled out
 gradido backend migrate-down   one step down, then stop
 gradido federation         not written yet
-gradido dht-node           not written yet
+gradido dht-node           the peer network node alone
+gradido backend dht-node   both, in one process
 ```
 
-One process runs one service. Two in one process would share a heap and a signal handler and
-would be a deployment decision taken by an argument parser; a deployment that wants both
-starts the binary twice, which is also how it gets to put them on two machines.
+**Roles combine.** backend, federation and dht-node run alone or in any combination in one
+process: `gradido backend dht-node`, `--backend --dht-node` on the fast path. A command such as
+`setup` belongs to one service and is refused after two. A community on a small
+machine wants all of them in one process. A larger one starts the binary once per role, on one
+machine or on several, and the roles then reach each other over their contracted interfaces
+instead of in the process — *Peer network*, *Roles, and where a call goes*. Nothing but the
+arguments differs.
+
+One limit holds across all of it: **a node key runs in one process.** A deployment that scales
+the backend across `SO_REUSEPORT` processes runs the dht-node in one of them or beside them, never
+in each.
 
 **The pages are embedded, not read.** `bun build --compile` puts a file into the executable
 when a module imports it, so `scripts/bundle.ts` generates the entry point that imports every

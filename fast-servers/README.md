@@ -91,6 +91,12 @@ zig build -Dh2o=false -Dtarget=x86_64-windows-gnu
 Windows needs `-Dh2o=false`, because h2o is a posix event loop; `-Dpostgres` turns itself off
 there. Everything else is the default build.
 
+The network module of the dht-node role is libp2p-ffi, a prebuilt object fetched for the target.
+It is published for Linux (glibc), macOS and Windows (MSVC), x64 and arm64. The musl and windows-gnu
+builds above get a stub in its place, which reaches nobody. `-Dlibp2p-ffi=stub` selects the stub
+anywhere, and `-Dlibp2p-ffi=<dir>` links a local build of the module instead —
+`dht-node/Architecture.md`, *Today's code*.
+
 ## h2o, and the fallback behind the same header
 
 h2o is the server:
@@ -197,16 +203,21 @@ Configuration comes from the environment, with legacy's names and ports:
 | `BACKEND_PORT` | `4000` |
 | `FEDERATION_PORT` | `5010` |
 | `DHT_PORT` | `5000` |
-| `FEDERATION_DHT_TOPIC` | unset — `--dht-node` refuses to start without it |
-| `FEDERATION_DHT_SEED` | unset |
+| `DHT_TOPIC` | unset — `--dht-node` refuses to start without it |
+| `MASTER_SEED` | unset — a secret, see `contracts/secrets.json`. `setup` makes it and never replaces it; `--dht-node` derives its identity from it |
+| `DHT_DELEGATION` | unset — `setup` writes it: the community key's signature over this instance's dht identity |
+| `DHT_REACHABILITY` | `private` — `setup` writes `public` when the community URL is on the public internet |
+| `DHT_BOOTSTRAP_URL` | `https://gdd.gradido.net` — the community `--dht-node` joins the network through; empty for none |
 | `LOG_LEVEL` | `info` |
 | `NODE_ENV` | `development` | `production` refuses an empty `DB_PASSWORD` on PostgreSQL, answers cross-origin requests from loopback only, and makes `migrate-down` ask for a confirmation |
 
-Each role answers `GET /_health`. Beyond that the backend serves one contracted route,
-`POST /user/create` — registration, and the first of the 139 in `contracts/server/`. Every other
-path on the backend answers `ROUTE_NOT_IMPLEMENTED` (501) rather than 404, because a deployment
-runs one implementation and never forwards to the other. Federation serves nothing yet, and peer
-discovery is a stub that finds nobody.
+Each role answers `GET /_health`. Beyond that the backend serves the contracted routes
+`POST /user/create` — registration — and `GET /peer/bootstrap`, answered from the `--dht-node`
+role in the same process and `PEER_NETWORK_UNAVAILABLE` (503) without one. Every other path on the
+backend answers `ROUTE_NOT_IMPLEMENTED` (501) rather than 404, because a deployment runs one
+implementation and never forwards to the other. Federation serves nothing yet, and `--dht-node`
+joins the network through `DHT_BOOTSTRAP_URL` with the identity `setup` wrote — `MASTER_SEED` and
+`DHT_DELEGATION` — but answers no call until there is a federation role to hand one to.
 
 ```sh
 fast-servers migrate-down          # take the database down one migration, then stop
@@ -346,7 +357,7 @@ backend-core/     the backend domain: the migration runner, the repositories and
                   every line of it is a translation of packages/backend-core
 backend/          the HTTP server the frontend talks to
 federation/       the HTTP server other communities talk to
-dht-node/         the peer discovery role, and the extern "C" boundary to the
+dht-node/         the network role, and the extern "C" boundary to the prebuilt
                   rust-libp2p module that will sit behind it
 tests/contract    contracts/test-vectors/, run against this implementation
 tests/integration the probe server and the bun suite that drives it

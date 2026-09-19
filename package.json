@@ -17,6 +17,8 @@
     "lint": "biome check --error-on-warnings scripts contracts && turbo lint",
     "lint:fix": "biome check --error-on-warnings scripts contracts --write && turbo lint:fix",
     "test": "turbo test",
+    "test:interop": "bun run zig build && turbo test:interop",
+    "test:e2e": "bun run zig build && turbo test:e2e",
     "typecheck": "turbo typecheck",
     "regen:vectors": "bun scripts/regen-contract-vectors.ts"
   },

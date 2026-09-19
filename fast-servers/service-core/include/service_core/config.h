@@ -19,8 +19,9 @@
 
 #define SC_CONFIG_HOST_MAX 64
 #define SC_CONFIG_TOPIC_MAX 128
-/* 32 bytes of seed, hex encoded, plus the terminator */
-#define SC_CONFIG_SEED_HEX_MAX 65
+/* DHT_DELEGATION: 136 bytes as hex, and the terminator. */
+#define SC_CONFIG_DELEGATION_HEX_MAX 273
+#define SC_CONFIG_URL_MAX 256
 
 typedef struct sc_config {
     /* Interface the HTTP roles bind to. Loopback by default: a fast server is expected to sit
@@ -42,13 +43,22 @@ typedef struct sc_config {
      */
     uint16_t server_threads;
 
-    /* FEDERATION_DHT_TOPIC. Empty means peer discovery stays off, which is how legacy spells
-     * it too -- see stage5.env, "if you set the value of FEDERATION_DHT_TOPIC". */
+    /* DHT_TOPIC, legacy's FEDERATION_DHT_TOPIC. Empty means the network node stays off, as it did
+     * there. It separates networks, so it is part of the node's protocol names. */
     char dht_topic[SC_CONFIG_TOPIC_MAX];
-    /* FEDERATION_DHT_SEED, hex. The community key pair and therefore the libp2p peer id are
-     * derived from it, so both implementations must read the same bytes out of it --
-     * see dht-node/Architecture.md, *The identity problem*. */
-    char dht_seed_hex[SC_CONFIG_SEED_HEX_MAX];
+    /* DHT_DELEGATION, hex: the community key's signature over this instance's dht
+     * node key, written by `setup` -- service_core/dht_delegation.h. Public, and the node key it
+     * names is derived from MASTER_SEED, which is a secret and read where it is used rather than
+     * held here. */
+    char dht_delegation_hex[SC_CONFIG_DELEGATION_HEX_MAX];
+    /* DHT_REACHABILITY: `public` or `private`, and private when unset. `setup` writes
+     * public for a community URL on the public internet -- service_core/public_url.h -- and an
+     * operator whose URL is public but whose dht port is not forwarded writes private. */
+    int dht_public;
+    /* DHT_BOOTSTRAP_URL: the community asked for peer.bootstrap at start, DHT_BOOTSTRAP_DEFAULT_URL
+     * in contracts/const.json when unset. Empty joins through nobody -- the first community of a
+     * network. */
+    char dht_bootstrap_url[SC_CONFIG_URL_MAX];
 
     sc_log_level log_level; /* LOG_LEVEL */
 } sc_config;

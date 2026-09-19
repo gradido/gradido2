@@ -77,6 +77,52 @@
       "source": "backend/src/config/schema.ts FEDERATION_VALIDATE_COMMUNITY_TIMER"
     },
 
+    "dht.mirror_shards": {
+      "group": "dht",
+      "scope": "instance",
+      "type": "varchar(255)",
+      "default": "own",
+      "description": "Which shard topics this instance keeps the transactions of: a comma-separated list of `own`, `all`, a shard number N or a range N-M, with N and M from 0 to DHT_SHARD_COUNT - 1 (const.json). Empty keeps none. A community's shard is sha256(DHT_SHARD_CONTEXT || community key)[0] & (DHT_SHARD_COUNT - 1).",
+      "note": "`own` costs no traffic: a community follows its own shard topic anyway, because it publishes there, so keeping what arrives is a question of disk alone -- and it is what gives every transaction a copy at every community of its shard without anybody configuring anything. The dht-node role reads no database; the role that does hands these values over, at start and whenever they change.",
+      "source": "gradido2 Architecture.md — Peer network, Mirror nodes, and the topics they follow"
+    },
+
+    "dht.mirror_communities": {
+      "group": "dht",
+      "scope": "instance",
+      "type": "text",
+      "default": "",
+      "description": "Communities this instance keeps the transactions of beyond its shards: their public keys as 64 lowercase hex digits, comma-separated, at most 190. Each is followed on its community topic (DHT_COMMUNITY_TOPIC_CONTEXT in const.json), which its community publishes to only while somebody follows it.",
+      "note": "190 because libp2p-ffi follows at most 256 topics by default: the instance's own shard and community topic, up to 63 further shards, and these.",
+      "source": "gradido2 Architecture.md — Peer network, Mirror nodes, and the topics they follow"
+    },
+
+    "dht.mirror_bytes_per_second": {
+      "group": "dht",
+      "scope": "instance",
+      "type": "uint32",
+      "unit": "bytes_per_second",
+      "default": "65536",
+      "min": "1024",
+      "max": "1073741824",
+      "description": "How much published traffic this instance accepts, measured on the wire. What is over it is neither kept nor forwarded, and is fetched later over RPC by whoever needs it. 64 KiB/s carries some six of the heaviest transactions -- a shielded transfer is about 10 KB -- per second, for good.",
+      "note": "Meant as one budget for all topic traffic. libp2p-ffi limits per peer class today (lp2p_limit_set_bytes with LP2P_PROTOCOL_TOPICS), so until it has a limit across classes the budget applies to each class and the classes add up.",
+      "source": "gradido2 Architecture.md — Peer network, Mirror nodes, and the topics they follow"
+    },
+
+    "dht.mirror_bytes_burst": {
+      "group": "dht",
+      "scope": "instance",
+      "type": "uint32",
+      "unit": "bytes",
+      "default": "1048576",
+      "min": "131072",
+      "max": "1073741824",
+      "description": "How much of dht.mirror_bytes_per_second may be taken at once, after a quiet spell.",
+      "note": "At least 128 KiB because a single message may be 64 KiB plus its frame (libp2p-ffi topic_max_message_bytes): a burst below that would let a message of the largest size through never, however long it waited.",
+      "source": "gradido2 Architecture.md — Peer network, Mirror nodes, and the topics they follow"
+    },
+
     "dlt.active": {
       "group": "dlt",
       "scope": "instance",

@@ -1,0 +1,359 @@
+{
+  "contractVersion": 1,
+  "kind": "test-vectors",
+  "subject": "public-url",
+  "notes": [
+    "Whether a URL names a host on the public internet. `setup` asks it of the community URL and writes the answer as DHT_REACHABILITY: public, or private for everything else, and the dht node starts accordingly.",
+    "The host is judged as it was written, not as a WHATWG parser would rewrite it: that parser turns `http://2130706433` into 127.0.0.1 and a C reader does not, so both implementations take the host out of the text by the same rule and read an address the way inet_pton does -- four decimal parts without leading zeros, or RFC 4291 text. Anything else numeric is private.",
+    "A name is public unless it has no dot or ends in a label reserved for a network that is not the internet. Whether it resolves is not asked: `setup` runs where DNS may not yet point at the machine, and the operator called it the public URL."
+  ],
+  "fields": {
+    "id": {
+      "type": "text",
+      "note": "Stable forever. A failure names this."
+    },
+    "why": {
+      "type": "text",
+      "note": "What this vector is load bearing for."
+    },
+    "url": {
+      "type": "text",
+      "note": "The URL as the community row holds it."
+    },
+    "expect.public": {
+      "type": "bool",
+      "note": "The contract."
+    }
+  },
+  "count": 41,
+  "vectors": [
+    {
+      "id": "public-url.domain",
+      "why": "The ordinary case: a community with a domain.",
+      "url": "https://gdd.gradido.net",
+      "expect": {
+        "public": true
+      }
+    },
+    {
+      "id": "public-url.domain-with-port-path-and-user",
+      "why": "Everything around the host is ignored: userinfo, port, path, query, fragment.",
+      "url": "https://user:secret@gdd.example.org:8443/path?x=1#y",
+      "expect": {
+        "public": true
+      }
+    },
+    {
+      "id": "public-url.domain-uppercase",
+      "why": "Case does not change a name.",
+      "url": "HTTPS://GDD.GRADIDO.NET",
+      "expect": {
+        "public": true
+      }
+    },
+    {
+      "id": "public-url.domain-trailing-dot",
+      "why": "The root label written out is the same name.",
+      "url": "https://gdd.gradido.net.",
+      "expect": {
+        "public": true
+      }
+    },
+    {
+      "id": "public-url.public-ipv4",
+      "why": "An address routed on the internet.",
+      "url": "http://8.8.8.8",
+      "expect": {
+        "public": true
+      }
+    },
+    {
+      "id": "public-url.public-ipv4-next-to-private",
+      "why": "The first address past 172.16/12, against a mask that is one bit too wide.",
+      "url": "http://172.32.0.1",
+      "expect": {
+        "public": true
+      }
+    },
+    {
+      "id": "public-url.public-ipv4-past-cgnat",
+      "why": "The first address past 100.64/10.",
+      "url": "http://100.128.0.1",
+      "expect": {
+        "public": true
+      }
+    },
+    {
+      "id": "public-url.public-ipv6",
+      "why": "An IPv6 address routed on the internet, in brackets and with a port.",
+      "url": "http://[2a00:1450:4001:82b::200e]:443",
+      "expect": {
+        "public": true
+      }
+    },
+    {
+      "id": "public-url.localhost",
+      "why": "What the development setup writes.",
+      "url": "http://localhost",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.localhost-port",
+      "why": "The same with the backend's port.",
+      "url": "http://localhost:4000",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.localhost-uppercase",
+      "why": "Case does not make localhost public.",
+      "url": "http://LocalHost",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.localhost-subdomain",
+      "why": "Everything under localhost is this machine, RFC 6761.",
+      "url": "http://app.localhost",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.loopback",
+      "why": "The loopback address.",
+      "url": "http://127.0.0.1",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.loopback-anywhere-in-127",
+      "why": "All of 127/8 is loopback, not just .1.",
+      "url": "http://127.1.2.3:8080",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.unspecified",
+      "why": "The address a listener binds to, nobody's address to dial.",
+      "url": "http://0.0.0.0",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.ipv6-loopback",
+      "why": "IPv6 loopback.",
+      "url": "http://[::1]:4000",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.ipv6-unspecified",
+      "why": "IPv6 unspecified.",
+      "url": "http://[::]",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.private-10",
+      "why": "RFC 1918.",
+      "url": "http://10.0.0.5",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.private-172",
+      "why": "RFC 1918, the lowest of 172.16/12.",
+      "url": "http://172.16.0.1",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.private-172-top",
+      "why": "RFC 1918, the highest of 172.16/12.",
+      "url": "http://172.31.255.255",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.private-192-168",
+      "why": "RFC 1918, the home router's network.",
+      "url": "http://192.168.1.10",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.link-local",
+      "why": "IPv4 link-local.",
+      "url": "http://169.254.1.1",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.cgnat",
+      "why": "Carrier-grade NAT, RFC 6598: behind a provider's NAT, not on the internet.",
+      "url": "http://100.64.0.1",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.multicast",
+      "why": "Multicast and above: no host has these.",
+      "url": "http://224.0.0.1",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.ipv6-unique-local",
+      "why": "IPv6 unique local, fc00::/7.",
+      "url": "http://[fd00::1]",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.ipv6-link-local",
+      "why": "IPv6 link-local.",
+      "url": "http://[fe80::1]",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.ipv6-zone",
+      "why": "A zone id names an interface of this machine.",
+      "url": "http://[fe80::1%25eth0]",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.ipv4-mapped-private",
+      "why": "An IPv4-mapped address is judged as the IPv4 address it carries.",
+      "url": "http://[::ffff:192.168.1.1]",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.ipv4-mapped-public",
+      "why": "And a public one stays public.",
+      "url": "http://[::ffff:8.8.8.8]",
+      "expect": {
+        "public": true
+      }
+    },
+    {
+      "id": "public-url.number-host",
+      "why": "127.0.0.1 as one decimal number: a browser reads it so, and nobody publishes an address that way.",
+      "url": "http://2130706433",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.hex-host",
+      "why": "The same in hex parts.",
+      "url": "http://0x7f.1",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.leading-zero",
+      "why": "A leading zero is octal to some readers and decimal to others; neither is a public address.",
+      "url": "http://010.0.0.1",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.single-label",
+      "why": "A name without a dot: a container or a machine on the local network.",
+      "url": "http://gradido",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.mdns",
+      "why": "Multicast DNS, this network only.",
+      "url": "http://gdd.local",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.internal",
+      "why": "Reserved for private use.",
+      "url": "http://gdd.internal",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.home-arpa",
+      "why": "Reserved for home networks, RFC 8375.",
+      "url": "http://router.home.arpa",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.test-tld",
+      "why": "Reserved for testing, RFC 6761.",
+      "url": "http://gdd.test",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.no-scheme",
+      "why": "Without a scheme there is no host to find.",
+      "url": "gdd.gradido.net",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.empty-host",
+      "why": "An empty host.",
+      "url": "http:///path",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.unclosed-bracket",
+      "why": "An IPv6 literal that never closes.",
+      "url": "http://[::1",
+      "expect": {
+        "public": false
+      }
+    },
+    {
+      "id": "public-url.double-dot",
+      "why": "An empty label is no name.",
+      "url": "http://gdd..gradido.net",
+      "expect": {
+        "public": false
+      }
+    }
+  ]
+}

@@ -184,19 +184,353 @@
       "source": "shared/src/const/index.ts"
     },
     "DHT_BOOTSTRAP_DEFAULT_URL": {
-      "group": "federation",
+      "group": "dht",
       "type": "text",
       "value": "https://gdd.gradido.net",
       "description": "Where a community bootstraps from when its operator configures nothing. Overridable, and any running community can serve the same route — this is the default, not the only entry point.",
       "source": "gradido2 — the community operated by the Gradido project"
     },
     "DHT_BOOTSTRAP_PEERS_MAX": {
-      "group": "federation",
+      "group": "dht",
       "type": "uint32",
       "unit": "peers",
       "value": "20",
       "description": "How many peers peer.bootstrap hands out. Enough to join the network, few enough that the route is not an enumeration endpoint.",
       "source": "gradido2 — libp2p, unlike hyperswarm, comes with no public network to join"
+    },
+    "MASTER_SEED_BYTES": {
+      "group": "identity",
+      "type": "uint32",
+      "unit": "bytes",
+      "value": "32",
+      "description": "Length of MASTER_SEED (secrets.json). Within SLIP-10's 16 to 64, and the size of an ed25519 seed.",
+      "source": "gradido2 Architecture.md -- Peer network, Communities and instances"
+    },
+    "MASTER_SEED_PATH_DHT": {
+      "group": "dht",
+      "type": "uint32",
+      "value": "6580340",
+      "description": "The SLIP-10 index of the path segment `dht`, under which the dht-node identity is derived from MASTER_SEED: the word's ASCII bytes read as one big-endian number, 0x00646874. Hardened, as every derivation of gradido-blockchain-core is. The derived child's 32-byte seed is libp2p-ffi's node seed; its public key is the node key a delegation names. test-vectors/master-seed.json holds both implementations to it.",
+      "source": "gradido2 Architecture.md -- Peer network, Communities and instances"
+    },
+    "DHT_SHARD_COUNT": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "shards",
+      "value": "64",
+      "description": "How many shard topics a community's transactions are spread over. A community's shard is sha256(DHT_SHARD_CONTEXT || community public key)[0] & (DHT_SHARD_COUNT - 1), so the count is a power of two and at most 256. A mirror subscribes to whole shards to follow many communities at once. Raising it is a network-wide decision with an overlap window, never a code update on one side.",
+      "source": "gradido2 Architecture.md — Peer network, Mirror nodes, and the topics they follow"
+    },
+    "DHT_SHARD_CONTEXT": {
+      "group": "dht",
+      "type": "text",
+      "value": "gradido/shard/v1",
+      "description": "Prefix of the hash that puts a community into a shard. Fixed so that both node implementations put the same community into the same shard; the version in it is what a future shard layout changes.",
+      "source": "gradido2 Architecture.md — Peer network, Mirror nodes, and the topics they follow"
+    },
+    "DHT_SHARD_TOPIC_CONTEXT": {
+      "group": "dht",
+      "type": "text",
+      "value": "gradido/shard/v1/topic",
+      "description": "Prefix of the hash that turns a shard number into a topic key: sha256(DHT_SHARD_TOPIC_CONTEXT || shard byte). A separate prefix from DHT_SHARD_CONTEXT, so that a topic key is never a shard input and the two derivations cannot be confused.",
+      "source": "gradido2 Architecture.md — Peer network, Mirror nodes, and the topics they follow"
+    },
+    "DHT_COMMUNITY_TOPIC_CONTEXT": {
+      "group": "dht",
+      "type": "text",
+      "value": "gradido/community/v1",
+      "description": "Prefix of the hash that turns a community public key into its own topic key: sha256(DHT_COMMUNITY_TOPIC_CONTEXT || community public key). A community publishes into this topic only while somebody follows it, which is what makes mirroring a single community free for everyone else.",
+      "source": "gradido2 Architecture.md — Peer network, Mirror nodes, and the topics they follow"
+    },
+    "DHT_KAD_PROTOCOL": {
+      "group": "dht",
+      "type": "text",
+      "value": "/gradido/{DHT_TOPIC}/kad/1",
+      "description": "The Kademlia protocol both nodes speak, with {DHT_TOPIC} replaced by the DHT_TOPIC setting. The topic is in the name so that two networks -- staging and production -- never share a routing table.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_ANNOUNCE_TOPIC": {
+      "group": "dht",
+      "type": "text",
+      "value": "/gradido/{DHT_TOPIC}/announce/1",
+      "description": "The gossipsub topic of the announcements, {DHT_TOPIC} as above.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_ANNOUNCE_MAX_PAYLOAD_BYTES": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "bytes",
+      "value": "1024",
+      "description": "The largest announcement payload a node publishes or accepts. The frame around it -- version byte and the 136-byte delegation -- is not counted.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_RPC_PROTOCOL": {
+      "group": "dht",
+      "type": "text",
+      "value": "/lp2p/rpc/1",
+      "description": "The one libp2p protocol every RPC travels on. libp2p-ffi's, not ours to rename: the operation is named inside the frame, which is why no per-operation protocol exists. The frame is libp2p-ffi's src/wire.rs.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_RPC_MAX_REQUEST_BYTES": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "bytes",
+      "value": "1048576",
+      "description": "The largest RPC request payload a node sends or accepts, the frame around it not counted. Applied by both nodes.",
+      "source": "gradido2 Architecture.md — Peer network, Transports and relay"
+    },
+    "DHT_RPC_MAX_RESPONSE_BYTES": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "bytes",
+      "value": "10485760",
+      "description": "The largest RPC response payload. Applied by both nodes.",
+      "source": "gradido2 Architecture.md — Peer network, Transports and relay"
+    },
+    "DHT_RELAY_MAX_RESERVATIONS": {
+      "group": "dht",
+      "type": "uint32",
+      "value": "128",
+      "description": "How many private nodes a public one holds a relay slot for at once. Applied by both nodes.",
+      "source": "gradido2 Architecture.md — Peer network, Transports and relay"
+    },
+    "DHT_RELAY_RESERVATION_SECONDS": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "seconds",
+      "value": "3600",
+      "description": "How long a slot lasts before the private node has to renew it. Applied by both nodes.",
+      "source": "gradido2 Architecture.md — Peer network, Transports and relay"
+    },
+    "DHT_RELAY_CIRCUIT_SECONDS": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "seconds",
+      "value": "120",
+      "description": "How long one relayed connection may stay open. A call opens a new one when the last has closed. Applied by both nodes.",
+      "source": "gradido2 Architecture.md — Peer network, Transports and relay"
+    },
+    "DHT_RELAY_CIRCUIT_BYTES": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "bytes",
+      "value": "16777216",
+      "description": "How much one relayed connection may carry. At least one DHT_RPC_MAX_REQUEST_BYTES and one DHT_RPC_MAX_RESPONSE_BYTES with room to spare: a community without a URL is reached over relays alone, and a limit below a full exchange would make every large answer undeliverable. rust-libp2p's default of 128 KiB is sized for hole punching, not for carrying calls. Applied by both nodes.",
+      "source": "gradido2 Architecture.md — Peer network, Transports and relay"
+    },
+    "DHT_RELAY_MAX_RESERVATIONS_PER_PEER": {
+      "group": "dht",
+      "type": "uint32",
+      "value": "4",
+      "description": "Slots one node may hold on one relay. Fast path only: js-libp2p's relay has no such limit, so a TypeScript relay is bounded by the others alone.",
+      "source": "gradido2 Architecture.md — Peer network, Transports and relay"
+    },
+    "DHT_RELAY_MAX_CIRCUITS": {
+      "group": "dht",
+      "type": "uint32",
+      "value": "16",
+      "description": "Relayed connections open at once. What a relay carries at most is this times DHT_RELAY_CIRCUIT_BYTES every DHT_RELAY_CIRCUIT_SECONDS. Fast path only: js-libp2p's relay has no such limit, so a TypeScript relay is bounded by the others alone.",
+      "source": "gradido2 Architecture.md — Peer network, Transports and relay"
+    },
+    "DHT_RELAY_MAX_CIRCUITS_PER_PEER": {
+      "group": "dht",
+      "type": "uint32",
+      "value": "4",
+      "description": "Relayed connections one node may have open at once. Fast path only: js-libp2p's relay has no such limit, so a TypeScript relay is bounded by the others alone.",
+      "source": "gradido2 Architecture.md — Peer network, Transports and relay"
+    },
+    "DHT_RELAY_CIRCUIT_PEER_INTERVAL_SECONDS": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "seconds",
+      "value": "120",
+      "description": "New relayed connections per node: one every this many seconds, DHT_RELAY_CIRCUIT_PEER_BURST in reserve. Fast path only: js-libp2p's relay has no such limit, so a TypeScript relay is bounded by the others alone.",
+      "source": "gradido2 Architecture.md — Peer network, Transports and relay"
+    },
+    "DHT_RELAY_CIRCUIT_PEER_BURST": {
+      "group": "dht",
+      "type": "uint32",
+      "value": "30",
+      "description": "The reserve of DHT_RELAY_CIRCUIT_PEER_INTERVAL_SECONDS. Fast path only: js-libp2p's relay has no such limit, so a TypeScript relay is bounded by the others alone.",
+      "source": "gradido2 Architecture.md — Peer network, Transports and relay"
+    },
+    "DHT_RELAY_CIRCUIT_IP_INTERVAL_SECONDS": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "seconds",
+      "value": "60",
+      "description": "New relayed connections per IP address: one every this many seconds, DHT_RELAY_CIRCUIT_IP_BURST in reserve. Fast path only: js-libp2p's relay has no such limit, so a TypeScript relay is bounded by the others alone.",
+      "source": "gradido2 Architecture.md — Peer network, Transports and relay"
+    },
+    "DHT_RELAY_CIRCUIT_IP_BURST": {
+      "group": "dht",
+      "type": "uint32",
+      "value": "60",
+      "description": "The reserve of DHT_RELAY_CIRCUIT_IP_INTERVAL_SECONDS. Fast path only: js-libp2p's relay has no such limit, so a TypeScript relay is bounded by the others alone.",
+      "source": "gradido2 Architecture.md — Peer network, Transports and relay"
+    },
+    "DHT_CLASS_UNKNOWN": {
+      "group": "dht",
+      "type": "uint32",
+      "value": "0",
+      "description": "The peer class of a community nobody has classified yet -- every community until the federation role has looked at it. libp2p-ffi's LP2P_CLASS_UNKNOWN.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_CLASS_WITHOUT_URL": {
+      "group": "dht",
+      "type": "uint32",
+      "value": "1",
+      "description": "A community with a valid delegation and no verified URL: cheap to create, so the strictest of the classified.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_CLASS_WITH_URL": {
+      "group": "dht",
+      "type": "uint32",
+      "value": "2",
+      "description": "A community whose URL answered the federation handshake with the key it claims.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_CLASS_OWN_INSTANCE": {
+      "group": "dht",
+      "type": "uint32",
+      "value": "3",
+      "description": "Another instance of this node's own community. Not limited: it synchronises.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_CLASS_BLOCKED": {
+      "group": "dht",
+      "type": "uint32",
+      "value": "255",
+      "description": "Refused outright, whatever it asks. libp2p-ffi's LP2P_CLASS_BLOCKED.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_UNKNOWN_PEER_PER_MINUTE": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests_per_minute",
+      "value": "6",
+      "description": "Inbound RPC requests a DHT_CLASS_UNKNOWN community may make, per node. A token bucket: this many a minute, DHT_LIMIT_UNKNOWN_PEER_BURST in reserve. A request over it is refused before the federation role sees it. A starting value, to be tuned under load.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_UNKNOWN_PEER_BURST": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests",
+      "value": "3",
+      "description": "The reserve of DHT_LIMIT_UNKNOWN_PEER_PER_MINUTE: how many requests may come at once after a quiet spell.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_UNKNOWN_PREFIX_PER_MINUTE": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests_per_minute",
+      "value": "30",
+      "description": "Inbound RPC requests a DHT_CLASS_UNKNOWN community may make, per IPv4 /24 or IPv6 /56 -- not applied to relayed connections, whose visible address is the relay's. A token bucket: this many a minute, DHT_LIMIT_UNKNOWN_PREFIX_BURST in reserve. A request over it is refused before the federation role sees it. A starting value, to be tuned under load.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_UNKNOWN_PREFIX_BURST": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests",
+      "value": "10",
+      "description": "The reserve of DHT_LIMIT_UNKNOWN_PREFIX_PER_MINUTE: how many requests may come at once after a quiet spell.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_UNKNOWN_GLOBAL_PER_MINUTE": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests_per_minute",
+      "value": "300",
+      "description": "Inbound RPC requests a DHT_CLASS_UNKNOWN community may make, for the whole class. A token bucket: this many a minute, DHT_LIMIT_UNKNOWN_GLOBAL_BURST in reserve. A request over it is refused before the federation role sees it. A starting value, to be tuned under load.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_UNKNOWN_GLOBAL_BURST": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests",
+      "value": "60",
+      "description": "The reserve of DHT_LIMIT_UNKNOWN_GLOBAL_PER_MINUTE: how many requests may come at once after a quiet spell.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_WITHOUT_URL_PEER_PER_MINUTE": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests_per_minute",
+      "value": "30",
+      "description": "Inbound RPC requests a DHT_CLASS_WITHOUT_URL community may make, per node. A token bucket: this many a minute, DHT_LIMIT_WITHOUT_URL_PEER_BURST in reserve. A request over it is refused before the federation role sees it. A starting value, to be tuned under load.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_WITHOUT_URL_PEER_BURST": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests",
+      "value": "10",
+      "description": "The reserve of DHT_LIMIT_WITHOUT_URL_PEER_PER_MINUTE: how many requests may come at once after a quiet spell.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_WITHOUT_URL_PREFIX_PER_MINUTE": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests_per_minute",
+      "value": "120",
+      "description": "Inbound RPC requests a DHT_CLASS_WITHOUT_URL community may make, per IPv4 /24 or IPv6 /56, as for UNKNOWN. A token bucket: this many a minute, DHT_LIMIT_WITHOUT_URL_PREFIX_BURST in reserve. A request over it is refused before the federation role sees it. A starting value, to be tuned under load.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_WITHOUT_URL_PREFIX_BURST": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests",
+      "value": "30",
+      "description": "The reserve of DHT_LIMIT_WITHOUT_URL_PREFIX_PER_MINUTE: how many requests may come at once after a quiet spell.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_WITHOUT_URL_GLOBAL_PER_MINUTE": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests_per_minute",
+      "value": "1200",
+      "description": "Inbound RPC requests a DHT_CLASS_WITHOUT_URL community may make, for the whole class. A token bucket: this many a minute, DHT_LIMIT_WITHOUT_URL_GLOBAL_BURST in reserve. A request over it is refused before the federation role sees it. A starting value, to be tuned under load.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_WITHOUT_URL_GLOBAL_BURST": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests",
+      "value": "200",
+      "description": "The reserve of DHT_LIMIT_WITHOUT_URL_GLOBAL_PER_MINUTE: how many requests may come at once after a quiet spell.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_WITH_URL_PEER_PER_MINUTE": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests_per_minute",
+      "value": "120",
+      "description": "Inbound RPC requests a DHT_CLASS_WITH_URL community may make, per node. A token bucket: this many a minute, DHT_LIMIT_WITH_URL_PEER_BURST in reserve. A request over it is refused before the federation role sees it. A starting value, to be tuned under load.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_WITH_URL_PEER_BURST": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests",
+      "value": "30",
+      "description": "The reserve of DHT_LIMIT_WITH_URL_PEER_PER_MINUTE: how many requests may come at once after a quiet spell.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_WITH_URL_GLOBAL_PER_MINUTE": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests_per_minute",
+      "value": "6000",
+      "description": "Inbound RPC requests a DHT_CLASS_WITH_URL community may make, for the whole class. A token bucket: this many a minute, DHT_LIMIT_WITH_URL_GLOBAL_BURST in reserve. A request over it is refused before the federation role sees it. A starting value, to be tuned under load.",
+      "source": "gradido2 Architecture.md — Peer network"
+    },
+    "DHT_LIMIT_WITH_URL_GLOBAL_BURST": {
+      "group": "dht",
+      "type": "uint32",
+      "unit": "requests",
+      "value": "1000",
+      "description": "The reserve of DHT_LIMIT_WITH_URL_GLOBAL_PER_MINUTE: how many requests may come at once after a quiet spell.",
+      "source": "gradido2 Architecture.md — Peer network"
     },
     "SESSION_HARD_TIMEOUT_MS": {
       "group": "session",

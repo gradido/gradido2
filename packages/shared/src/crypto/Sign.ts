@@ -62,6 +62,10 @@ export class SignKeyPair {
     this.keyData = keyData
   }
 
+  /** The 32-byte ed25519 seed: what a library that derives its own key pair takes. */
+  get seed(): Uint8Array {
+    return this.keyData.slice(0, 32)
+  }
   get publicKey(): Uint8Array {
     return this.keyData.slice(32, 64)
   }

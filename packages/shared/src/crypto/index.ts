@@ -1,2 +1,5 @@
+export * from './dhtDelegation'
 export * from './hash'
+export * from './masterSeed'
 export * from './Sign'
+export * from './shard'

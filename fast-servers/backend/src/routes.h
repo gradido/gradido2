@@ -15,6 +15,10 @@
  *  bc_context. */
 int backend_user_create(sc_http_req *req, void *user_data);
 
+/** `GET /peer/bootstrap` -- contracts/server/backend/peer.json, `peer.bootstrap`. Answered from
+ *  the dht-node role in this process, PEER_NETWORK_UNAVAILABLE without one. */
+int backend_peer_bootstrap(sc_http_req *req, void *user_data);
+
 /**
  * Every path no route matched.
  *

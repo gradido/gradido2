@@ -9,9 +9,9 @@ import type { HomeCommunity, NewHomeCommunity } from '../community.data'
  * exist yet. Both methods are startup-only, which is why neither is on a hot path and why
  * neither caches anything — the caller holds the result for the life of the process.
  *
- * Note what is *not* selected: `private_key`. It is a secret with exactly one future reader
- * (whatever signs a federation handshake), and until that exists nothing loads it. See
- * `community.data.ts`.
+ * `findHomeCommunity` does not select `private_key`: that value is held for the life of the
+ * process. The key is read by `findHomeCommunitySigningKey` alone, at the moment something signs
+ * with it -- see `community.data.ts`.
  */
 export class CommunityRepository {
   public constructor(private readonly db: DatabaseConnection) {}
@@ -70,6 +70,38 @@ export class CommunityRepository {
       description: row.description,
       publicKey: new Uint8Array(row.publicKey),
     }
+  }
+
+  /**
+   * The home community's private key, 64 bytes, or nothing on a database that has never been set
+   * up. For signing, by a caller that lets go of it afterwards.
+   */
+  public async findHomeCommunitySigningKey(): Promise<Uint8Array | undefined> {
+    const rows =
+      this.db.kind === 'sqlite'
+        ? this.db.drizzle
+            .select({ privateKey: communitiesSqlite.privateKey })
+            .from(communitiesSqlite)
+            .where(eq(communitiesSqlite.remote, false))
+            .limit(2)
+            .all()
+        : await this.db.drizzle
+            .select({ privateKey: communitiesPg.privateKey })
+            .from(communitiesPg)
+            .where(eq(communitiesPg.remote, false))
+            .limit(2)
+
+    const row = rows[0]
+    if (row === undefined) {
+      return undefined
+    }
+    if (rows.length > 1) {
+      throw new Error('more than one home community: communities.remote = false on several rows')
+    }
+    if (row.privateKey === null || row.privateKey.length !== 64) {
+      throw new Error('the home community has no 64-byte private key')
+    }
+    return new Uint8Array(row.privateKey)
   }
 
   /** Writes the home community. Called once, at first start, and never again. */

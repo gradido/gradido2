@@ -8,6 +8,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@gradido/service-core": "workspace:*",
+    "@gradido/shared": "workspace:*",
     "jose": "6.2.0",
     "valibot": "1.5.0"
   },

@@ -176,6 +176,44 @@
             .url = "https://sqlite.org/2026/sqlite-amalgamation-3530200.zip",
             .hash = "N-V-__8AALc_rgC04POe18O0LKFRm4ouQpLtL3riscEmWp-Q",
         },
+        // libp2p-ffi: the peer network of the dht-node role, as the prebuilt object its own
+        // repository releases -- dht-node/Architecture.md, *The prebuild*, holds why it is Rust
+        // and why it is fetched rather than built. One archive per target, each pinned by the
+        // release's version and by hash, so they move together: a new release replaces all six.
+        //
+        // Lazy: a build fetches the one its target links, and none when the target has no
+        // prebuild or -Dlibp2p-ffi names something else. build.zig, libp2pFfiPackage, maps a
+        // target to its entry.
+        .libp2p_ffi_x86_64_linux_gnu = .{
+            .url = "https://github.com/gradido/libp2p-ffi/releases/download/v0.1.2/libp2p-ffi-0.1.2-x86_64-unknown-linux-gnu.tar.gz",
+            .hash = "N-V-__8AAMcddAJKnH57jVVBl8C3dMx8mJt5nlfeSt-9i1nJ",
+            .lazy = true,
+        },
+        .libp2p_ffi_aarch64_linux_gnu = .{
+            .url = "https://github.com/gradido/libp2p-ffi/releases/download/v0.1.2/libp2p-ffi-0.1.2-aarch64-unknown-linux-gnu.tar.gz",
+            .hash = "N-V-__8AAAc8lAKhOxrwOYKwPVNqDqb-_4P20RR9wl9g7Mke",
+            .lazy = true,
+        },
+        .libp2p_ffi_x86_64_macos = .{
+            .url = "https://github.com/gradido/libp2p-ffi/releases/download/v0.1.2/libp2p-ffi-0.1.2-x86_64-apple-darwin.tar.gz",
+            .hash = "N-V-__8AAD6GcgEYEMz8jgqBWWfQLTp4QjzrZ-5jWZQL-asB",
+            .lazy = true,
+        },
+        .libp2p_ffi_aarch64_macos = .{
+            .url = "https://github.com/gradido/libp2p-ffi/releases/download/v0.1.2/libp2p-ffi-0.1.2-aarch64-apple-darwin.tar.gz",
+            .hash = "N-V-__8AANZxZgERRzlDV9PE8br1X_XH9gB9-USiTtsRAIZ3",
+            .lazy = true,
+        },
+        .libp2p_ffi_x86_64_windows_msvc = .{
+            .url = "https://github.com/gradido/libp2p-ffi/releases/download/v0.1.2/libp2p-ffi-0.1.2-x86_64-pc-windows-msvc.tar.gz",
+            .hash = "N-V-__8AALIgzwaSvrlt2sqq8yls3fieiT_ZrZhPH1if2sCS",
+            .lazy = true,
+        },
+        .libp2p_ffi_aarch64_windows_msvc = .{
+            .url = "https://github.com/gradido/libp2p-ffi/releases/download/v0.1.2/libp2p-ffi-0.1.2-aarch64-pc-windows-msvc.tar.gz",
+            .hash = "N-V-__8AAGocsQbXbMyFSGny3kNxwOlIbXxvkcIDai1AiB21",
+            .lazy = true,
+        },
         // googletest, for the unit tests under -Dtests. Same pin as arnm and
         // gradido-blockchain-core, so the three repositories test against one version. Lazy: a build
         // without -Dtests never fetches it.

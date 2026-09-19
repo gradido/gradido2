@@ -22,10 +22,9 @@ import { join } from 'node:path'
  * Declared rather than discovered, and short because the services are. A secret added to either
  * implementation is added to `contracts/secrets.json` first: an operator who has learned
  * `DB_PASSWORD_FILE` has learned the mechanism, and a second secret that resolved differently
- * would make that knowledge wrong. The mail relay's password and the JWT signing key are the
- * one this was written in anticipation of, and the JWT signing key is the one still to come.
+ * would make that knowledge wrong. The JWT signing key is the one still to come.
  */
-export const SECRET_VARIABLES = ['DB_PASSWORD', 'EMAIL_PASSWORD'] as const
+export const SECRET_VARIABLES = ['DB_PASSWORD', 'EMAIL_PASSWORD', 'MASTER_SEED'] as const
 
 export type SecretVariable = (typeof SECRET_VARIABLES)[number]
 

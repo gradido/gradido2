@@ -103,21 +103,31 @@ A C++ module:
 The reason is concrete: an exception propagating into h2o's C event loop is undefined
 behavior.
 
-**Rust follows the same rule, in one module: `dht-node`.** It is there because libp2p has no
-C equivalent, not because Rust is nicer, and the boundary is the same shape:
+**Rust follows the same rule, and arrives prebuilt.** It is here because no C or C++ libp2p has
+circuit relay, not because Rust is nicer. The network module behind `dht-node`, `libp2p-ffi`, is
+built in a repository of its own and linked here as a downloaded static object, pinned by
+version and checksum; `gradido-blockchain-zk` is the other Rust module and arrives the same way.
+There is no cargo in this repository. The boundary is the same shape:
 
 ```text
 - exports an extern "C" header and nothing else
 - lets no Rust type cross the module boundary
 - #![forbid(unsafe_code)] in the interior; the unsafe lives in one file
-- panics are caught at the boundary and become an error code
+- panics are caught at the boundary and become an error code -- panic = "unwind"
+- only the extern "C" symbols are global in the object it ships as
 ```
 
-The last line is the Rust version of the exception rule: a panic unwinding into h2o's C
-event loop is undefined behavior for exactly the same reason a C++ exception is.
+The panic line is the Rust version of the exception rule: a panic unwinding into h2o's C event
+loop is undefined behavior for exactly the same reason a C++ exception is, and a module built
+with `panic = "abort"` would take the whole server down instead of returning the error code.
 
-Do not add a second Rust module. If one looks necessary, change `../Architecture.md` first —
-a third toolchain on the fast path is a design decision, not a dependency.
+The last line is what makes two Rust modules linkable into one binary at all. Two plain
+`staticlib`s built with different rustc versions collide on `rust_eh_personality`, and a
+`#[global_allocator]` in one of them either fails the link or silently takes over the other's
+allocations. `dht-node/Architecture.md`, *The prebuild*, has the measurement and the recipe.
+
+Do not add a Rust crate to this repository. A new Rust module is a repository of its own, and a
+line in `../Architecture.md` before that.
 
 **Tests are not modules.** The unit tests are C++ because googletest is, calling `extern "C"`
 headers — the same arrangement arnm and gradido-blockchain-core use. This section is about

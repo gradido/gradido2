@@ -8,9 +8,22 @@ import type { ServiceContext } from '..'
  */
 const FORCED_EXIT_TIMEOUT_MS = 10_000
 
+interface Role {
+  readonly context: ServiceContext
+  readonly stop: () => Promise<void> | void
+}
+
+/** Every role of this process that registered, in the order they did. */
+const roles: Role[] = []
+let shuttingDown = false
+
 /**
  * Stops the service on SIGINT and SIGTERM: no new work accepted, what is running finished,
  * the context closed, buffered log lines written, then exit.
+ *
+ * Called once per role. Several roles in one process -- backend and dht-node -- are stopped
+ * together by one handler, and the process exits after the last of them: a handler per role
+ * would let the quickest one end the process while another still closes its database.
  *
  * @param stop stops accepting new work and lets what is running finish -- an HTTP server
  *   stops listening, the dht-node leaves the network
@@ -19,10 +32,12 @@ export function setupGracefulShutdown(
   context: ServiceContext,
   stop: () => Promise<void> | void,
 ): void {
-  let shuttingDown = false
-  const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM']
+  roles.push({ context, stop })
+  if (roles.length > 1) {
+    return
+  }
 
-  for (const signal of signals) {
+  for (const signal of ['SIGINT', 'SIGTERM'] as NodeJS.Signals[]) {
     process.on(signal, async () => {
       /* A second Ctrl+C while the first one is still being handled would close the
          database twice. It means "hurry up", not "do it again". */
@@ -30,7 +45,7 @@ export function setupGracefulShutdown(
         return
       }
       shuttingDown = true
-      await gracefulShutdown(context, stop, signal)
+      await gracefulShutdown(signal)
     })
   }
 
@@ -44,40 +59,48 @@ export function setupGracefulShutdown(
   }
 }
 
-async function gracefulShutdown(
-  context: ServiceContext,
-  stop: () => Promise<void> | void,
-  signal: NodeJS.Signals,
-): Promise<void> {
-  const logger = context.logger
+async function gracefulShutdown(signal: NodeJS.Signals): Promise<void> {
+  const loggers = roles.map((role) => role.context.logger)
 
   const forcedExit = setTimeout(() => {
-    logger.fatal(
-      { cat: 'startup', event: 'startup.shutdown.failed', data: { signal, reason: 'timeout' } },
-      'shutdown takes too long, exiting anyway',
-    )
-    logger.flush()
+    for (const logger of loggers) {
+      logger.fatal(
+        { cat: 'startup', event: 'startup.shutdown.failed', data: { signal, reason: 'timeout' } },
+        'shutdown takes too long, exiting anyway',
+      )
+      logger.flush()
+    }
     process.exit(1)
   }, FORCED_EXIT_TIMEOUT_MS)
 
-  try {
-    await stop()
-    await context.close()
-    logger.info(
-      { cat: 'startup', event: 'startup.server.stopped', data: { signal } },
-      'service stopped',
-    )
+  const outcomes = await Promise.allSettled(
+    roles.map(async (role) => {
+      await role.stop()
+      await role.context.close()
+    }),
+  )
+
+  let failed = false
+  outcomes.forEach((outcome, index) => {
+    const logger = loggers[index]
+    if (logger === undefined) {
+      return
+    }
+    if (outcome.status === 'fulfilled') {
+      logger.info(
+        { cat: 'startup', event: 'startup.server.stopped', data: { signal } },
+        'service stopped',
+      )
+    } else {
+      failed = true
+      logger.fatal(
+        { cat: 'startup', event: 'startup.shutdown.failed', data: { signal, reason: 'error' } },
+        `shutdown failed: ${String(outcome.reason)}`,
+      )
+    }
     logger.flush()
-  } catch (error) {
-    logger.fatal(
-      { cat: 'startup', event: 'startup.shutdown.failed', data: { signal, reason: 'error' } },
-      `shutdown failed: ${String(error)}`,
-    )
-    logger.flush()
-    clearTimeout(forcedExit)
-    process.exit(1)
-  }
+  })
 
   clearTimeout(forcedExit)
-  process.exit(0)
+  process.exit(failed ? 1 : 0)
 }
