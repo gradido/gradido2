@@ -62,9 +62,7 @@
       "auth": "session",
       "roles": ["admin"],
       "request": {
-        "fields": [
-          { "name": "userId", "required": true, "type": "uint64" }
-        ]
+        "fields": [{ "name": "userId", "required": true, "type": "uint64" }]
       },
       "response": {
         "nullable": false,
@@ -117,9 +115,7 @@
       "auth": "session",
       "roles": ["admin"],
       "request": {
-        "fields": [
-          { "name": "userRoleId", "required": true, "type": "uint64" }
-        ]
+        "fields": [{ "name": "userRoleId", "required": true, "type": "uint64" }]
       },
       "response": {
         "nullable": false,

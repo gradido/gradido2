@@ -115,3 +115,34 @@ Map lore abstractions to their real code concepts.
 | The book that began again after its last page | `sqlite3_step` restarts a finished statement; the cursor in `sql_sqlite.c` now stays at its end |
 | Sirodunon's bench, glass and sign | the `DatabaseGate` in `packages/backend-core/src/database/gate.ts`, answering the same 503 |
 | One tireless man who leaves a note at the window | the TypeScript path's single event loop: PostgreSQL queries are asynchronous and do not block it; `bun:sqlite` is synchronous, so the well is the one place he waits himself |
+| The page of cities in Senomagos | legacy's `federated_communities`, written by its dht-node from what it heard on the road |
+| The herald | the dht-node role — `packages/dht-node` and `fast-servers/dht-node` |
+| The great seal, kept by the magistrate | the community key pair; only `setup` ever holds it |
+| The small sealed letter | `DHT_DELEGATION` — 136 bytes, the community key's signature over this instance's node key, with an expiry |
+| Shown with every word he speaks | the delegation travels in every frame, so no caller fetches one |
+| A name struck from the founding words | the node key derived from `MASTER_SEED` along `dht`; the peer id both paths derive identically |
+| The herald who will not walk under a name that is not his | `dht.node.failed` with `delegation-foreign`: the delegation names another node than the seed derives |
+| He carries, he does not decide | the node touches no database, verifies no envelope and registers no operation of its own |
+| A rumour until somebody has stood in front of the man | announcements and bootstrap answers are hints; a community is verified when it is contacted |
+| One letter, one man, one road | one process per instance key; two nodes with one key are one peer id in two places |
+| He never asks for a list | communities are found by key, never enumerated — no heartbeat, no sweep, no table of online communities |
+| The old capital's gate | `DHT_BOOTSTRAP_DEFAULT_URL`, `https://gdd.gradido.net`, over the public `peer.bootstrap` route |
+| Who else is out here | `GET /peer/bootstrap` — `contracts/server/backend/peer.json` |
+| Checked in exactly one place | `self.delegation` must verify and name the key of `self.peerId`; otherwise the whole answer is dropped |
+| Directions are not a character reference | the `peers` of an answer are dialled, never trusted, and never written down as verified |
+| A different handful every time | the rotating routing-table sample, so newcomers fan out instead of piling onto the same peers |
+| We have none | 503 `PEER_NETWORK_UNAVAILABLE` (3010) from a process without the dht-node role |
+| Knocking every minute while alone | the rejoin: `DHT_BOOTSTRAP_URL` asked again each minute while the node has no connection |
+| Ten breaths, and dropped when the gates close | the ten-second fetch timeout, cancelled at once on shutdown; on the fast path it blocks the role's thread and the module queues events meanwhile |
+| A city at the end of a private lane | `DHT_REACHABILITY=private` — no address of its own that anybody outside can dial |
+| A doorway rented in a gatehouse | circuit relay v2: a reservation on a public node, announced as the private node's address |
+| The terms on the gatehouse door | `DHT_RELAY_*` in `contracts/const.json` — reservations, durations, bytes and rates a public node lends under |
+| Settled at the founding, never revised | `setup` writes `DHT_REACHABILITY` from the community URL; AutoNAT never overrides it |
+| The surveyor who never returns a verdict | js-libp2p's AutoNAT: its client reaches no private verdict and its server answers nobody |
+| Two teachers who never met | `js-libp2p` on the reference path, `rust-libp2p` through `libp2p-ffi` on the fast one |
+| The field | the interop test, `packages/dht-node/interop/fast.test.ts` — `bun run test:interop` |
+| The scribe at the edge of the field | the test drives both nodes and reads the fast path's own log lines rather than asking either implementation about the other |
+| A messenger carrying an errand nobody takes | an RPC naming an operation the node did not register; neither path takes one yet |
+| The talkative herald, quieted | the reference node used to log `dht.call.refused` for those; it now drops them silently, as libp2p-ffi does inside the module |
+| The grammar belonged to the teachers | behavior that comes from the shared library, not from the city: the charter's "Sirodunon is right" settles manner, not grammar |
+| The second half of the field | the setup test, `packages/backend/e2e/setup.test.ts` — `setup` driven through a pseudo-terminal on both paths, checking the `.env` it leaves behind |

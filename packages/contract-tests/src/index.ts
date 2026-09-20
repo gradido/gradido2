@@ -12,6 +12,21 @@ export {
   loadJwtVectors,
 } from './jwt.vectors.ts'
 export {
+  loadMasterSeedVectors,
+  type MasterSeedVector,
+  masterSeedVectorSchema,
+} from './master-seed.vectors.ts'
+export {
+  loadPublicUrlVectors,
+  type PublicUrlVector,
+  publicUrlVectorSchema,
+} from './public-url.vectors.ts'
+export {
+  loadShardVectors,
+  type ShardVector,
+  shardVectorSchema,
+} from './shard.vectors.ts'
+export {
   type ContractValue,
   contractValueSchema,
   loadVectors,

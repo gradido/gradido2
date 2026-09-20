@@ -23,7 +23,7 @@ import { SNAPSHOT_DIR } from '../tools/manifest.mjs'
 import { fixture } from '../tools/variants.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const IR = path.join(ROOT, 'gen', 'mjml', 'ir.json')
+const IR = path.join(ROOT, 'build', 'tools', 'mjml', 'ir.json')
 
 const escape = (s) =>
   String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])

@@ -1,0 +1,220 @@
+{
+  "contractVersion": 1,
+  "kind": "test-vectors",
+  "subject": "master-seed",
+  "notes": [
+    "MASTER_SEED (secrets.json) is the root of the keys an instance derives. These vectors hold both implementations to the three things that come out of it: which text is a seed, which dht-node identity a seed derives, and the delegation the community key signs for that identity.",
+    "The derivation is SLIP-10 through gradido-blockchain-core, one hardened step at MASTER_SEED_PATH_DHT (const.json). Both paths call the same C function, so what a derive vector pins is the binding and the index around it rather than two implementations of SLIP-10.",
+    "The delegation is libp2p-ffi's format, and every delegation below was signed by libp2p-ffi itself (lp2p_delegation_sign, v0.1.2) when the file was written, and every dhtNodeKey and communityKey computed by its lp2p_key_from_seed: the vectors say what the network accepts, not what either implementation believes. ed25519 signatures are deterministic, so a delegation is an exact value.",
+    "A delegate vector's community private key is communitySeed followed by communityKey -- the 64 bytes communities.private_key holds.",
+    "No regenerator: every derived value is recomputed by both runners and compared, and the values came from the oracles named above."
+  ],
+  "rules": {
+    "pathDht": {
+      "type": "uint32",
+      "value": "6580340",
+      "note": "MASTER_SEED_PATH_DHT in const.json: the ASCII bytes of `dht`, 0x00646874."
+    },
+    "seedBytes": {
+      "type": "uint32",
+      "value": "32",
+      "note": "MASTER_SEED_BYTES in const.json."
+    }
+  },
+  "fields": {
+    "id": {
+      "type": "text",
+      "note": "Stable forever. A failure names this."
+    },
+    "why": {
+      "type": "text",
+      "note": "What this vector is load bearing for."
+    },
+    "kind": {
+      "type": "text",
+      "note": "parse, derive or delegate: which of the three a vector tests, and so which of the fields below it carries."
+    },
+    "text": {
+      "type": "text",
+      "nullable": true,
+      "note": "parse: the value as MASTER_SEED holds it."
+    },
+    "masterSeed": {
+      "type": "bytes",
+      "nullable": true,
+      "note": "derive and delegate: 32 bytes."
+    },
+    "communitySeed": {
+      "type": "bytes",
+      "nullable": true,
+      "note": "delegate: the community's 32-byte ed25519 seed."
+    },
+    "expiresMs": {
+      "type": "uint64",
+      "unit": "unix_milliseconds",
+      "nullable": true,
+      "note": "delegate: 0 is never."
+    },
+    "expect.accepted": {
+      "type": "bool",
+      "nullable": true,
+      "note": "parse: whether the text is a master seed. The contract."
+    },
+    "expect.dhtNodeSeed": {
+      "type": "bytes",
+      "nullable": true,
+      "note": "derive: the 32-byte seed libp2p-ffi takes as node_seed."
+    },
+    "expect.dhtNodeKey": {
+      "type": "bytes",
+      "nullable": true,
+      "note": "derive and delegate: the node's ed25519 public key."
+    },
+    "expect.communityKey": {
+      "type": "bytes",
+      "nullable": true,
+      "note": "delegate: the community's public key."
+    },
+    "expect.delegation": {
+      "type": "bytes",
+      "nullable": true,
+      "note": "delegate: the 136 bytes, exactly."
+    }
+  },
+  "count": 13,
+  "vectors": [
+    {
+      "id": "master-seed.derive.all-zero",
+      "why": "Every 32 bytes are a seed, the zero ones included: nothing in the derivation may special-case them.",
+      "kind": "derive",
+      "masterSeed": "0000000000000000000000000000000000000000000000000000000000000000",
+      "expect": {
+        "dhtNodeSeed": "6c5c41e51e0244efcf2ef81f9c2b0905df441805abc6b4db2617866e09ab289c",
+        "dhtNodeKey": "9279cba51f08c708c12e7a50af11a9353cfd22ca9efd28974100155f9265c1f9"
+      }
+    },
+    {
+      "id": "master-seed.derive.sevens",
+      "why": "The seed the other vectors start from, so a failure here explains theirs.",
+      "kind": "derive",
+      "masterSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+      "expect": {
+        "dhtNodeSeed": "c10d5959cda7ba223a0a120228d7e0f65c6fee1799c7b54a700deab14524d0b7",
+        "dhtNodeKey": "6d238a55b43ae445b24c6fb157fb2202ee9355eb26fb45ad57768ee902eeb3c3"
+      }
+    },
+    {
+      "id": "master-seed.derive.all-ones",
+      "why": "The top of the byte range, against an implementation that reads a byte as signed.",
+      "kind": "derive",
+      "masterSeed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expect": {
+        "dhtNodeSeed": "2281a2fa8606281a94f76fd8719cb1176e58a9a5515eba81881c483be913257b",
+        "dhtNodeKey": "a2bffec26e0f9f5f47a72f803a87d5d7b33809d4703f3f09e2cfd9c3e191b492"
+      }
+    },
+    {
+      "id": "master-seed.derive.mixed",
+      "why": "A seed without a pattern.",
+      "kind": "derive",
+      "masterSeed": "3c1f8e2a9d4b76c05e1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f70",
+      "expect": {
+        "dhtNodeSeed": "ce940d568d5692cb3525bb0aa24d94cbc14cb42db2d5715b1b7ccdab5f2f7780",
+        "dhtNodeKey": "88bb98b6bfb99ce72818bfcfaae593ff93a6c776257c71abdacf526156697fc9"
+      }
+    },
+    {
+      "id": "master-seed.delegate.never-expires",
+      "why": "What setup signs: the community key vouching for the dht node derived from the master seed, with no expiry.",
+      "kind": "delegate",
+      "communitySeed": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+      "masterSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+      "expiresMs": "0",
+      "expect": {
+        "communityKey": "b533d8ad9fcfbdde0b481c1b334ddc3c53412fd614564e7e5afd020368d382c3",
+        "dhtNodeKey": "6d238a55b43ae445b24c6fb157fb2202ee9355eb26fb45ad57768ee902eeb3c3",
+        "delegation": "6d238a55b43ae445b24c6fb157fb2202ee9355eb26fb45ad57768ee902eeb3c3b533d8ad9fcfbdde0b481c1b334ddc3c53412fd614564e7e5afd020368d382c30000000000000000c2ad260d5a267e793d5989f7ff90785f8efc91b583e073fb3b3c8a0174601b047cc84b00eab6277e6c151f6ed03bb793a8993f294f823507cae2631cdfd2860a"
+      }
+    },
+    {
+      "id": "master-seed.delegate.expires",
+      "why": "The same with an expiry, which is signed over big-endian: a little-endian writer fails here alone.",
+      "kind": "delegate",
+      "communitySeed": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+      "masterSeed": "0707070707070707070707070707070707070707070707070707070707070707",
+      "expiresMs": "1789816471000",
+      "expect": {
+        "communityKey": "b533d8ad9fcfbdde0b481c1b334ddc3c53412fd614564e7e5afd020368d382c3",
+        "dhtNodeKey": "6d238a55b43ae445b24c6fb157fb2202ee9355eb26fb45ad57768ee902eeb3c3",
+        "delegation": "6d238a55b43ae445b24c6fb157fb2202ee9355eb26fb45ad57768ee902eeb3c3b533d8ad9fcfbdde0b481c1b334ddc3c53412fd614564e7e5afd020368d382c3000001a0b95ffdd8738a281ed47836dccbd660bb5406984b1269c292ca26b7128d2f3444c8fba1b0886533220d68815faee7861b08749e6d1e6d84bb2a913de0aa12fa268f341801"
+      }
+    },
+    {
+      "id": "master-seed.delegate.other-community",
+      "why": "Another community and another seed: the community key and the node key are not the same bytes twice.",
+      "kind": "delegate",
+      "communitySeed": "5b7c9d1e3f20415263748596a7b8c9dae0f1021324354657687980a1b2c3d4e5",
+      "masterSeed": "3c1f8e2a9d4b76c05e1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f70",
+      "expiresMs": "0",
+      "expect": {
+        "communityKey": "589573171f4ffccb30f31dc9fda01da7af97b8361f142ef7bad8366a918921b5",
+        "dhtNodeKey": "88bb98b6bfb99ce72818bfcfaae593ff93a6c776257c71abdacf526156697fc9",
+        "delegation": "88bb98b6bfb99ce72818bfcfaae593ff93a6c776257c71abdacf526156697fc9589573171f4ffccb30f31dc9fda01da7af97b8361f142ef7bad8366a918921b5000000000000000099c681eaa6b10c77e0935bceddb10eb6b6d6b99111716406ee0cba3d7307ab7288d90940367ad1d187a50f71bbf3fe397721a595a1fe10470875ceb4c753d804"
+      }
+    },
+    {
+      "id": "master-seed.parse.lowercase",
+      "why": "What setup writes.",
+      "kind": "parse",
+      "text": "0707070707070707070707070707070707070707070707070707070707070707",
+      "expect": {
+        "accepted": true
+      }
+    },
+    {
+      "id": "master-seed.parse.uppercase",
+      "why": "Hex digits are hex digits in either case: a seed pasted from another tool is the same seed.",
+      "kind": "parse",
+      "text": "ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB",
+      "expect": {
+        "accepted": true
+      }
+    },
+    {
+      "id": "master-seed.parse.short",
+      "why": "63 digits: half a byte missing is not a seed.",
+      "kind": "parse",
+      "text": "707070707070707070707070707070707070707070707070707070707070707",
+      "expect": {
+        "accepted": false
+      }
+    },
+    {
+      "id": "master-seed.parse.long",
+      "why": "65 digits: a stray character is refused, not cut off.",
+      "kind": "parse",
+      "text": "07070707070707070707070707070707070707070707070707070707070707070",
+      "expect": {
+        "accepted": false
+      }
+    },
+    {
+      "id": "master-seed.parse.not-hex",
+      "why": "A letter that is no hex digit.",
+      "kind": "parse",
+      "text": "070707070707070707070707070707070707070707070707070707070707070g",
+      "expect": {
+        "accepted": false
+      }
+    },
+    {
+      "id": "master-seed.parse.empty",
+      "why": "An empty value is a present one, and still no seed: setup refuses it rather than replacing it.",
+      "kind": "parse",
+      "text": "",
+      "expect": {
+        "accepted": false
+      }
+    }
+  ]
+}

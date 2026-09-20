@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@gradido/backend": "workspace:*",
+    "@gradido/dht-node": "workspace:*",
     "@gradido/email-native": "workspace:*",
     "@gradido/shared": "workspace:*"
   },

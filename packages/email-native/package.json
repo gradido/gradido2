@@ -29,21 +29,22 @@
     "tools"
   ],
   "scripts": {
+    "bench": "BENCH=1 bun test tests/bench.test.mjs && bun tests/mail-bench.mjs && bun tests/render-bench.mjs",
     "build": "c-cpp-zig-build && bun scripts/sync-fast-servers.ts",
+    "build:clean": "c-cpp-zig-build clean",
     "build:debug": "c-cpp-zig-build --debug && bun scripts/sync-fast-servers.ts",
-    "snapshots:update": "bun run extract:mjml && node tools/snapshots.mjs",
+    "extract:mjml": "bun tools/extract_mjml.mjs --out build/tools/mjml",
+    "extract:pug": "bun tools/extract.mjs --out build/tools/pug",
+    "import:pug": "bun run extract:pug && bun run extract:mjml && bun tools/compare_pug.mjs",
     "info": "c-cpp-zig-build info",
-    "test": "node --test tests/",
-    "bench": "BENCH=1 node --test tests/bench.test.mjs && bun tests/mail-bench.mjs && bun tests/render-bench.mjs",
     "lint": "biome check --error-on-warnings .",
     "lint:fix": "biome check --error-on-warnings . --write",
-    "build:clean": "c-cpp-zig-build clean",
-    "extract:mjml": "node tools/extract_mjml.mjs --out gen/mjml",
     "po": "bun tools/json2po.mjs",
-    "extract:pug": "node tools/extract.mjs --out gen/pug",
     "preview": "bun scripts/preview.ts",
-    "preview:build": "node tools/preview.mjs",
-    "import:pug": "bun run extract:pug && bun run extract:mjml && node tools/compare_pug.mjs"
+    "preview:build": "bun tools/preview.mjs",
+    "snapshots:update": "bun run extract:mjml && bun tools/snapshots.mjs",
+    "test": "bun test tests/",
+    "test:node": "node --test tests/"
   },
   "zigNative": {
     "optimize": "fast",

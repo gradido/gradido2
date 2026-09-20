@@ -32,6 +32,8 @@ export enum ErrorCode {
   /** `errors/api.json`. The database has all the work this process may give it; nothing was
    *  run, and the same request a moment later is expected to work. Sent with `Retry-After`. */
   ServiceBusy = 3009,
+  /** `errors/api.json`. `peer.bootstrap` on a server whose process runs no dht-node role. */
+  PeerNetworkUnavailable = 3010,
 }
 
 /**
@@ -58,6 +60,7 @@ const ERROR_NAMES: Record<ErrorCode, string> = {
   [ErrorCode.Unknown]: 'UNKNOWN',
   [ErrorCode.RouteNotImplemented]: 'ROUTE_NOT_IMPLEMENTED',
   [ErrorCode.ServiceBusy]: 'SERVICE_BUSY',
+  [ErrorCode.PeerNetworkUnavailable]: 'PEER_NETWORK_UNAVAILABLE',
 }
 
 /**
@@ -72,6 +75,7 @@ type ErrorParameters = {
   [ErrorCode.Unknown]: []
   [ErrorCode.RouteNotImplemented]: [route: string]
   [ErrorCode.ServiceBusy]: [retryAfter: number]
+  [ErrorCode.PeerNetworkUnavailable]: []
 }
 
 /**
@@ -90,6 +94,7 @@ const ERROR_MESSAGES: { [Code in ErrorCode]: (...parameters: ErrorParameters[Cod
   [ErrorCode.Unknown]: () => 'unknown error',
   [ErrorCode.RouteNotImplemented]: (route) => `route not implemented on this server: ${route}`,
   [ErrorCode.ServiceBusy]: (retryAfter) => `service busy, retry after ${retryAfter} seconds`,
+  [ErrorCode.PeerNetworkUnavailable]: () => 'this server runs no peer network node',
 }
 
 /** The HTTP status the contract gives each code, kept beside the code it belongs to. */
@@ -98,6 +103,7 @@ const ERROR_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.Unknown]: 500,
   [ErrorCode.RouteNotImplemented]: 501,
   [ErrorCode.ServiceBusy]: 503,
+  [ErrorCode.PeerNetworkUnavailable]: 503,
 }
 
 export function errorStatus(code: ErrorCode): number {

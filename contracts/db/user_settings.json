@@ -37,10 +37,7 @@
       "default": "now"
     }
   ],
-  "primaryKey": [
-    "user_id",
-    "key"
-  ],
+  "primaryKey": ["user_id", "key"],
   "unique": [],
   "indexes": [],
   "notes": [

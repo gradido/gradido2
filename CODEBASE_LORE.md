@@ -432,3 +432,132 @@ window and serves the queue until the answer comes — only at the well does he 
 bucket himself. But she has the same bench, the same glass and the same sign, in the same
 words — because a traveller must never be able to tell, from the answer, which city he was
 standing in.
+
+## XVII. The herald who keeps no book
+
+Senomagos keeps a list of cities.
+
+It is a real page in a real book, and it is filled in by the herald himself: every name that
+was ever shouted at him from the road is on it, written down in the city's own hand, on the
+authority of a man who said it about himself on a Tuesday. The list is then consulted by clerks
+who were not there.
+
+The new cities have no page. They were built without one on purpose, and the rule that replaced
+it is short: **you do not ask who is out there. You hold up a seal and ask the road for whoever
+carries it.**
+
+Every city has a great seal, kept by the magistrate and never taken out of the city. A herald
+gets a small letter instead: the magistrate's seal on a strip naming this one man, valid until a
+date written on it, and he shows it with every word he speaks. Nobody ever has to send to his
+city to ask whether he is genuine — the answer travels with him, which is the entire point, and
+what it saves is one journey per stranger forever.
+
+His name is not chosen. It is made from the city's founding words, the way a coin is struck from
+a die, and the two cities — given the same founding words on the same morning — sent out a
+herald with the same name. Not a similar name. The same one, letter for letter. They had not
+compared notes. They had both simply been told how names are made.
+
+That is also the one way the thing goes wrong. Change the founding words after the letter has
+been sealed and the letter names a man who no longer exists. The herald then refuses to set out
+at all — he will not walk the road under a name that is not his — and says, in the one sentence
+he is allowed, that this is a matter for the magistrate.
+
+Three rules hang in the herald's house, and none of them is about walking.
+
+**He carries. He does not decide.** He keeps no book, may not write in the city's, and has no
+opinion about who deserves an answer. What he hears on the road he says out loud in the city and
+leaves to the clerks, because a name heard on the road is a rumour until somebody has stood in
+front of the man.
+
+**One letter, one man, one road.** Two heralds carrying the same letter would both be answered
+to, a conversation begun with one would be finished by the other, and neither would know what
+the other had said. A city that grows until it needs more clerks does not get a second herald
+with the same letter; it gets one herald, at one gate, and the clerks come to him.
+
+**He never asks for a list.** Not of cities, not of who is awake. There is no nightly round, no
+roll call, no page to keep current. A city that wants another city asks for it by its seal, at
+the moment it wants it, and finds out then.
+
+## XVIII. Who else is on the road
+
+A city founded this morning knows exactly one address: the old capital's gate, written into the
+charter because a road with nobody on it is not a road.
+
+So the herald walks there and asks the one question the gate exists to answer: *who else is out
+here?* And the gate answers with itself — name, directions, and its sealed letter — and then
+with a handful of others, directions only.
+
+Two things about that handful.
+
+It is checked in exactly one place. The gate's own answer must carry a letter naming the man who
+handed it over, and if it does not, the whole answer is dropped, the handful with it: a gate
+that lies about itself is not a gate to take directions from. Everybody else in it is directions
+and nothing more. **Directions are not a character reference.** Each of those is a stranger
+until the herald has stood in front of him and seen his letter, and not one of them is written
+into any book before that.
+
+And it is a different handful every time. The gate keeps no favourites and hands out a fresh
+slice of whoever it happens to be talking to, because a gate with a fixed answer sends every
+newcomer in the history of the road to the same three doors.
+
+A city that keeps no herald at all is asked the same question and answers it plainly: *we have
+none*. It does not stay silent and it does not improvise, for the same reason the runner in
+chapter XV writes his line either way — silence is indistinguishable from a gate nobody was
+standing at.
+
+The newcomer who has met nobody knocks again every minute. The moment he has met somebody he
+stops, and he does not start again until he is alone. While he is away knocking, the messages
+for him pile up behind the door; he is gone ten breaths at most, and if the city begins closing
+its gates he drops the errand where he stands.
+
+Then there are the cities at the end of private lanes: the gate is real, the city is real, and
+nobody outside can reach either. Such a city rents a doorway in a public city's gatehouse and
+gives *that* as its address, and everything meant for it arrives through somebody else's wall.
+The lending city sets the terms, written on the gatehouse door: how many doorways at once, how
+long a doorway is held, how much may pass through it, and how often one stranger may ask for
+one. A gatehouse that lends without terms is a gatehouse somebody eventually moves into.
+
+Which of the two a city is — public gate or private lane — is settled at the founding and
+written in the note nailed inside the gate. It is not discovered and it is not revised. One of
+the cities keeps a surveyor for exactly this question who has never once returned a verdict, and
+rather than have the two cities disagree about what they are, both are simply told, and neither
+is allowed to change its mind on a hunch. An honest founder whose gate is on the road but whose
+lane is barred writes *private* with his own hand and loses nothing but the pleasure of lending
+doorways.
+
+## XIX. The field where the two heralds meet
+
+The two heralds learned the language from different teachers.
+
+Neither teacher ever met the other, both taught the same tongue, and both were entirely
+confident. So before either of them is taught anything new, the cities do the only thing that
+settles it: they send both men to a field with nothing between them.
+
+Each joins the road through the other's gate. Each is asked to find the other's city knowing
+nothing but its seal — and each does, because the road remembers where a seal was last seen and
+nothing else about it. Each sends the other a messenger carrying an errand no city on the road
+has a desk for. And a scribe sits at the edge of the field writing down what both of them do,
+because neither city is trusted to describe the other.
+
+The messengers are what found the difference.
+
+Both heralds turned them away, immediately and correctly — an errand nobody takes is not an
+insult and not a crime, it is simply an errand nobody takes, and the man is sent off at once so
+that he can try elsewhere before the day is out. But one herald wrote a line in his day-book
+about it, and the other wrote nothing. Two day-books that cannot be laid side by side are two
+day-books, and the whole reason for keeping them in the same hand is that one day somebody has
+to.
+
+The argument about who was wrong lasted no time at all, because it is not the usual argument.
+Sirodunon is right where the cities disagree — that is the charter, and it does not bend. But
+this was not the city's manner. It was the grammar, and the grammar belonged to the teachers, not
+to the cities: a man who is handed an errand nobody takes does not announce it, he simply does
+not take it. So the talkative herald was quieted, the tablet was corrected to say what both men
+do, and the field test that caught it now runs before anything either of them says is changed.
+
+The field has a second half, and it is the least glamorous thing in this book. Somebody sits
+down at a desk in an empty city and founds it, twice, once in each city, pressing Enter through
+the whole conversation the way a founder on a bench would — and then checks that the note inside
+the gate has a herald's name in it, the magistrate's letter under it, and a seal that matches the
+words the city was founded with. Everything above depends on that afternoon having gone
+correctly. It is the one part nobody would ever think to test, which is why it is tested at all.

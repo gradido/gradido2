@@ -59,15 +59,11 @@
       "description": "The admin who made the change. NULL for anything written outside the application."
     }
   ],
-  "primaryKey": [
-    "id"
-  ],
+  "primaryKey": ["id"],
   "unique": [
     {
       "name": "roles_name_key",
-      "columns": [
-        "name"
-      ]
+      "columns": ["name"]
     }
   ],
   "indexes": [],

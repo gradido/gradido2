@@ -36,3 +36,13 @@ target_link_libraries(test_register_account PRIVATE backend_core service_core GT
 # The other half: what the unique indexes answer when the two rows are written without asking
 # first. Needs a database, and makes its own -- SQLite, on a file it removes again.
 add_test(NAME backend_core.register_account COMMAND test_register_account)
+
+add_executable(test_sign_dht_delegation test_sign_dht_delegation.cpp)
+target_include_directories(test_sign_dht_delegation PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../service-core/include
+)
+target_link_libraries(test_sign_dht_delegation PRIVATE backend_core service_core GTest::gtest)
+
+# The community key, read out of the row the setup wrote, signing this instance's dht identity.
+add_test(NAME backend_core.sign_dht_delegation COMMAND test_sign_dht_delegation)

@@ -1,5 +1,6 @@
 export * from './askForSetup'
 export * from './envFile'
+export * from './masterSeed'
 export * from './migrateDownCommand'
 export * from './prompt'
 export * from './requireHomeCommunity'

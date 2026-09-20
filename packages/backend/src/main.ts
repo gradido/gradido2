@@ -1,18 +1,21 @@
 import { cors } from '@elysiajs/cors'
 import {
+  CommunityRepository,
   connectDatabase,
   DatabaseGate,
   databaseErrorMessage,
   runMigrations,
   SchemaMismatchError,
+  signDhtDelegationFor,
   waitForDatabase,
 } from '@gradido/backend-core'
-import { Logger, setupGracefulShutdown, smtpRelay } from '@gradido/service-core'
+import { isPublicUrl, Logger, setupGracefulShutdown, smtpRelay } from '@gradido/service-core'
 import { AppContext } from './AppContext'
 import { CONFIG } from './config'
 import { probeMailRelay } from './mail'
 import { createBackendApp, type StaticSite, staticRoutes } from './server'
 import {
+  askForMasterSeed,
   askForSetup,
   canAskForSetup,
   migrateDownCommand,
@@ -256,8 +259,22 @@ async function runSetup(logger: Logger): Promise<void> {
   }
 
   const answers = await askForSetup()
+  let masterSeed: Awaited<ReturnType<typeof askForMasterSeed>>
   try {
-    say('', `Written to ${writeEnvFile(answers.env)}`, '')
+    masterSeed = await askForMasterSeed()
+  } catch (error) {
+    if (!(error instanceof SetupError)) {
+      throw error
+    }
+    logger.fatal(
+      { cat: 'startup', event: 'startup.setup.failed', data: { reason: error.reason } },
+      `cannot set up: ${error.message}`,
+    )
+    logger.flush()
+    process.exit(1)
+  }
+  try {
+    say('', `Written to ${writeEnvFile({ ...answers.env, ...masterSeed.env })}`, '')
   } catch (error) {
     /* The answers were given and there is nowhere to put them. Nothing has been migrated and
        no row has been written, so the whole conversation has to be held again once the file
@@ -271,10 +288,20 @@ async function runSetup(logger: Logger): Promise<void> {
   }
 
   const db = connectDatabase(answers.database)
+  let peerNetwork: Record<string, string>
   try {
     await waitForDatabase(db, logger)
     await runMigrations(db, logger)
     await setupCommand({ db, logger }, answers.community)
+    /* Once the row exists, created now or found from an earlier run: the community key signs
+       this instance's dht identity, and the row's URL decides whether the node starts public.
+       The dht-node role, which reads no database, starts from what is written here. */
+    const delegation = await signDhtDelegationFor({ db, logger }, masterSeed.seed)
+    const home = await new CommunityRepository(db).findHomeCommunity()
+    peerNetwork = {
+      DHT_DELEGATION: Buffer.from(delegation).toString('hex'),
+      DHT_REACHABILITY: home !== undefined && isPublicUrl(home.url) ? 'public' : 'private',
+    }
   } catch (error) {
     /* One failure left by the time this is reached: the database the answers named. The
        conversation cannot fail — a rejected answer is asked again — and a schema this build
@@ -294,6 +321,20 @@ async function runSetup(logger: Logger): Promise<void> {
     await db.close().catch(() => {
       /* Already failing; a connection that will not close changes nothing about that. */
     })
+    process.exit(1)
+  }
+  try {
+    const path = writeEnvFile(peerNetwork)
+    say(
+      `The peer network identity is written to ${path}; the node starts ${peerNetwork.DHT_REACHABILITY}`,
+    )
+  } catch (error) {
+    logger.fatal(
+      { cat: 'startup', event: 'startup.setup.failed', data: { reason: 'config-unwritable' } },
+      `cannot set up: ${error instanceof Error ? error.message : String(error)}`,
+    )
+    logger.flush()
+    await db.close()
     process.exit(1)
   }
   logger.flush()

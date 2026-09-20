@@ -28,6 +28,7 @@
  */
 #include "setup.h"
 
+#include <sodium.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -802,4 +803,41 @@ int backend_ask_for_setup(backend_setup_answers *setup)
     answered = hold_conversation(setup);
     bk_prompt_end();
     return answered;
+}
+
+sc_status backend_ask_for_master_seed(backend_setup_answers *setup,
+                                      uint8_t seed[SC_MASTER_SEED_BYTES])
+{
+    /* Longer than a seed, so that a value that is too long is reported as not being one. */
+    char current[2 * SC_MASTER_SEED_HEX_SIZE];
+    char typed[256];
+    sc_status status;
+
+    if (setup == NULL || seed == NULL)
+        return SC_ERR_INVALID_ARGUMENT;
+
+    status = sc_secret_read("MASTER_SEED", current, sizeof(current));
+    if (status == SC_ERR_UNAVAILABLE)
+        return status;
+    if (status != SC_OK || sc_secret_source_of("MASTER_SEED") != SC_SECRET_NOWHERE) {
+        const int parsed = status == SC_OK && sc_master_seed_parse(current, seed);
+        sodium_memzero(current, sizeof(current));
+        return parsed ? SC_OK : SC_ERR_MALFORMED;
+    }
+
+    bk_say("\nThis instance needs a master seed: the root of the keys it derives, its peer");
+    bk_say("network identity first. The system's randomness makes it; whatever you type");
+    bk_say("now is mixed in as well.\n");
+    typed[0] = '\0';
+    bk_prompt_begin();
+    (void)bk_prompt_secret("Type some random keys", "", "optional", typed, sizeof(typed));
+    bk_prompt_end();
+
+    status = sc_master_seed_new(typed, seed);
+    sodium_memzero(typed, sizeof(typed));
+    if (status != SC_OK)
+        return status;
+    sc_master_seed_to_hex(seed, setup->master_seed);
+    add(setup, "MASTER_SEED", setup->master_seed);
+    return SC_OK;
 }

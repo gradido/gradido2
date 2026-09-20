@@ -2,6 +2,7 @@ import { DatabaseBusy } from '@gradido/backend-core'
 import { ErrorCode, errorBody, errorStatus } from '@gradido/shared/errors'
 import { Elysia } from 'elysia'
 import type { AppContext } from '../AppContext'
+import { peerRoutes } from './peerRoutes'
 import { userRoutes } from './userRoutes'
 
 /**
@@ -68,6 +69,7 @@ export const createBackendApp = (context: AppContext) =>
       return errorBody(ErrorCode.Unknown)
     })
     .use(userRoutes(context))
+    .use(peerRoutes())
 
 /**
  * The whole application as a type — every domain at once.

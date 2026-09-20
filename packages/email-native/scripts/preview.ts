@@ -28,7 +28,7 @@ import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dir, '..')
-const OUT = path.join(ROOT, 'gen', 'preview')
+const OUT = path.join(ROOT, 'build', 'tools', 'preview')
 const argPort = process.argv.indexOf('--port')
 const PORT = argPort >= 0 ? Number(process.argv[argPort + 1]) : 4321
 
@@ -50,7 +50,7 @@ const push = (line: string) => {
 async function build(why: string): Promise<boolean> {
   const started = performance.now()
   for (const [tool, args] of [
-    ['tools/extract_mjml.mjs', ['--out', 'gen/mjml']],
+    ['tools/extract_mjml.mjs', ['--out', 'build/tools/mjml']],
     ['tools/preview.mjs', []],
   ] as const) {
     const p = Bun.spawn(['node', tool, ...args], { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' })
@@ -111,7 +111,7 @@ const server = Bun.serve({
     }
 
     const name = pathname === '/' ? '/index.html' : pathname
-    const f = file(path.join('gen', 'preview', name))
+    const f = file(path.join('build', 'tools', 'preview', name))
     if (await f.exists()) return new Response(f, { headers: { 'cache-control': 'no-store' } })
     return new Response('not found', { status: 404 })
   },

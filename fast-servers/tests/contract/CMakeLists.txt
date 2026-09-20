@@ -24,3 +24,42 @@ target_compile_definitions(test_jwt_contract PRIVATE
 target_link_libraries(test_jwt_contract PRIVATE service_core GTest::gtest)
 
 add_test(NAME contract.jwt COMMAND test_jwt_contract)
+
+add_executable(test_master_seed_contract test_master_seed_contract.cpp)
+target_include_directories(test_master_seed_contract PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../service-core/include
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${arnm_SOURCE_DIR}/include
+)
+target_compile_definitions(test_master_seed_contract PRIVATE
+  FS_CONTRACT_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../../contracts/test-vectors"
+)
+target_link_libraries(test_master_seed_contract PRIVATE service_core GTest::gtest)
+
+add_test(NAME contract.master_seed COMMAND test_master_seed_contract)
+
+add_executable(test_public_url_contract test_public_url_contract.cpp)
+target_include_directories(test_public_url_contract PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../service-core/include
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${arnm_SOURCE_DIR}/include
+)
+target_compile_definitions(test_public_url_contract PRIVATE
+  FS_CONTRACT_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../../contracts/test-vectors"
+)
+target_link_libraries(test_public_url_contract PRIVATE service_core GTest::gtest)
+
+add_test(NAME contract.public_url COMMAND test_public_url_contract)
+
+add_executable(test_shard_contract test_shard_contract.cpp)
+target_include_directories(test_shard_contract PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../service-core/include
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${arnm_SOURCE_DIR}/include
+)
+target_compile_definitions(test_shard_contract PRIVATE
+  FS_CONTRACT_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../../contracts/test-vectors"
+)
+target_link_libraries(test_shard_contract PRIVATE service_core GTest::gtest)
+
+add_test(NAME contract.shard COMMAND test_shard_contract)

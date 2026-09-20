@@ -22,7 +22,9 @@ const arg = (name, fallback) => {
 
 export const TEMPLATE_ROOT = path.resolve(arg('templates', path.join(ROOT, 'templates')))
 export const LOCALE_DIR = path.resolve(arg('locales', path.join(ROOT, 'locales')))
-export const OUT_DIR = path.resolve(arg('out', path.join(ROOT, 'gen')))
+// Under build/, which is the generated root `c-cpp-zig-build clean` takes away: what the
+// tools write here is an intermediate, never a source, and nothing but a tool reads it.
+export const OUT_DIR = path.resolve(arg('out', path.join(ROOT, 'build', 'tools')))
 // The MJML output, checked in. tools/snapshots.mjs writes it, tests/snapshots.test.mjs
 // and tools/verify.mjs compare against it.
 export const SNAPSHOT_DIR = path.resolve(

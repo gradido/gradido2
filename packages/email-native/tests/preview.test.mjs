@@ -21,7 +21,7 @@ import { pack } from '../tools/preview.mjs'
 import { fixture } from '../tools/variants.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const IR = path.join(ROOT, 'gen', 'mjml', 'ir.json')
+const IR = path.join(ROOT, 'build', 'tools', 'mjml', 'ir.json')
 
 const ready = fs.existsSync(IR) && fs.existsSync(SNAP)
 

@@ -77,6 +77,14 @@ target_link_libraries(test_secret PRIVATE service_core GTest::gtest)
 # packages/service-core/src/config/secret.test.ts.
 add_test(NAME service_core.secret COMMAND test_secret)
 
+add_executable(test_master_seed test_master_seed.cpp)
+target_include_directories(test_master_seed PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_link_libraries(test_master_seed PRIVATE service_core GTest::gtest)
+
+# What contracts/test-vectors/master-seed.json cannot say: that a new seed is random, and how the
+# functions treat arguments they cannot work with.
+add_test(NAME service_core.master_seed COMMAND test_master_seed)
+
 add_executable(test_log test_log.cpp)
 target_include_directories(test_log PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 target_link_libraries(test_log PRIVATE service_core GTest::gtest)

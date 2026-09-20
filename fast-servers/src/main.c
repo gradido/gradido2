@@ -73,7 +73,7 @@ typedef struct fs_role {
 static const fs_role kRoles[] = {
     {"--backend", "backend", backend_run, "HTTP server the frontend talks to (default)"},
     {"--federation", "federation", federation_run, "HTTP server other communities talk to"},
-    {"--dht-node", "dht-node", dht_node_server_run, "peer discovery, needs FEDERATION_DHT_TOPIC"},
+    {"--dht-node", "dht-node", dht_node_server_run, "peer discovery, needs DHT_TOPIC"},
 };
 
 #define FS_ROLE_COUNT ((int)(sizeof(kRoles) / sizeof(kRoles[0])))
@@ -158,7 +158,8 @@ static void print_usage(FILE *out)
             SC_ENV_FILE_NAME);
     fprintf(out, "nobody exported -- what is already set wins. `setup` writes that file.\n\n");
     fprintf(out, "  %-14s LISTEN_HOST, BACKEND_PORT, FEDERATION_PORT, DHT_PORT,\n", "server");
-    fprintf(out, "  %-14s FEDERATION_DHT_TOPIC, FEDERATION_DHT_SEED, SERVER_THREADS\n", "");
+    fprintf(out, "  %-14s DHT_TOPIC, MASTER_SEED, DHT_DELEGATION,\n", "");
+    fprintf(out, "  %-14s DHT_REACHABILITY, DHT_BOOTSTRAP_URL, SERVER_THREADS\n", "");
     fprintf(out, "  %-14s DB_TYPE (sqlite or postgresql), DB_FILE, and for postgresql\n",
             "database");
     fprintf(out, "  %-14s DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE,\n", "");

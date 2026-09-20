@@ -21,6 +21,7 @@ export type LogCategory =
   | 'session'
   | 'startup'
   | 'mail'
+  | 'dht'
 
 /** { code, name } from contracts/errors, never the thrown object and never a stack. */
 export type LogError = {

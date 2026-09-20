@@ -14,7 +14,7 @@ import { createBackendApp } from './app'
 describe('a request the database has no place for', () => {
   test('is answered 503 SERVICE_BUSY with Retry-After', async () => {
     const gate = new DatabaseGate(1, 20)
-    /* The one place, taken for good. */
+    // biome-ignore lint/complexity/noVoid: the one place, taken for good — this promise is meant never to settle, so it is the one call that must not be awaited or caught
     void gate.run(() => new Promise<never>(() => undefined))
     const context = {
       logger: Logger.create({ LOG_LEVEL: 'fatal', LOG_FILE: '', NODE_ENV: 'test' }),

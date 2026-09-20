@@ -572,6 +572,8 @@ const UnitTest = struct {
     /// assertions a test was built to run -- arnm's unchecked appends check their preconditions
     /// only where the calling translation unit leaves them on.
     keep_assertions: bool = false,
+    /// Links the libp2p-ffi module; the test is not built where the stub stands in for it.
+    libp2p_ffi: bool = false,
 };
 
 const Context = struct {
@@ -830,6 +832,108 @@ fn onPublishFailure(b: *std.Build, publish_root: []const u8, why: []const u8) vo
     }
 }
 
+/// The dht-node role's network module: the object and what it needs on the link line.
+const Libp2pFfi = struct {
+    /// libp2p_ffi.o, or libp2p_ffi.lib on Windows.
+    object: std.Build.LazyPath,
+    /// The archive's directory: the Windows archive carries an import library beside the object.
+    dir: std.Build.LazyPath,
+    /// NATIVE_LIBS.txt, read while configuring, because it decides what is linked.
+    native_libs: []const u8,
+};
+
+/// The build.zig.zon entry of the published libp2p-ffi archive for @p t, or null where none is
+/// published. Windows means msvc only: the Rust object expects MSVC's CRT and exception handling,
+/// which a windows-gnu link does not provide.
+fn libp2pFfiPackage(t: std.Target) ?[]const u8 {
+    return switch (t.os.tag) {
+        .linux => if (!t.abi.isGnu()) null else switch (t.cpu.arch) {
+            .x86_64 => "libp2p_ffi_x86_64_linux_gnu",
+            .aarch64 => "libp2p_ffi_aarch64_linux_gnu",
+            else => null,
+        },
+        .macos => switch (t.cpu.arch) {
+            .x86_64 => "libp2p_ffi_x86_64_macos",
+            .aarch64 => "libp2p_ffi_aarch64_macos",
+            else => null,
+        },
+        .windows => if (t.abi != .msvc) null else switch (t.cpu.arch) {
+            .x86_64 => "libp2p_ffi_x86_64_windows_msvc",
+            .aarch64 => "libp2p_ffi_aarch64_windows_msvc",
+            else => null,
+        },
+        else => null,
+    };
+}
+
+/// What -Dlibp2p-ffi selects, or null for the stub in dht-node/src/libp2p_ffi_stub.c.
+///
+/// `prebuilt` is the pinned release where one is published for the target and the stub where
+/// none is -- musl, windows-gnu, other architectures. The stub says so loudly when the role
+/// starts. A directory is a locally built module, as `scripts/localize.sh` in libp2p-ffi leaves
+/// it in dist/<triple>.
+fn libp2pFfi(b: *std.Build, target: std.Build.ResolvedTarget, choice: []const u8) ?Libp2pFfi {
+    if (std.mem.eql(u8, choice, "stub")) return null;
+    var dir: std.Build.LazyPath = undefined;
+    var native_libs_path: []const u8 = undefined;
+    if (std.mem.eql(u8, choice, "prebuilt")) {
+        const name = libp2pFfiPackage(target.result) orelse return null;
+        const dep = b.lazyDependency(name, .{}) orelse return null;
+        dir = dep.path("");
+        native_libs_path = dep.builder.pathFromRoot("NATIVE_LIBS.txt");
+    } else {
+        const abs = b.pathFromRoot(choice);
+        dir = .{ .cwd_relative = abs };
+        native_libs_path = b.pathJoin(&.{ abs, "NATIVE_LIBS.txt" });
+    }
+    const native_libs = std.fs.cwd().readFileAlloc(b.allocator, native_libs_path, 64 * 1024) catch |err| {
+        std.debug.panic("-Dlibp2p-ffi: cannot read {s}: {s}", .{ native_libs_path, @errorName(err) });
+    };
+    const object = if (target.result.os.tag == .windows) "libp2p_ffi.lib" else "libp2p_ffi.o";
+    return .{ .object = dir.path(b, object), .dir = dir, .native_libs = native_libs };
+}
+
+/// Links the module and every library its NATIVE_LIBS.txt names.
+///
+/// The file is rustc's own list, so it is read rather than copied into this build -- and an
+/// entry this function does not recognise stops the build instead of being passed on as a guess.
+fn linkLibp2pFfi(compile: *std.Build.Step.Compile, module: Libp2pFfi) void {
+    compile.addObjectFile(module.object);
+    compile.addLibraryPath(module.dir);
+    var tokens = std.mem.tokenizeAny(u8, module.native_libs, " \t\r\n");
+    while (tokens.next()) |token| {
+        if (std.mem.eql(u8, token, "-framework")) {
+            const framework = tokens.next() orelse std.debug.panic("NATIVE_LIBS.txt ends in -framework", .{});
+            compile.linkFramework(framework);
+        } else if (std.mem.startsWith(u8, token, "-l")) {
+            const name = token[2..];
+            if (std.mem.eql(u8, name, "gcc_s")) {
+                // Rust's unwinder calls, answered by zig's libunwind: a cross build has no
+                // libgcc_s of the target to find.
+                compile.linkSystemLibrary("unwind");
+            } else if (!isLibcPart(name)) {
+                compile.linkSystemLibrary(name);
+            }
+        } else if (std.mem.endsWith(u8, token, ".lib")) {
+            compile.linkSystemLibrary(token[0 .. token.len - ".lib".len]);
+        } else if (std.mem.startsWith(u8, token, "/defaultlib:")) {
+            // The CRT, which an msvc link selects itself.
+        } else {
+            std.debug.panic("libp2p-ffi's NATIVE_LIBS.txt asks for `{s}`, which linkLibp2pFfi " ++
+                "in build.zig does not know how to provide", .{token});
+        }
+    }
+}
+
+/// Libraries that link_libc already provides, on glibc and on macOS.
+fn isLibcPart(name: []const u8) bool {
+    const parts = [_][]const u8{ "c", "m", "pthread", "dl", "rt", "util", "System" };
+    for (parts) |part| {
+        if (std.mem.eql(u8, name, part)) return true;
+    }
+    return false;
+}
+
 /// One static library per component, all built the same way.
 fn addComponent(
     context: *const Context,
@@ -882,6 +986,7 @@ pub fn build(b: *std.Build) void {
     const enable_pages = b.option(bool, "pages", "Embed the frontends from publish/ and serve them. Off builds a server that answers ROUTE_NOT_IMPLEMENTED for every page (and needs no bun)") orelse true;
     const publish_root = b.option([]const u8, "publish", "Where `turbo publish` assembled the pages, relative to this build root") orelse "../publish";
     const enable_benchmarks = b.option(bool, "benchmarks", "Build the bench_* binaries") orelse false;
+    const libp2p_ffi_choice = b.option([]const u8, "libp2p-ffi", "The dht-node network module: `prebuilt` (the pinned libp2p-ffi release where one is published for the target, else the stub), `stub` (reaches nobody), or a directory holding a local build of it") orelse "prebuilt";
     const sanitize = b.option(SanitizeMode, "sanitize", "Instrument C sources: undefined_behavior (UBSan) or thread (TSan). AddressSanitizer needs the CMake build with -DFS_ENABLE_SANITIZERS=ON") orelse .off;
 
     if (enable_postgres and is_windows) {
@@ -932,10 +1037,10 @@ pub fn build(b: *std.Build) void {
     if (enable_pages) runPublish(b, publish_root);
     backend.addCSourceFile(.{ .file = staticSitesSource(b, publish_root, enable_pages), .flags = &c_flags });
     const federation = addComponent(&context, "federation", "federation/src", &.{});
-    // dht-node's Rust half does not exist yet; src/ holds the C stand-in behind the same
-    // extern "C" header. See dht-node/src/dht_node_stub.c for what changes when it lands, and
-    // dht-node/Architecture.md for why it is Rust at all.
-    const dht_node = addComponent(&context, "dht_node", "dht-node/src", &.{});
+    // The role links libp2p-ffi, or the stub where there is none -- see libp2pFfi.
+    const libp2p_ffi = libp2pFfi(b, target, libp2p_ffi_choice);
+    const dht_node_skip: []const []const u8 = if (libp2p_ffi != null) &.{"libp2p_ffi_stub.c"} else &.{};
+    const dht_node = addComponent(&context, "dht_node", "dht-node/src", dht_node_skip);
 
     // libuv is the platform layer, not an HTTP detail: the session cache's reader/writer lock,
     // the log's mutex and the thread each role runs on all come from its loop-free half. Every
@@ -985,7 +1090,7 @@ pub fn build(b: *std.Build) void {
     // addMultiarchIncludeDir on each of them as well, which addComponent already does.
     // The roles are here too: they start threads and wait on them through libuv, and the
     // database pool they take connections from is a libuv mutex and condition variable.
-    for ([_]*std.Build.Step.Compile{ service_core, backend_core, backend, federation }) |compile| {
+    for ([_]*std.Build.Step.Compile{ service_core, backend_core, backend, federation, dht_node }) |compile| {
         compile.linkLibrary(uv);
     }
 
@@ -993,7 +1098,7 @@ pub fn build(b: *std.Build) void {
     // reader that parses it is arnm's -- see AGENTS.md section 3a, reach for arnm's surface. The
     // include paths follow the same rule component_includes does, which is that a header a
     // component may use is on its search path rather than argued about per target.
-    for ([_]*std.Build.Step.Compile{ service_core, backend_core, backend, federation }) |compile| {
+    for ([_]*std.Build.Step.Compile{ service_core, backend_core, backend, federation, dht_node }) |compile| {
         // The core hides its crypto declarations behind this macro, so a consumer that does not
         // define it sees a different header than the one that was compiled.
         compile.root_module.addCMacro("USE_SODIUM", "1");
@@ -1036,6 +1141,7 @@ pub fn build(b: *std.Build) void {
     exe.linkLibrary(sodium);
     // main.c runs each role on a uv_thread_t.
     exe.linkLibrary(uv);
+    if (libp2p_ffi) |module| linkLibp2pFfi(exe, module);
 
     // TLS for h2o, and for the database. build.zig.zon, .libressl, holds why it is LibreSSL and
     // not OpenSSL; the short version is that the OpenSSL package builds for x86_64 only, and an
@@ -1315,6 +1421,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "test_env_file", .dir = "service-core/tests", .src = "test_env_file.cpp", .lib = service_core },
             .{ .name = "test_jwt", .dir = "service-core/tests", .src = "test_jwt.cpp", .lib = service_core },
             .{ .name = "test_secret", .dir = "service-core/tests", .src = "test_secret.cpp", .lib = service_core },
+            .{ .name = "test_master_seed", .dir = "service-core/tests", .src = "test_master_seed.cpp", .lib = service_core },
             .{ .name = "test_log", .dir = "service-core/tests", .src = "test_log.cpp", .lib = service_core },
             // The one test that reaches into a component's src/: the two calls it holds together
             // are not on service-core's surface and should not be. See the file's own comment,
@@ -1323,14 +1430,18 @@ pub fn build(b: *std.Build) void {
             .{ .name = "test_migrations", .dir = "backend-core/tests", .src = "test_migrations.cpp", .lib = backend_core, .deps = &.{service_core}, .includes = &.{"service-core/include"} },
             .{ .name = "test_user", .dir = "backend-core/tests", .src = "test_user.cpp", .lib = backend_core, .deps = &.{service_core}, .includes = &.{"service-core/include"} },
             .{ .name = "test_register_account", .dir = "backend-core/tests", .src = "test_register_account.cpp", .lib = backend_core, .deps = &.{service_core}, .includes = &.{"service-core/include"} },
+            .{ .name = "test_sign_dht_delegation", .dir = "backend-core/tests", .src = "test_sign_dht_delegation.cpp", .lib = backend_core, .deps = &.{service_core}, .includes = &.{"service-core/include"} },
             .{ .name = "test_field_rules", .dir = "backend/tests", .src = "test_field_rules.cpp", .sources = &.{"backend/src/field_rules.c"}, .includes = &.{"backend/src"} },
             .{ .name = "test_static_sites", .dir = "backend/tests", .src = "test_static_sites.cpp", .sources = &.{"backend/src/static_sites.c"}, .includes = &.{"service-core/include"} },
             // Compiled in like the two above, and linked against libuv because that is all the
             // probe reaches -- the role's socket is libuv's, and so is the test's listener.
             .{ .name = "test_postgres_probe", .dir = "backend/tests", .src = "test_postgres_probe.cpp", .sources = &.{"backend/src/postgres_probe.c"}, .includes = &.{"backend/src"}, .deps = &.{uv} },
+            .{ .name = "test_libp2p_ffi", .dir = "dht-node/tests", .src = "test_libp2p_ffi.cpp", .libp2p_ffi = true },
+            .{ .name = "test_peer_id", .dir = "dht-node/tests", .src = "test_peer_id.cpp", .sources = &.{"dht-node/src/peer_id.c"}, .includes = &.{"dht-node/src"} },
         };
 
         for (unit_tests) |unit_test| {
+            if (unit_test.libp2p_ffi and libp2p_ffi == null) continue;
             const test_optimize: std.builtin.OptimizeMode = if (unit_test.keep_assertions)
                 switch (optimize) {
                     .ReleaseFast, .ReleaseSmall => .ReleaseSafe,
@@ -1364,6 +1475,7 @@ pub fn build(b: *std.Build) void {
                 test_exe.addCSourceFiles(.{ .files = unit_test.sources, .flags = &c_flags });
             if (unit_test.lib) |lib| test_exe.linkLibrary(lib);
             for (unit_test.deps) |dep| test_exe.linkLibrary(dep);
+            if (unit_test.libp2p_ffi) linkLibp2pFfi(test_exe, libp2p_ffi.?);
             addHostSystemPaths(b, test_exe, target);
             if (b.lazyDependency("googletest", .{ .target = target, .optimize = optimize })) |dep| {
                 const gtest = dep.artifact("gtest");
@@ -1388,7 +1500,7 @@ pub fn build(b: *std.Build) void {
         // vector file, which means arnm's header, and a component test that sees a header its
         // component does not carry stops proving what the loop above exists to prove. So these
         // are built here instead, with arnm and the directory the vectors live in.
-        const contract_tests = [_][]const u8{"test_jwt_contract"};
+        const contract_tests = [_][]const u8{ "test_jwt_contract", "test_master_seed_contract", "test_public_url_contract", "test_shard_contract" };
         for (contract_tests) |name| {
             const contract_exe = b.addExecutable(.{
                 .name = name,

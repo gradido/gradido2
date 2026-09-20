@@ -53,6 +53,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import { type Manifest, PUBLISH, readManifest } from './publish'
+import { quicBinding } from './quicBinding'
 import { run, turbo } from './run'
 import { zigExe } from './zig'
 
@@ -263,19 +264,22 @@ async function writeEntry(manifest: Manifest): Promise<string> {
 }
 
 async function compileTypeScript(entry: string, outfile: string): Promise<void> {
-  /* --target=bun and nothing else: the embedded addons are native code for this platform, so
-     bun's cross-compilation targets would produce a binary that cannot load its own contents. */
-  await run(
-    [
-      process.execPath,
-      'build',
-      '--compile',
-      '--target=bun',
-      `--outfile=${outfile}`,
-      relative(ROOT, entry),
-    ],
-    {},
-  )
+  /* target `bun` and nothing else: the embedded addons are native code for this platform, so
+     bun's cross-compilation targets would produce a binary that cannot load its own contents.
+     The API rather than `bun build` on the command line, because the QUIC binding of the dht-node
+     role needs a plugin to be embedded at all -- see quicBinding.ts. */
+  const result = await Bun.build({
+    entrypoints: [entry],
+    compile: { outfile },
+    target: 'bun',
+    plugins: [quicBinding(join(ROOT, 'packages', 'dht-node', 'package.json'))],
+  })
+  if (!result.success) {
+    for (const log of result.logs) {
+      console.error(log)
+    }
+    throw new Error('bun build --compile failed')
+  }
   report(outfile)
 }
 

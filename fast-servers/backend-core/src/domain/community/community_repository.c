@@ -12,6 +12,7 @@
  */
 #include "backend_core/domain/community.h"
 
+#include <sodium.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -26,6 +27,11 @@ static sc_sql_statement kSelectHome = SC_SQL_STATEMENT(
     "WHERE remote = false LIMIT 2",
     "SELECT id, community_uuid, url, name, description, public_key FROM communities "
     "WHERE remote = 0 LIMIT 2");
+
+static sc_sql_statement kSelectHomeSigningKey = SC_SQL_STATEMENT(
+    "community.find_home_signing_key",
+    "SELECT private_key FROM communities WHERE remote = false LIMIT 2",
+    "SELECT private_key FROM communities WHERE remote = 0 LIMIT 2");
 
 /* creation_date is when the community was founded, as far as this instance knows: now.
  * Distinct from created_at, which is when this row was written -- the two coincide only here. */
@@ -88,6 +94,47 @@ sc_status bc_community_find_home(sc_db *db, bc_home_community *out, int *found, 
     status = bc_sql_finish(&rows, &failure, status, error, error_size);
     if (status != SC_OK)
         *found = 0;
+    return status;
+}
+
+sc_status bc_community_find_home_signing_key(sc_db *db, uint8_t out[BC_PRIVATE_KEY_SIZE],
+                                             int *found, char *error, size_t error_size)
+{
+    sc_sql_rows rows;
+    sc_sql_error failure;
+    sc_status status;
+
+    if (db == NULL || out == NULL || found == NULL || error == NULL || error_size == 0)
+        return SC_ERR_INVALID_ARGUMENT;
+    *found = 0;
+    error[0] = '\0';
+
+    status = sc_sql_query(db, &kSelectHomeSigningKey, NULL, 0, &rows, &failure);
+    if (status != SC_OK) {
+        bc_sql_set_error(error, error_size, failure.message);
+        return status;
+    }
+    if (sc_sql_next(&rows)) {
+        if (sc_sql_col_bytes(&rows, 0, out, BC_PRIVATE_KEY_SIZE) != BC_PRIVATE_KEY_SIZE) {
+            bc_sql_set_error(error, error_size,
+                             "communities.private_key is not 64 bytes on the home community");
+            status = SC_ERR_MALFORMED;
+        } else {
+            *found = 1;
+        }
+        if (status == SC_OK && sc_sql_next(&rows)) {
+            bc_sql_set_error(error, error_size,
+                             "more than one home community: communities.remote = false on "
+                             "several rows");
+            status = SC_ERR_MALFORMED;
+            *found = 0;
+        }
+    }
+    status = bc_sql_finish(&rows, &failure, status, error, error_size);
+    if (status != SC_OK || !*found) {
+        *found = 0;
+        sodium_memzero(out, BC_PRIVATE_KEY_SIZE);
+    }
     return status;
 }
 

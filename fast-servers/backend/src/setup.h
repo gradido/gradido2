@@ -22,9 +22,10 @@
 #include "service_core/db.h"
 #include "service_core/email/config.h"
 #include "service_core/env_file.h"
+#include "service_core/master_seed.h"
 
-/** How many variables the conversation can decide. One per field it asks about. */
-#define BACKEND_SETUP_ENTRY_MAX 16
+/** How many variables the setup can decide: one per field it asks about, and MASTER_SEED. */
+#define BACKEND_SETUP_ENTRY_MAX 17
 
 /**
  * Everything the conversation produced: the row, and the variables as the text they go into
@@ -54,6 +55,8 @@ typedef struct backend_setup_answers {
     char email_pass[SC_MAIL_PASS_MAX];
     char email_sender[SC_MAIL_ADDR_MAX];
     char email_sender_name[SC_MAIL_SENDER_NAME_MAX];
+    /** MASTER_SEED as it goes into `.env`, when backend_ask_for_master_seed made a new one. */
+    char master_seed[SC_MASTER_SEED_HEX_SIZE];
 
     /** Set when the database the environment names already was kept as it is. Then none of
      *  the db_ fields above is filled in and none of the DB_ variables is written -- the
@@ -72,5 +75,17 @@ typedef struct backend_setup_answers {
  * It is not an error here -- the caller decides what a setup without an answer means.
  */
 int backend_ask_for_setup(backend_setup_answers *setup);
+
+/**
+ * The instance's master seed into @p seed: the one it has, or a new one -- contracts/secrets.json,
+ * MASTER_SEED. A new one is added to @p setup's entries; one that exists is never replaced,
+ * whichever source it comes from, because every identity derived from it would change with it.
+ *
+ * SC_ERR_MALFORMED for a configured value that is not 64 hex digits, which is left alone;
+ * SC_ERR_UNAVAILABLE when a named source of it cannot be read. `packages/backend/src/setup/
+ * masterSeed.ts` is the reference.
+ */
+sc_status backend_ask_for_master_seed(backend_setup_answers *setup,
+                                      uint8_t seed[SC_MASTER_SEED_BYTES]);
 
 #endif /* BACKEND_SETUP_H */

@@ -39,9 +39,7 @@
       "description": "The admin who made the change. NULL for a value written by a migration or by an operator outside the application."
     }
   ],
-  "primaryKey": [
-    "key"
-  ],
+  "primaryKey": ["key"],
   "unique": [],
   "indexes": [],
   "notes": [

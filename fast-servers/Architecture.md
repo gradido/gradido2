@@ -29,18 +29,21 @@ C      the fast server: h2o, request path, session, repositories.
        Also shared-native. This is where most native code lives.
 C++    leaf modules only, behind an extern "C" header:
        Justified by a library without a C equivalent
-Rust   one module, dht-node, behind an extern "C" header.
+Rust   prebuilt modules from repositories of their own, behind an
+       extern "C" header: libp2p-ffi, the network node behind dht-node.
        Justified by the same rule as C++ and by nothing else:
-       libp2p has no C equivalent and writing one is not a module,
-       it is a second project. See dht-node/Architecture.md.
+       no C or C++ libp2p has circuit relay, and completing one is
+       not a module, it is a second project. No Rust source and no
+       cargo here.
+       See dht-node/Architecture.md.
 zig    build system and cross compilation. No application code —
        its API still moves between versions.
 ```
 
-The Rust module is the only one whose counterpart in `packages/` is a different
+The network module is the only one whose counterpart in `packages/` is a different
 implementation rather than the same code seen from the other side. `../Architecture.md`,
-*Peer discovery*, holds why, and what replaces the shared code: an interop test between the
-two nodes, in CI, because no contract vector can express "these two find each other".
+*Peer network*, holds why, and what replaces the shared code: an interop test between the two
+nodes, in CI, because no contract vector can express "these two find each other".
 
 ---
 
@@ -203,7 +206,8 @@ database workers   DB_POOL_SIZE, per cache group, each owning one PostgreSQL con
                    for its whole life. See Databases, The executor
 sqlite writer      one, queue-fed, owning the one write connection. See Databases
 sweeper            one per executor: answers the units that waited too long
-dht-node           tokio, inside the Rust module, reached only through drain
+dht-node           tokio, inside the prebuilt Rust module. The dht-node role thread
+                   waits in lp2p_poll and hands events on; nothing calls back into C
 ```
 
 Everything below the role line is a consequence of the rule and not a preference -- the
@@ -288,7 +292,8 @@ PostgreSQL              a database worker of the loop's cache group. The loop pa
 SQLite reads            the request thread, on that loop's own connection.
 SQLite writes           the one writer thread, queue-fed.
 Mail                    the mail workers. Never the request thread, at any queue depth.
-Peer discovery          the Rust module's own thread, drained, never waited on.
+Peer network            the Rust module's own threads. The role thread waits on its poll;
+                        a loop only ever sends a call in and never waits on the network.
 ```
 
 **What is worth controlling separately is the number of connections, not the number of threads.**
@@ -720,9 +725,11 @@ Non-negotiable wherever C runs, and more so where it was AI-generated:
 - Contract vectors as a merge gate, green on both implementations.
 - The Rust module is not exempt. Safe Rust ends at the `extern "C"` line: the pointers, the
   lengths and the lifetimes on the C side of `dht-node` are as unchecked as any other FFI
-  seam, and they run under the same sanitizers. `#![forbid(unsafe_code)]` in the Rust
-  interior, the `unsafe` confined to one file, and that file fuzzed like a parser — because
-  what arrives there is a peer list built from what strangers on the network said.
+  seam, and they run under the same sanitizers here. The prebuild itself is not instrumented,
+  so what the sanitizers see is the C side of the seam; the other side is the module
+  repository's job — `#![forbid(unsafe_code)]` in the interior, the `unsafe` confined to one
+  file, and that file fuzzed like a parser, because what arrives there was said by strangers
+  on the network.
 
 ---
 

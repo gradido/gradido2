@@ -1,5 +1,6 @@
 #include "backend/backend.h"
 
+#include <sodium.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,11 +11,13 @@
 #include "cors.h"
 #include "routes.h"
 #include "service_core/db.h"
+#include "service_core/dht_delegation.h"
 #include "service_core/email/config.h"
 #include "service_core/email/transport.h"
 #include "service_core/env_file.h"
 #include "service_core/http.h"
 #include "service_core/log/log.h"
+#include "service_core/public_url.h"
 #include "setup.h"
 
 /**
@@ -151,6 +154,8 @@ sc_status backend_run(const sc_config *cfg, const sc_quit_flag *quit)
     status = sc_http_route(server, SC_HTTP_HEALTH_PATH, sc_http_health, (void *)"backend");
     if (status == SC_OK)
         status = sc_http_route(server, "/user/create", backend_user_create, &context);
+    if (status == SC_OK)
+        status = sc_http_route(server, "/peer/bootstrap", backend_peer_bootstrap, NULL);
     /* Everything no route matched: the pages this binary carries first -- a file they have, or
      * a browser navigating to a route of the app -- and otherwise a contracted route this
      * implementation does not serve yet, which says so rather than 404ing. A deployment runs one
@@ -217,9 +222,47 @@ static void setup_failed(const char *reason, const char *message)
     sc_log_event(SC_LOG_FATAL, SC_CAT_STARTUP, "startup.setup.failed", &log, "%s", message);
 }
 
+/*
+ * The community key signs this instance's dht identity, and @p url -- the row's -- decides whether
+ * the node starts public. Both go into `.env`: the dht-node role reads no database and starts from
+ * what is written here.
+ */
+static sc_status write_peer_network(sc_db *db, const uint8_t master_seed[SC_MASTER_SEED_BYTES],
+                                    const char *url)
+{
+    uint8_t delegation[SC_DHT_DELEGATION_BYTES];
+    char hex[SC_DHT_DELEGATION_HEX_SIZE];
+    char error[BC_SQL_ERROR_MAX];
+    const char *reachability = sc_url_is_public(url) ? "public" : "private";
+    sc_env_entry entries[2];
+    sc_status status;
+
+    status = bc_sign_dht_delegation_for(db, master_seed, delegation, error, sizeof(error));
+    if (status != SC_OK) {
+        sc_log_fatal(SC_CAT_STARTUP, "startup.database.failed",
+                     "the peer network delegation could not be signed: %s", error);
+        return status;
+    }
+    (void)sodium_bin2hex(hex, sizeof(hex), delegation, sizeof(delegation));
+    entries[0].name = "DHT_DELEGATION";
+    entries[0].value = hex;
+    entries[1].name = "DHT_REACHABILITY";
+    entries[1].value = reachability;
+    status = sc_env_file_write(SC_ENV_FILE_NAME, entries, 2, error, sizeof(error));
+    if (status != SC_OK) {
+        setup_failed("config-unwritable", error);
+        return status;
+    }
+    (void)fprintf(stdout, "The peer network identity is written to %s; the node starts %s\n",
+                  SC_ENV_FILE_NAME, reachability);
+    (void)fflush(stdout);
+    return SC_OK;
+}
+
 sc_status backend_setup(const sc_config *cfg, const sc_quit_flag *quit)
 {
     backend_setup_answers answers;
+    uint8_t master_seed[SC_MASTER_SEED_BYTES];
     sc_db_config db_config;
     sc_db *db = NULL;
     bc_home_community existing;
@@ -247,6 +290,17 @@ sc_status backend_setup(const sc_config *cfg, const sc_quit_flag *quit)
                      "attached -- under docker compose that is: docker compose run --rm backend "
                      "setup");
         return SC_ERR_UNAVAILABLE;
+    }
+
+    status = backend_ask_for_master_seed(&answers, master_seed);
+    if (status != SC_OK) {
+        setup_failed("master-seed-invalid",
+                     status == SC_ERR_MALFORMED
+                         ? "MASTER_SEED is set but is not 64 hex digits. It is the root of this "
+                           "instance's keys, so setup does not replace it: correct it, or remove "
+                           "it to have a new one made."
+                         : "MASTER_SEED could not be read from the source that names it");
+        return status;
     }
 
     status = sc_env_file_write(SC_ENV_FILE_NAME, answers.entries, answers.entry_count, error,
@@ -303,14 +357,20 @@ sc_status backend_setup(const sc_config *cfg, const sc_quit_flag *quit)
          * no row. The `.env` written a moment ago is the point of a second run, and an operator
          * changing a relay should not have to drop a row to do it. */
         (void)fprintf(stderr, "this instance is already set up as \"%s\"\n", existing.name);
-        sc_db_close(db);
-        return SC_OK;
+    } else {
+        status = bc_create_home_community(db, &answers.community, &created, error, sizeof(error));
+        if (status != SC_OK) {
+            sc_log_event(SC_LOG_FATAL, SC_CAT_STARTUP, "startup.database.failed", &log,
+                         "the home community could not be written: %s", error);
+            sc_db_close(db);
+            sodium_memzero(master_seed, sizeof(master_seed));
+            return status;
+        }
     }
 
-    status = bc_create_home_community(db, &answers.community, &created, error, sizeof(error));
-    if (status != SC_OK)
-        sc_log_event(SC_LOG_FATAL, SC_CAT_STARTUP, "startup.database.failed", &log,
-                     "the home community could not be written: %s", error);
+    /* Once the row exists, created now or found from an earlier run. */
+    status = write_peer_network(db, master_seed, found ? existing.url : created.url);
+    sodium_memzero(master_seed, sizeof(master_seed));
     sc_db_close(db);
     return status;
 }

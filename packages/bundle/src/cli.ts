@@ -29,17 +29,17 @@ const isService = (value: string | undefined): value is Service =>
   (SERVICES as readonly string[]).includes(value ?? '')
 
 /**
- * The entry point of the single binary: pick a service, hand it the rest of the command line.
+ * The entry point of the single binary: pick the services, hand them the rest of the command line.
  *
  * `gradido` alone is `gradido backend serve`, which is the download-and-start promise of
  * `Architecture.md` — one file, no arguments, a server. A named service takes the arguments
  * after its name, so `gradido backend setup` and `gradido setup` are the same command: the
  * service may be left out, and then it is the backend.
  *
- * Nothing here starts more than one service. Two of them in one process would share a heap
- * and a signal handler and would be a deployment decision made by an argument parser — a
- * deployment that wants a federation server next to a backend starts the binary twice, which
- * is also how it gets to put them on different machines.
+ * Several services may be named, `gradido backend dht-node`, and then they share the process,
+ * as `gradido2-fast --backend --dht-node` does on the fast path: the backend answers
+ * `peer.bootstrap` from the node beside it. Several services only serve -- a command such as
+ * `setup` belongs to one service and is refused after two.
  */
 export async function runGradido(argv: readonly string[], binary: GradidoBinary): Promise<void> {
   if (!binary.sites.length || binary.sites[0].name !== 'frontend') {
@@ -47,7 +47,7 @@ export async function runGradido(argv: readonly string[], binary: GradidoBinary)
     console.error('Missing Frontend Page')
     return
   }
-  const [first, ...rest] = argv
+  const first = argv[0]
 
   if (first === '--help' || first === '-h') {
     // biome-ignore lint/suspicious/noConsole: this is the output somebody asked for
@@ -60,9 +60,27 @@ export async function runGradido(argv: readonly string[], binary: GradidoBinary)
     return
   }
 
-  const service: Service = isService(first) ? first : 'backend'
-  const args = isService(first) ? rest : argv
+  let named = 0
+  while (isService(argv[named])) {
+    named++
+  }
+  const services = named === 0 ? (['backend'] as const) : (argv.slice(0, named) as Service[])
+  const args = argv.slice(named)
+  if (new Set(services).size !== services.length) {
+    return refuse(`a service is named twice: ${services.join(' ')}`)
+  }
+  if (services.length > 1 && args.length !== 0) {
+    return refuse(`"${args.join(' ')}" is a command of one service, not of ${services.join(' ')}`)
+  }
 
+  await Promise.all(services.map((service) => runService(service, args, binary)))
+}
+
+async function runService(
+  service: Service,
+  args: readonly string[],
+  binary: GradidoBinary,
+): Promise<void> {
   switch (service) {
     case 'backend':
       /* The pages go with the backend and with nothing else: they are what a browser asks
@@ -74,14 +92,15 @@ export async function runGradido(argv: readonly string[], binary: GradidoBinary)
          `return await runFederation(args)` — same shape as the backend above, because it is
          the same kind of thing: an Elysia server over `service-core`, mounted at
          `/api/{apiVersion}` rather than at the root. It gets no sites. */
-      return unavailable(service, 'packages/federation')
+      return refuse('"federation" is not implemented yet — it will live in packages/federation.')
 
-    case 'dht-node':
-      /* `packages/dht-node` does not exist yet either, and it will not look like the two
-         above: js-libp2p, no HTTP server of its own, no database — see Architecture.md,
-         *Peer discovery*. It still starts from here, because it is a service a deployment
-         runs as a process, and this binary is how a process is started. */
-      return unavailable(service, 'packages/dht-node')
+    case 'dht-node': {
+      /* Imported here and not at the top: its configuration is checked when the module loads,
+         and a backend start must not fail over a dht setting it never reads. The bundler still
+         embeds it -- a static specifier in an import() is followed like any other. */
+      const { runDhtNode } = await import('@gradido/dht-node/main')
+      return await runDhtNode(args)
+    }
   }
 }
 
@@ -100,22 +119,23 @@ export function startGradido(argv: readonly string[], binary: GradidoBinary): vo
   })
 }
 
-/** A service this build has no implementation for. Refuses rather than starting something else. */
-function unavailable(service: Service, where: string): never {
+/** An argument this binary cannot act on. Refuses rather than starting something else. */
+function refuse(message: string): never {
   // biome-ignore lint/suspicious/noConsole: an unusable argument, before anything is open
-  console.error(`"${service}" is not implemented yet — it will live in ${where}.`)
+  console.error(message)
   process.exit(1)
 }
 
 function usage(): string {
   return `gradido2 — the Gradido server: every service, and the pages, in one file
 
-usage:  gradido2 [service] [command]
+usage:  gradido2 [service...] [command]
+        gradido2 backend dht-node     both, in one process; a command takes one service
 
 services
   backend       the HTTP API, and the frontends this binary carries (the default)
   federation    not built yet
-  dht-node      not built yet
+  dht-node      the peer network node: finds communities, carries their calls, relays
 
 backend commands
   serve         start the server (the default)

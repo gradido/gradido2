@@ -18,6 +18,7 @@
 #define DEFAULT_BACKEND_PORT 4000
 #define DEFAULT_FEDERATION_PORT 5010
 #define DEFAULT_DHT_PORT 5000
+#define DEFAULT_DHT_BOOTSTRAP_URL "https://gdd.gradido.net"
 
 /**
  * Copies the environment variable @p name into @p dst, or @p fallback when it is unset.
@@ -62,6 +63,22 @@ static sc_status read_port(uint16_t *out, const char *name, uint16_t fallback)
     return SC_OK;
 }
 
+static sc_status read_reachability(int *is_public)
+{
+    const char *value = getenv("DHT_REACHABILITY");
+
+    *is_public = 0;
+    if (value == NULL || value[0] == '\0' || strcmp(value, "private") == 0)
+        return SC_OK;
+    if (strcmp(value, "public") == 0) {
+        *is_public = 1;
+        return SC_OK;
+    }
+    sc_log_fatal(SC_CAT_STARTUP, "config.reachability_invalid",
+                 "DHT_REACHABILITY is '%s', which is neither public nor private", value);
+    return SC_ERR_MALFORMED;
+}
+
 /* 0 is not an error here: it is how "one per core" is spelled, and it is the default. The
  * ceiling is the one the ticket in a deferred request can carry -- service_core/http.h. */
 static sc_status read_threads(uint16_t *out)
@@ -99,10 +116,15 @@ sc_status sc_config_load(sc_config *out)
         copy_env(out->listen_host, sizeof(out->listen_host), "LISTEN_HOST", DEFAULT_LISTEN_HOST);
     if (status != SC_OK)
         return status;
-    status = copy_env(out->dht_topic, sizeof(out->dht_topic), "FEDERATION_DHT_TOPIC", "");
+    status = copy_env(out->dht_topic, sizeof(out->dht_topic), "DHT_TOPIC", "");
     if (status != SC_OK)
         return status;
-    status = copy_env(out->dht_seed_hex, sizeof(out->dht_seed_hex), "FEDERATION_DHT_SEED", "");
+    status = copy_env(out->dht_delegation_hex, sizeof(out->dht_delegation_hex),
+                      "DHT_DELEGATION", "");
+    if (status != SC_OK)
+        return status;
+    status = copy_env(out->dht_bootstrap_url, sizeof(out->dht_bootstrap_url), "DHT_BOOTSTRAP_URL",
+                      DEFAULT_DHT_BOOTSTRAP_URL);
     if (status != SC_OK)
         return status;
 
@@ -116,6 +138,9 @@ sc_status sc_config_load(sc_config *out)
     if (status != SC_OK)
         return status;
 
+    status = read_reachability(&out->dht_public);
+    if (status != SC_OK)
+        return status;
     status = read_threads(&out->server_threads);
     if (status != SC_OK)
         return status;
@@ -136,13 +161,14 @@ void sc_config_log(const sc_config *cfg)
     else
         snprintf(threads, sizeof(threads), "%u", (unsigned)cfg->server_threads);
 
-    /* The seed is reported as present or absent. Printing it would put the community's private
-     * key into every log aggregator the operator happens to run. */
     sc_log_info(SC_CAT_STARTUP, "config.loaded",
-                "host %s, backend %u, federation %u, dht %u, threads %s, topic %s, seed %s, "
-                "log level %d",
+                "host %s, backend %u, federation %u, dht %u, threads %s, topic %s, delegation %s, "
+                "reachability %s, bootstrap %s, log level %d",
                 cfg->listen_host, (unsigned)cfg->backend_port, (unsigned)cfg->federation_port,
                 (unsigned)cfg->dht_port, threads,
                 cfg->dht_topic[0] != '\0' ? cfg->dht_topic : "(unset)",
-                cfg->dht_seed_hex[0] != '\0' ? "set" : "(unset)", (int)cfg->log_level);
+                cfg->dht_delegation_hex[0] != '\0' ? "set" : "(unset)",
+                cfg->dht_public ? "public" : "private",
+                cfg->dht_bootstrap_url[0] != '\0' ? cfg->dht_bootstrap_url : "(none)",
+                (int)cfg->log_level);
 }

@@ -52,25 +52,17 @@
       "default": "now"
     }
   ],
-  "primaryKey": [
-    "id"
-  ],
+  "primaryKey": ["id"],
   "unique": [
     {
       "name": "role_rights_role_id_domain_right_name_key",
-      "columns": [
-        "role_id",
-        "domain",
-        "right_name"
-      ]
+      "columns": ["role_id", "domain", "right_name"]
     }
   ],
   "indexes": [
     {
       "name": "role_rights_role_id_idx",
-      "columns": [
-        "role_id"
-      ]
+      "columns": ["role_id"]
     }
   ],
   "notes": [

@@ -1,0 +1,129 @@
+{
+  "contractVersion": 1,
+  "kind": "test-vectors",
+  "subject": "shard",
+  "notes": [
+    "Which shard a community is in and which topic keys follow from it -- DHT_SHARD_COUNT and the three contexts in const.json. A mirror follows shard topics and community topics by these keys; two implementations that computed a different key would follow different topics and never hear each other, without failing anything.",
+    "Every value was computed with Python's hashlib when the file was written, a third implementation beside the two runners. The contexts are hashed as their UTF-8 bytes and nothing else: no length prefix, no terminator.",
+    "A shard is the first byte of the hash masked with DHT_SHARD_COUNT - 1, and the shard topic hashes that one byte -- not the byte before masking."
+  ],
+  "rules": {
+    "shardCount": {
+      "type": "uint32",
+      "value": "64",
+      "note": "DHT_SHARD_COUNT in const.json."
+    }
+  },
+  "fields": {
+    "id": {
+      "type": "text",
+      "note": "Stable forever. A failure names this."
+    },
+    "why": {
+      "type": "text",
+      "note": "What this vector is load bearing for."
+    },
+    "kind": {
+      "type": "text",
+      "note": "community: a community key and everything derived from it. topic: a shard number and its topic key."
+    },
+    "communityKey": {
+      "type": "bytes",
+      "nullable": true,
+      "note": "community: 32 bytes."
+    },
+    "shard": {
+      "type": "uint32",
+      "nullable": true,
+      "note": "topic: 0 to DHT_SHARD_COUNT - 1."
+    },
+    "expect.shard": {
+      "type": "uint32",
+      "nullable": true,
+      "note": "community: the community's shard."
+    },
+    "expect.shardTopicKey": {
+      "type": "bytes",
+      "note": "The shard's topic key, 32 bytes."
+    },
+    "expect.communityTopicKey": {
+      "type": "bytes",
+      "nullable": true,
+      "note": "community: the community's own topic key, 32 bytes."
+    }
+  },
+  "count": 7,
+  "vectors": [
+    {
+      "id": "shard.community.all-zero",
+      "why": "The zero key: nothing in the derivation may special-case it.",
+      "kind": "community",
+      "communityKey": "0000000000000000000000000000000000000000000000000000000000000000",
+      "expect": {
+        "shard": "13",
+        "shardTopicKey": "9eec6e26e0066ab7a7fc4bc75d6d723f378f3af4d8253808fc4f4732031d1ce6",
+        "communityTopicKey": "ad33a59c5ec2d06b65fc08d180e184e870a8fcf09377ebe4c9c52556ddf92aaa"
+      }
+    },
+    {
+      "id": "shard.community.community-a",
+      "why": "The community key of the master-seed vectors, so the two files can be read together.",
+      "kind": "community",
+      "communityKey": "b533d8ad9fcfbdde0b481c1b334ddc3c53412fd614564e7e5afd020368d382c3",
+      "expect": {
+        "shard": "22",
+        "shardTopicKey": "eefad2011e8c0c6777dadd8d27f7c5f411494857f9c6d44d9b74cc8817014e8f",
+        "communityTopicKey": "a94e0eebc82bef754302d26181866997b6316205761fdb78a832510cc4b56673"
+      }
+    },
+    {
+      "id": "shard.community.all-ones",
+      "why": "The top of the byte range.",
+      "kind": "community",
+      "communityKey": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expect": {
+        "shard": "1",
+        "shardTopicKey": "beba8f18e7bbcbe39866deaf3bc6908635ce5ad0b529bae95335b0c6c83923f1",
+        "communityTopicKey": "0bfcc8d66147f7d0a583beb6c3eeee46a8d575b04e49e613b883a7e32a9c354c"
+      }
+    },
+    {
+      "id": "shard.community.community-b",
+      "why": "A second key with no pattern.",
+      "kind": "community",
+      "communityKey": "6d238a55b43ae445b24c6fb157fb2202ee9355eb26fb45ad57768ee902eeb3c3",
+      "expect": {
+        "shard": "42",
+        "shardTopicKey": "4d37b1b82b15615b65f9753925c3e10ec32eca0622914591e146588813495c66",
+        "communityTopicKey": "8e0fe9d18f6700bc7c93f01a4e8fdc2326907c659704012c0f86e6003d24318a"
+      }
+    },
+    {
+      "id": "shard.topic.0",
+      "why": "The first shard.",
+      "kind": "topic",
+      "shard": "0",
+      "expect": {
+        "shardTopicKey": "c90ab4eecec86c9a82b3bd62d3d2b703bdbba12d72b6defac23c907d55568096"
+      }
+    },
+    {
+      "id": "shard.topic.1",
+      "why": "The second, against an off-by-one in the byte that is hashed.",
+      "kind": "topic",
+      "shard": "1",
+      "expect": {
+        "shardTopicKey": "beba8f18e7bbcbe39866deaf3bc6908635ce5ad0b529bae95335b0c6c83923f1"
+      }
+    },
+    {
+      "id": "shard.topic.63",
+      "why": "The last shard DHT_SHARD_COUNT allows.",
+      "kind": "topic",
+      "shard": "63",
+      "expect": {
+        "shardTopicKey": "5edc1a97a1125c7a098733463b7fb0c897ee4f382f9aa37061408cb2e7667f7e"
+      }
+    }
+  ]
+}

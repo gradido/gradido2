@@ -1,5 +1,5 @@
 /*
- * Writes tests/__snapshots__ out of gen/mjml/ir.json.
+ * Writes tests/__snapshots__ out of build/tools/mjml/ir.json.
  *
  *   bun run snapshots:update
  *
@@ -29,7 +29,7 @@ const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`)
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback
 }
-const IR = path.resolve(arg('ir', path.join(ROOT, 'gen', 'mjml', 'ir.json')))
+const IR = path.resolve(arg('ir', path.join(ROOT, 'build', 'tools', 'mjml', 'ir.json')))
 const OUT = path.resolve(arg('out', SNAPSHOT_DIR))
 
 const escape = (s) =>

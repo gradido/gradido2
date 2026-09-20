@@ -17,9 +17,9 @@
  * Both sides are filled with the same fixture values the snapshots use, so what
  * is compared is two finished documents and not two intermediate forms.
  *
- *   node tools/extract.mjs      --out gen/pug
- *   node tools/extract_mjml.mjs --out gen/mjml
- *   node tools/compare_pug.mjs [--pug gen/pug] [--mjml gen/mjml] [--diff DIR]
+ *   bun tools/extract.mjs       --out build/tools/pug
+ *   bun tools/extract_mjml.mjs  --out build/tools/mjml
+ *   bun tools/compare_pug.mjs  [--pug DIR] [--mjml DIR] [--diff DIR]
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -31,9 +31,9 @@ const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`)
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback
 }
-const PUG = path.resolve(arg('pug', path.join(ROOT, 'gen', 'pug')))
-const MJML = path.resolve(arg('mjml', path.join(ROOT, 'gen', 'mjml')))
-const DIFF_DIR = path.resolve(arg('diff', path.join(ROOT, 'gen', 'diff')))
+const PUG = path.resolve(arg('pug', path.join(ROOT, 'build', 'tools', 'pug')))
+const MJML = path.resolve(arg('mjml', path.join(ROOT, 'build', 'tools', 'mjml')))
+const DIFF_DIR = path.resolve(arg('diff', path.join(ROOT, 'build', 'tools', 'diff')))
 
 const escape = (s) =>
   String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])

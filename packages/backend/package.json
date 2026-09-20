@@ -17,7 +17,8 @@
     "lint": "biome check --error-on-warnings .",
     "lint:fix": "biome check --error-on-warnings . --write",
     "start": "bun src/index.ts",
-    "test": "bun test",
+    "test": "bun test src",
+    "test:e2e": "bun test ./e2e",
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {

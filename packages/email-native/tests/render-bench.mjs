@@ -2,7 +2,7 @@
  * The addon's render() against the two things it could be replaced by.
  *
  *   JS ops     the same op list walked in JavaScript. This is the real
- *              alternative: gen/mjml/ir.json is on disk anyway, and a role that
+ *              alternative: build/tools/mjml/ir.json is on disk anyway, and a role that
  *              wanted mails from TypeScript could walk it in twenty lines --
  *              tools/preview-page.html already does exactly that.
  *   pug        legacy, for reference. It is not what this package builds any
@@ -28,7 +28,7 @@ const email = require('../index.cjs')
 const N = 100_000
 const LOCALE = 'de'
 const TEMPLATE = 'accountActivation'
-const IR = path.join(TEMPLATE_ROOT, '..', 'gen', 'mjml', 'ir.json')
+const IR = path.join(TEMPLATE_ROOT, '..', 'build', 'tools', 'mjml', 'ir.json')
 
 const values = {
   firstName: 'Björn',
