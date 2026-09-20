@@ -383,7 +383,7 @@ on Node, 33x on Bun — which is the finding that matters most here, and
 the reason this package exists for `fast-servers` first and for the TypeScript path only
 where a mail never becomes a JS value.
 
-The first row is not a hypothetical: `gen/mjml/ir.json` is on disk anyway and the walk is
+The first row is not a hypothetical: `build/tools/mjml/ir.json` is on disk anyway and the walk is
 twenty lines — `tools/preview-page.html` is one, and `tests/render-bench.mjs` builds the row
 by finding the variant whose output equals the addon's, so the two are timed on bytes already
 proven equal. The pug row is legacy's renderer over legacy's markup; it renders a different,
@@ -529,10 +529,16 @@ src/render.c                  its runtime half: ops, escaping, the arena
 napi/                         the Node-API bindings and the version script
 tls/                          the mbedTLS trim (MBEDTLS_USER_CONFIG_FILE)
 scripts/                      the copy into fast-servers
-tests/                        node --test; the addon, its TLS, the snapshots, the
-                              branch markers, the preview. `bun run test` walks the
-                              directory; the send benchmark in it skips unless
-                              BENCH=1, which is what `bun run bench` sets
+build/tools/                  what the tools above write when they are run by hand:
+                              mjml/ir.json, pug/ir.json, preview/, diff/. Generated,
+                              so it lives under build/ and goes with a `build:clean`;
+                              build/gen beside it is the build's own output
+tests/                        `bun run test`; the addon, its TLS, the snapshots, the
+                              branch markers, the preview. They are written against
+                              node:test, which both runtimes run, so `bun run
+                              test:node` is the same suite on node -- the second
+                              runtime the addon claims to serve. The send benchmark
+                              in it skips unless BENCH=1, which `bun run bench` sets
 ```
 
 `include/` and `src/` mirror the paths those two files have in `fast-servers/service-core`,

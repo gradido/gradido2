@@ -2,7 +2,7 @@
  * The preview: every locale and every variant of a template, in a browser, with
  * the slot values editable.
  *
- * It renders NOTHING. gen/mjml/ir.json already holds each document as
+ * It renders NOTHING. build/tools/mjml/ir.json already holds each document as
  * [literal, slot, literal, ...]; the page joins the literals and escapes the slot
  * values, which is exactly what ge_render_* does at runtime -- so switching a
  * locale or typing a 40-character surname costs no round trip, and what you look
@@ -14,7 +14,7 @@
  *            ├─► verify.mjs  ──► the check     that C agrees
  *            └─► preview.mjs ──► this page     what you look at
  *
- *   node tools/preview.mjs              gen/preview/{index.html,<name>.json}
+ *   bun tools/preview.mjs               build/tools/preview/{index.html,<name>.json}
  *   node tools/preview.mjs --inline     one self-contained .html per template
  *
  * `--inline` is for handing a page to somebody: data embedded, no server, no
@@ -33,8 +33,8 @@ const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`)
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback
 }
-const IR = path.resolve(arg('ir', path.join(ROOT, 'gen', 'mjml', 'ir.json')))
-const OUT = path.resolve(arg('out', path.join(ROOT, 'gen', 'preview')))
+const IR = path.resolve(arg('ir', path.join(ROOT, 'build', 'tools', 'mjml', 'ir.json')))
+const OUT = path.resolve(arg('out', path.join(ROOT, 'build', 'tools', 'preview')))
 const INLINE = process.argv.includes('--inline')
 
 const LIT = 0

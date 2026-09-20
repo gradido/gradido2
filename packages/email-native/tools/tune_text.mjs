@@ -4,7 +4,7 @@
  * The plain text part is html-to-text over the rendered HTML, so tuning it means
  * trying selectors and looking at 270 documents. Re-running the extractor for each
  * attempt would mean 270 MJML compiles per attempt; instead the sentinel HTML is
- * rebuilt straight out of gen/mjml/ir.json -- it is exactly the string html-to-text
+ * rebuilt straight out of build/tools/mjml/ir.json -- it is exactly the string html-to-text
  * was handed -- and only the conversion is repeated.
  *
  *   node tools/tune_text.mjs              score the options in manifest.mjs
@@ -53,7 +53,7 @@ const chunkText = (text) => {
   return ops
 }
 
-const read = (d) => JSON.parse(fs.readFileSync(path.join(ROOT, 'gen', d, 'ir.json'), 'utf8'))
+const read = (d) => JSON.parse(fs.readFileSync(path.join(ROOT, 'build', 'tools', d, 'ir.json'), 'utf8'))
 const pug = read('pug')
 const mjml = read('mjml')
 const P = Object.fromEntries(pug.templates.map((t) => [t.name, t]))
