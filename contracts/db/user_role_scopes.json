@@ -43,17 +43,11 @@
       "default": "now"
     }
   ],
-  "primaryKey": [
-    "id"
-  ],
+  "primaryKey": ["id"],
   "unique": [
     {
       "name": "user_role_scopes_user_role_id_dimension_target_id_key",
-      "columns": [
-        "user_role_id",
-        "dimension",
-        "target_id"
-      ]
+      "columns": ["user_role_id", "dimension", "target_id"]
     }
   ],
   "indexes": [],

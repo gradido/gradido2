@@ -38,161 +38,92 @@
       "name": "user",
       "description": "Registration, login, session, profile and the admin actions on an account.",
       "exposes": [],
-      "sources": [
-        "server/backend/user.json"
-      ],
+      "sources": ["server/backend/user.json"],
       "rights": [
         {
           "name": "VERIFY_LOGIN",
           "bit": "0",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "LOGIN",
           "bit": "1",
           "public": true,
-          "roles": [
-            "UNAUTHORIZED",
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["UNAUTHORIZED", "USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "LOGOUT",
           "bit": "2",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "CREATE_USER",
           "bit": "3",
           "public": true,
-          "roles": [
-            "UNAUTHORIZED",
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["UNAUTHORIZED", "USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "SEND_RESET_PASSWORD_EMAIL",
           "bit": "4",
           "public": true,
-          "roles": [
-            "UNAUTHORIZED",
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["UNAUTHORIZED", "USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "SET_PASSWORD",
           "bit": "5",
           "public": true,
-          "roles": [
-            "UNAUTHORIZED",
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["UNAUTHORIZED", "USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "QUERY_OPT_IN",
           "bit": "6",
           "public": true,
-          "roles": [
-            "UNAUTHORIZED",
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["UNAUTHORIZED", "USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "CHECK_USERNAME",
           "bit": "7",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "UPDATE_USER_INFOS",
           "bit": "8",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "USER",
           "bit": "9",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "HAS_ELOPAGE",
           "bit": "10",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "GMS_USER_PLAYGROUND",
           "bit": "11",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "HUMHUB_AUTO_LOGIN",
           "bit": "12",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "SEARCH_ADMIN_USERS",
           "bit": "13",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "SEARCH_USERS",
           "bit": "14",
-          "roles": [
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "SEND_ACTIVATION_EMAIL",
           "bit": "15",
-          "roles": [
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "SET_USER_ROLE",
@@ -220,9 +151,7 @@
     {
       "name": "contribution",
       "description": "Contributions, the messages on them and the contribution links.",
-      "exposes": [
-        "creation_group"
-      ],
+      "exposes": ["creation_group"],
       "sources": [
         "server/backend/contribution.json",
         "server/backend/contribution-message.json",
@@ -232,153 +161,94 @@
         {
           "name": "CREATE_CONTRIBUTION",
           "bit": "0",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "UPDATE_CONTRIBUTION",
           "bit": "1",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "DELETE_CONTRIBUTION",
           "bit": "2",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "LIST_CONTRIBUTIONS",
           "bit": "3",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "LIST_ALL_CONTRIBUTIONS",
           "bit": "4",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "OPEN_CREATIONS",
           "bit": "5",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "ADMIN_CREATE_CONTRIBUTION",
           "bit": "6",
-          "roles": [
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "ADMIN_UPDATE_CONTRIBUTION",
           "bit": "7",
           "bound": true,
-          "roles": [
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "ADMIN_DELETE_CONTRIBUTION",
           "bit": "8",
           "bound": true,
-          "roles": [
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "ADMIN_LIST_CONTRIBUTIONS",
           "bit": "9",
           "bound": true,
-          "roles": [
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "ADMIN_OPEN_CREATIONS",
           "bit": "10",
-          "roles": [
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "CONFIRM_CONTRIBUTION",
           "bit": "11",
           "bound": true,
-          "roles": [
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "DENY_CONTRIBUTION",
           "bit": "12",
           "bound": true,
-          "roles": [
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "CREATE_CONTRIBUTION_MESSAGE",
           "bit": "13",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "LIST_ALL_CONTRIBUTION_MESSAGES",
           "bit": "14",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "ADMIN_CREATE_CONTRIBUTION_MESSAGE",
           "bit": "15",
           "bound": true,
-          "roles": [
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "ADMIN_LIST_ALL_CONTRIBUTION_MESSAGES",
           "bit": "16",
           "bound": true,
-          "roles": [
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "CREATE_CONTRIBUTION_LINK",
@@ -398,11 +268,7 @@
         {
           "name": "LIST_CONTRIBUTION_LINKS",
           "bit": "20",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         }
       ]
     },
@@ -419,113 +285,66 @@
         {
           "name": "SEND_COINS",
           "bit": "0",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "TRANSACTION_LIST",
           "bit": "1",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "BALANCE",
           "bit": "2",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "CREATE_TRANSACTION_LINK",
           "bit": "3",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "DELETE_TRANSACTION_LINK",
           "bit": "4",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "QUERY_TRANSACTION_LINK",
           "bit": "5",
           "public": true,
-          "roles": [
-            "UNAUTHORIZED",
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["UNAUTHORIZED", "USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "REDEEM_TRANSACTION_LINK",
           "bit": "6",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "QUERY_REDEEM_JWT",
           "bit": "7",
           "public": true,
-          "roles": [
-            "UNAUTHORIZED",
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["UNAUTHORIZED", "USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "DISBURSE_TRANSACTION_LINK",
           "bit": "8",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "LIST_TRANSACTION_LINKS",
           "bit": "9",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "LIST_TRANSACTION_LINKS_ADMIN",
           "bit": "10",
-          "roles": [
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["MODERATOR", "MODERATOR_AI"]
         }
       ]
     },
     {
       "name": "community",
       "description": "The home community and the federated ones, their statistics, their branding and the linked Humhub spaces.",
-      "exposes": [
-        "community"
-      ],
+      "exposes": ["community"],
       "sources": [
         "server/backend/community.json",
         "server/backend/statistics.json",
@@ -537,20 +356,12 @@
           "name": "COMMUNITIES",
           "bit": "0",
           "public": true,
-          "roles": [
-            "UNAUTHORIZED",
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI",
-            "DLT_CONNECTOR"
-          ]
+          "roles": ["UNAUTHORIZED", "USER", "MODERATOR", "MODERATOR_AI", "DLT_CONNECTOR"]
         },
         {
           "name": "COMMUNITY_UPDATE",
           "bit": "1",
-          "roles": [
-            "DLT_CONNECTOR"
-          ]
+          "roles": ["DLT_CONNECTOR"]
         },
         {
           "name": "COMMUNITY_WITH_API_KEYS",
@@ -560,31 +371,18 @@
         {
           "name": "COMMUNITY_STATISTICS",
           "bit": "3",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "PROJECT_BRANDING_VIEW",
           "bit": "4",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "PROJECT_BRANDING_BANNER",
           "bit": "5",
           "public": true,
-          "roles": [
-            "UNAUTHORIZED",
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["UNAUTHORIZED", "USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "PROJECT_BRANDING_MUTATE",
@@ -594,11 +392,7 @@
         {
           "name": "LIST_HUMHUB_SPACES",
           "bit": "7",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         }
       ]
     },
@@ -606,35 +400,22 @@
       "name": "creation_group",
       "description": "Creation groups and who may manage which of them.",
       "exposes": [],
-      "sources": [
-        "server/backend/creation-group.json"
-      ],
+      "sources": ["server/backend/creation-group.json"],
       "rights": [
         {
           "name": "LIST_CREATION_GROUPS",
           "bit": "0",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "MANAGE_OWN_CREATION_GROUPS",
           "bit": "1",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "MANAGE_USER_CREATION_GROUPS",
           "bit": "2",
-          "roles": [
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "MANAGE_CREATION_GROUPS",
@@ -659,24 +440,17 @@
       "name": "crea",
       "description": "The AI assistant: its chat and its settings.",
       "exposes": [],
-      "sources": [
-        "server/backend/crea.json",
-        "server/backend/crea-chat.json"
-      ],
+      "sources": ["server/backend/crea.json", "server/backend/crea-chat.json"],
       "rights": [
         {
           "name": "AI_SEND_MESSAGE",
           "bit": "0",
-          "roles": [
-            "MODERATOR_AI"
-          ]
+          "roles": ["MODERATOR_AI"]
         },
         {
           "name": "SET_USER_SALUTATION",
           "bit": "1",
-          "roles": [
-            "MODERATOR_AI"
-          ]
+          "roles": ["MODERATOR_AI"]
         },
         {
           "name": "AI_SETTINGS",
@@ -689,36 +463,22 @@
       "name": "gdt",
       "description": "The GDT side: balance, entries and the publisher lookup.",
       "exposes": [],
-      "sources": [
-        "server/backend/gdt.json"
-      ],
+      "sources": ["server/backend/gdt.json"],
       "rights": [
         {
           "name": "GDT_BALANCE",
           "bit": "0",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "LIST_GDT_ENTRIES",
           "bit": "1",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "EXIST_PID",
           "bit": "2",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         }
       ]
     },
@@ -726,45 +486,27 @@
       "name": "matching",
       "description": "Matching entries.",
       "exposes": [],
-      "sources": [
-        "server/backend/matching-entry.json"
-      ],
+      "sources": ["server/backend/matching-entry.json"],
       "rights": [
         {
           "name": "CREATE_MATCHING_ENTRY",
           "bit": "0",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "UPDATE_MATCHING_ENTRY",
           "bit": "1",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "DELETE_MATCHING_ENTRY",
           "bit": "2",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "LIST_MATCHING_ENTRY",
           "bit": "3",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         }
       ]
     },
@@ -772,27 +514,17 @@
       "name": "newsletter",
       "description": "The newsletter subscription.",
       "exposes": [],
-      "sources": [
-        "server/backend/newsletter.json"
-      ],
+      "sources": ["server/backend/newsletter.json"],
       "rights": [
         {
           "name": "SUBSCRIBE_NEWSLETTER",
           "bit": "0",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "UNSUBSCRIBE_NEWSLETTER",
           "bit": "1",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         }
       ]
     },
@@ -808,20 +540,12 @@
         {
           "name": "MANAGE_OWN_THANK_YOU_CARD",
           "bit": "0",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         },
         {
           "name": "RECEIVE_THANK_YOU_CARD_PAYMENT",
           "bit": "1",
-          "roles": [
-            "USER",
-            "MODERATOR",
-            "MODERATOR_AI"
-          ]
+          "roles": ["USER", "MODERATOR", "MODERATOR_AI"]
         }
       ]
     }

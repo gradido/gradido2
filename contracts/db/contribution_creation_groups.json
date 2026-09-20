@@ -37,31 +37,22 @@
       "default": "now"
     }
   ],
-  "primaryKey": [
-    "id"
-  ],
+  "primaryKey": ["id"],
   "unique": [
     {
       "name": "contribution_creation_groups_pair_key",
-      "columns": [
-        "contribution_id",
-        "creation_group_id"
-      ]
+      "columns": ["contribution_id", "creation_group_id"]
     }
   ],
   "indexes": [
     {
       "name": "contribution_creation_groups_contribution_id_idx",
-      "columns": [
-        "contribution_id"
-      ],
+      "columns": ["contribution_id"],
       "note": "Redundant with the leading column of uniq_contribution_creation_group. Do not recreate it in gradido2."
     },
     {
       "name": "contribution_creation_groups_creation_group_id_idx",
-      "columns": [
-        "creation_group_id"
-      ]
+      "columns": ["creation_group_id"]
     }
   ],
   "notes": [
