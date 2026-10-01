@@ -94,6 +94,11 @@ static const char *begin_text(const sc_db *db)
  * connection that will not come back is met again by make_usable before the next unit, which
  * is where that is reported.
  *
+ * The unit is not failed for it, whether the redial worked or not. A unit that ends with
+ * ROLLBACK asked for nothing to be kept, and nothing was: its outcome stands -- a registration
+ * for a taken address is answered 204 either way. A unit that goes on, for AGAIN or a rerun,
+ * meets the dead connection at its next BEGIN and fails there, with the driver's own message.
+ *
  * SQLite rolls back in this process, with its own file I/O, and that can fail and leave the
  * transaction open. The writer has one connection: every later unit would then run inside a
  * transaction nobody ends, and be lost. That is the one case this process does not survive --

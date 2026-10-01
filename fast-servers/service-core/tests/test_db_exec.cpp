@@ -581,7 +581,8 @@ TEST(PostgresExec, AFailedRollbackRedialsTheConnectionAndStopsNothing)
     TestUnit lost;
     lost.unit.access = SC_DB_WRITE;
     lost.unit.work = lose_the_session;
-    (void)sc_db_run(db, &lost.unit);
+    /* Not failed for it: the unit asked for nothing to be kept, and the server kept nothing. */
+    EXPECT_EQ(sc_db_run(db, &lost.unit), SC_OK) << lost.unit.error.message;
     EXPECT_NE(lost.work_status, SC_OK) << "the session was ended under the statement";
     EXPECT_FALSE(sc_runtime_stopped_critically());
     EXPECT_FALSE(sc_quit_requested(&quit));

@@ -614,11 +614,31 @@ throw new CriticalError(
 - **A new kind of critical failure is a new fatal event in `contracts/logging.json`**, in the
   same change.
 
-This is SQLite's failure and not PostgreSQL's. A `ROLLBACK` that fails there is a connection
-that is gone — the server has abandoned the transaction on its own — so nothing is stuck: bun's
-pool replaces the connection on the reference path, and a `fast-servers` worker dials its own
-again (`roll_back` in `service-core/src/db_exec.c`). The fast path stops for the same SQLite
-case, the same way: `sc_runtime_stop_critically`.
+A `ROLLBACK` that fails is one of three things, and only the first is critical. Both paths
+decide the same way — `sqliteTransaction.ts` on the reference path, `roll_back` in
+`fast-servers/service-core/src/db_exec.c` on the fast one:
+
+```text
+SQLite, the transaction     critical. The one connection is inside a transaction nobody
+is still open               ends, and every later write would join it and be lost.
+                            CriticalError here, sc_runtime_stop_critically there; closing
+                            the connection on the way down is what discards it
+
+SQLite, nothing is left     not critical, and nothing is replaced. SQLite ended the
+open                        transaction itself — a full disk and an I/O error do — or the
+                            connection was already closed by a shutdown. The caller gets
+                            the error the work failed with, and the connection is as
+                            usable as it was
+
+PostgreSQL                  not critical. The connection is gone, and the server abandons
+                            the transaction of a session that ended, so nothing is half
+                            done. bun's pool replaces the connection on the reference
+                            path; a fast-servers worker dials its own again on the spot
+```
+
+Which of the two SQLite cases it is, is asked and never guessed from the error:
+`sqlite.inTransaction` in bun, `sqlite3_get_autocommit` in C. A SQLite connection is never
+redialled: there is no server that could have dropped it.
 
 ---
 
