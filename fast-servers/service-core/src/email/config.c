@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../config_failed.h"
 #include "service_core/log/log.h"
 #include "service_core/secret.h"
 
@@ -31,8 +32,8 @@ static sc_status copy_env(char *dst, size_t dst_size, const char *name, const ch
         value = fallback;
     len = strlen(value);
     if (len >= dst_size) {
-        sc_log_fatal(SC_CAT_STARTUP, "config.value_too_long", "%s is %zu bytes, the limit is %zu",
-                     name, len, dst_size - 1);
+        SC_CONFIG_FAILED(name, "too-long", "%s is %zu bytes, the limit is %zu", name, len,
+                         dst_size - 1);
         return SC_ERR_TOO_LONG;
     }
     memcpy(dst, value, len + 1);
@@ -58,8 +59,7 @@ static sc_status read_flag(int *out, const char *name, int fallback)
     /* Only the two spellings, because a variable that is read leniently is one that can be
      * switched off by a typo: EMAIL=1 would silently become false, and the mail that never
      * arrives is discovered days later. */
-    sc_log_fatal(SC_CAT_STARTUP, "config.flag_invalid",
-                 "%s is '%s', which is neither true nor false", name, value);
+    SC_CONFIG_FAILED(name, "invalid", "%s is '%s', which is neither true nor false", name, value);
     return SC_ERR_MALFORMED;
 }
 
@@ -75,8 +75,8 @@ static sc_status read_port(uint16_t *out, const char *name, uint16_t fallback)
     }
     parsed = strtoul(value, &end, 10);
     if (*end != '\0' || parsed == 0 || parsed > 65535) {
-        sc_log_fatal(SC_CAT_STARTUP, "config.port_invalid",
-                     "%s is '%s', which is not a port between 1 and 65535", name, value);
+        SC_CONFIG_FAILED(name, "invalid", "%s is '%s', which is not a port between 1 and 65535",
+                         name, value);
         return SC_ERR_MALFORMED;
     }
     *out = (uint16_t)parsed;
@@ -113,8 +113,8 @@ static sc_status read_tls(sc_mail_tls *out)
             return SC_OK;
         }
     }
-    sc_log_fatal(SC_CAT_STARTUP, "config.mail_tls_invalid",
-                 "EMAIL_SMTP_TLS is '%s', which is none, starttls, require or implicit", value);
+    SC_CONFIG_FAILED("EMAIL_SMTP_TLS", "invalid",
+                     "EMAIL_SMTP_TLS is '%s', which is none, starttls, require or implicit", value);
     return SC_ERR_MALFORMED;
 }
 
@@ -149,8 +149,8 @@ sc_status sc_mail_env_load(sc_mail_env *out)
     status = sc_secret_read("EMAIL_PASSWORD", out->pass, sizeof(out->pass));
     if (status != SC_OK) {
         if (status == SC_ERR_TOO_LONG)
-            sc_log_fatal(SC_CAT_STARTUP, "config.value_too_long",
-                         "EMAIL_PASSWORD is %zu bytes at most", sizeof(out->pass) - 1);
+            SC_CONFIG_FAILED("EMAIL_PASSWORD", "too-long", "EMAIL_PASSWORD is %zu bytes at most",
+                             sizeof(out->pass) - 1);
         return status;
     }
     status = copy_env(out->sender, sizeof(out->sender), "EMAIL_SENDER", "");
@@ -167,13 +167,13 @@ sc_status sc_mail_env_load(sc_mail_env *out)
      * packages/backend/src/config/schema.ts forwards the same two onto the same two variables.
      */
     if (out->enabled && out->host[0] == '\0') {
-        sc_log_fatal(SC_CAT_STARTUP, "config.mail_incomplete",
-                     "EMAIL=true needs a relay in EMAIL_SMTP_HOST");
+        SC_CONFIG_FAILED("EMAIL_SMTP_HOST", "invalid",
+                         "EMAIL=true needs a relay in EMAIL_SMTP_HOST");
         return SC_ERR_MALFORMED;
     }
     if (out->enabled && out->sender[0] == '\0') {
-        sc_log_fatal(SC_CAT_STARTUP, "config.mail_incomplete",
-                     "EMAIL=true needs a sender address in EMAIL_SENDER");
+        SC_CONFIG_FAILED("EMAIL_SENDER", "invalid",
+                         "EMAIL=true needs a sender address in EMAIL_SENDER");
         return SC_ERR_MALFORMED;
     }
 
@@ -181,9 +181,9 @@ sc_status sc_mail_env_load(sc_mail_env *out)
                        out->tls == SC_MAIL_TLS_IMPLICIT ? "smtps" : "smtp", out->host,
                        (unsigned)out->port);
     if (written < 0 || (size_t)written >= sizeof(out->url)) {
-        sc_log_fatal(SC_CAT_STARTUP, "config.value_too_long",
-                     "EMAIL_SMTP_HOST and EMAIL_SMTP_PORT do not fit a URL of %zu bytes",
-                     sizeof(out->url) - 1);
+        SC_CONFIG_FAILED("EMAIL_SMTP_HOST", "too-long",
+                         "EMAIL_SMTP_HOST and EMAIL_SMTP_PORT do not fit a URL of %zu bytes",
+                         sizeof(out->url) - 1);
         return SC_ERR_TOO_LONG;
     }
     return SC_OK;

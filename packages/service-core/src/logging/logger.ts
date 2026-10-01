@@ -61,14 +61,20 @@ export type LogBindings = {
  * instead of at review time.
  */
 export class Logger {
-  private readonly pino: pino.Logger
-
-  private constructor(logger: pino.Logger) {
-    this.pino = logger
-  }
+  private constructor(
+    private readonly pino: pino.Logger,
+    /* The destinations behind `pino`, kept because that is where a flush has to go. */
+    private readonly streams: readonly pino.StreamEntry[],
+  ) {}
 
   public static create(env: RuntimeConfig): Logger {
-    return new Logger(createPinoLogger(env))
+    /* base: null removes pid and hostname. They differ per process, so two identical runs
+       would compare unequal -- see contracts/logging.json, envelope rules. pino's default
+       timestamp is already unix milliseconds, which is what the contract asks for. */
+    const options: pino.LoggerOptions = { level: env.LOG_LEVEL, base: null }
+    const streams = logStreams(env)
+
+    return new Logger(pino(options, pino.multistream(streams)), streams)
   }
 
   /** A logger that carries req/usr on every line, for the lifetime of one request. */
@@ -81,6 +87,7 @@ export class Logger {
         ...(bindings.req === undefined ? {} : { req: bindings.req }),
         ...(bindings.usr === undefined ? {} : { usr: Number(bindings.usr) }),
       }),
+      this.streams,
     )
   }
 
@@ -108,19 +115,24 @@ export class Logger {
     this.pino.fatal(line, msg)
   }
 
-  /** Writes out what is still buffered. Called on shutdown, not per line. */
+  /**
+   * Writes out what is still buffered, and has done so when it returns. Called before the
+   * process ends, not per line: what follows it may be `process.exit`.
+   *
+   * Every destination is flushed itself, synchronously. `pino.flush()` is not it: the stream
+   * behind this logger is a multistream, which has no `flush`, so that call writes nothing
+   * and runs its callback at once.
+   */
   public flush(): void {
-    this.pino.flush()
+    for (const { stream } of this.streams) {
+      try {
+        ;(stream as { flushSync?: () => void }).flushSync?.()
+      } catch {
+        /* A file still being opened has nothing to write to yet; pino writes what it holds
+           once it is open, and on exit. */
+      }
+    }
   }
-}
-
-function createPinoLogger(env: RuntimeConfig): pino.Logger {
-  /* base: null removes pid and hostname. They differ per process, so two identical runs
-     would compare unequal -- see contracts/logging.json, envelope rules. pino's default
-     timestamp is already unix milliseconds, which is what the contract asks for. */
-  const options: pino.LoggerOptions = { level: env.LOG_LEVEL, base: null }
-
-  return pino(options, pino.multistream(logStreams(env)))
 }
 
 /**

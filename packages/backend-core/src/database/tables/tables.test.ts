@@ -224,7 +224,7 @@ for (const kind of testDatabaseKinds()) {
 
       await insertMember(first)
       await insertMember(second)
-      expect(insertMember(first)).rejects.toThrow()
+      await expect(insertMember(first)).rejects.toThrow()
     })
 
     // The answer to the open question legacy left behind: its migration 0065 created this
@@ -248,7 +248,7 @@ for (const kind of testDatabaseKinds()) {
       }
 
       await insertCommunity('https://one.example.org')
-      expect(insertCommunity('https://two.example.org')).rejects.toThrow()
+      await expect(insertCommunity('https://two.example.org')).rejects.toThrow()
     })
 
     test('an address can only be registered once, whatever the community', async () => {
@@ -288,7 +288,7 @@ for (const kind of testDatabaseKinds()) {
       await insertContact(first, 'einhorn@gradido.net')
       // Unlike the keys on users, this one is global on purpose: an address identifies a
       // person, and two communities cannot share it.
-      expect(insertContact(second, 'einhorn@gradido.net')).rejects.toThrow()
+      await expect(insertContact(second, 'einhorn@gradido.net')).rejects.toThrow()
     })
 
     test('the two account tables point at each other', async () => {

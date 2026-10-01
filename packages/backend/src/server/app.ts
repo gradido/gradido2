@@ -1,4 +1,5 @@
 import { DatabaseBusy } from '@gradido/backend-core'
+import { CriticalError, stopAfterCriticalError } from '@gradido/service-core'
 import { ErrorCode, errorBody, errorStatus } from '@gradido/shared/errors'
 import { Elysia } from 'elysia'
 import type { AppContext } from '../AppContext'
@@ -48,6 +49,12 @@ export const createBackendApp = (context: AppContext) =>
         set.status = errorStatus(ErrorCode.ServiceBusy)
         set.headers['retry-after'] = String(error.retryAfter)
         return errorBody(ErrorCode.ServiceBusy, error.retryAfter)
+      }
+
+      /* The process cannot go on: said in the log, then stopped the way a SIGTERM stops it.
+         This request is still answered below, as any other that failed. */
+      if (error instanceof CriticalError) {
+        stopAfterCriticalError(context.logger, error)
       }
 
       /* The shape is contracted: contracts/logging.json fixes http.request.failed at method,

@@ -26,7 +26,7 @@ import { blob, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
  * collation to a key. `tables.test.ts` notices a key that comes back as anything else.
  *
  * **`private_key` is a secret and must never leave this file's neighbourhood.** It is not in
- * the row shape the application carries around (`community.data.ts`), it is not selected by
+ * the row shape the application carries around (`community.schema.ts`), it is not selected by
  * any query that feeds a response, and `contracts/logging.json` forbids logging it. It is
  * declared here because the column exists and the setup writes it, not because anything else
  * may read it.

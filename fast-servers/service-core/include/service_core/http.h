@@ -352,7 +352,8 @@ int sc_http_health(sc_http_req *req, void *user_data);
  *
  * Five seconds, which is longer than any request this server answers and short enough that an
  * orchestrator's own kill timer -- 10 s for `docker stop`, 30 s for Kubernetes by default --
- * does not run out first. Reaching it is logged.
+ * does not run out first. Reaching it ends sc_http_run with SC_ERR_TIMEOUT, which the process
+ * reports as startup.shutdown.failed and exits with 1 for -- contracts/logging.json.
  */
 #define SC_HTTP_DRAIN_MS 5000
 

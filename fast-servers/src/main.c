@@ -28,7 +28,9 @@
  *
  * Shutdown is one flag. SIGINT or SIGTERM raises it, every run loop notices within
  * SC_RUNTIME_TICK_MS and returns, and main joins the threads. Nothing is cancelled from the
- * outside: a thread stopped mid-request is a thread that leaked whatever it was holding.
+ * outside: a thread stopped mid-request is a thread that leaked whatever it was holding. A
+ * process that cannot go on sends itself that SIGTERM and exits with 1 -- runtime.h,
+ * sc_runtime_stop_critically.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -126,12 +128,42 @@ static void run_role(void *arg)
      * is why it is here and not after the join below. */
     (void)sc_log_thread_join();
     slot->status = slot->role->run(slot->cfg, &g_quit);
-    if (slot->status != SC_OK) {
+    if (slot->status == SC_ERR_TIMEOUT && sc_runtime_quit_signal() != NULL) {
+        /* Asked to stop, and did not get there in time: connections were still open when the
+         * wait for them ran out, and were cut. The same line, and the same exit code 1, as the
+         * reference path's shutdown that outlives its deadline -- which is why no
+         * startup.server.stopped follows. */
+        sc_log_value data[2] = {SC_LOG_STR("signal", sc_runtime_quit_signal()),
+                                SC_LOG_STR("reason", "timeout")};
+        sc_log_context context = {0};
+
+        context.data = data;
+        context.data_count = 2;
+        sc_log_event(SC_LOG_FATAL, SC_CAT_STARTUP, "startup.shutdown.failed", &context,
+                     "%s did not stop within %d ms, connections were still open", slot->role->name,
+                     SC_HTTP_DRAIN_MS);
+    } else if (slot->status != SC_OK) {
         /* One role that cannot start takes the process down. A half-started server that keeps
          * answering on two ports out of three is the failure mode an operator does not see. */
         sc_log_fatal(SC_CAT_STARTUP, "role.failed", "%s stopped with %s", slot->role->name,
                      sc_status_name(slot->status));
         sc_runtime_request_quit();
+    } else {
+        /* The role's last line, once it has stopped serving and closed what it held -- one per
+         * role, as on the reference path. Only a signal ends a role in good order and has a
+         * name to write here; a role that came down with another's failure says nothing more
+         * than that role already did. */
+        const char *signal_name = sc_runtime_quit_signal();
+
+        if (signal_name != NULL) {
+            sc_log_value data[1] = {SC_LOG_STR("signal", signal_name)};
+            sc_log_context context = {0};
+
+            context.data = data;
+            context.data_count = 1;
+            sc_log_event(SC_LOG_INFO, SC_CAT_STARTUP, "startup.server.stopped", &context,
+                         "%s stopped", slot->role->name);
+        }
     }
     sc_log_thread_leave();
 }
@@ -299,7 +331,16 @@ int main(int argc, char **argv)
     (void)sc_log_thread_join();
 
     if (env_status != SC_OK) {
-        sc_log_fatal(SC_CAT_STARTUP, "config.env_file_invalid", "%s", env_error);
+        sc_log_value data[2] = {SC_LOG_STR("variable", SC_ENV_FILE_NAME),
+                                SC_LOG_STR("reason", "invalid")};
+        sc_log_context context = {0};
+
+        /* The file and not a variable in it: it could not be read to the end, so nothing in it
+         * was taken. */
+        context.data = data;
+        context.data_count = 2;
+        sc_log_event(SC_LOG_FATAL, SC_CAT_STARTUP, "startup.config.failed", &context, "%s",
+                     env_error);
         sc_log_thread_leave();
         sc_log_shutdown();
         return 1;
@@ -307,8 +348,7 @@ int main(int argc, char **argv)
 
     status = sc_config_load(&cfg);
     if (status != SC_OK) {
-        sc_log_fatal(SC_CAT_STARTUP, "config.failed", "configuration is unusable: %s",
-                     sc_status_name(status));
+        /* Said already, by whatever read the variable that is wrong: startup.config.failed. */
         sc_log_thread_leave();
         sc_log_shutdown();
         return 1;
@@ -340,6 +380,8 @@ int main(int argc, char **argv)
      * the way it is everywhere else. */
     if (command != NULL) {
         exit_code = command->run(&cfg, &g_quit) == SC_OK ? 0 : 1;
+        if (sc_runtime_stopped_critically())
+            exit_code = 1;
         sc_log_thread_leave();
         sc_log_shutdown();
         return exit_code;
@@ -364,7 +406,6 @@ int main(int argc, char **argv)
     /* main owns nothing but the flag. Every role polls it; this loop waits for it. */
     while (!sc_quit_requested(&g_quit))
         sc_runtime_sleep_ms(SC_RUNTIME_TICK_MS);
-    sc_log_info(SC_CAT_STARTUP, "process.stopping", "shutting down");
 
     for (i = 0; i < FS_ROLE_COUNT; ++i) {
         if (!threads[i].started)
@@ -373,11 +414,15 @@ int main(int argc, char **argv)
         if (threads[i].status != SC_OK)
             exit_code = 1;
     }
+    /* Stopped by sc_runtime_stop_critically: every role may have come down in good order, and
+     * the process still did not end because somebody asked it to. */
+    if (sc_runtime_stopped_critically())
+        exit_code = 1;
 
     /* Last, and in this order: every role thread has been joined, so nothing is still writing a
      * line, and this thread gives its own pool back before the logger that holds the other end
-     * of it stops. Without the shutdown the lines still in the ring -- process.stopping among
-     * them -- would never be written at all. */
+     * of it stops. Without the shutdown the lines still in the ring -- every role's
+     * startup.server.stopped among them -- would never be written at all. */
     sc_log_thread_leave();
     sc_log_shutdown();
     return exit_code;

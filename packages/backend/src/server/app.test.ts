@@ -1,6 +1,6 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test'
 import { DatabaseGate } from '@gradido/backend-core'
-import { Logger } from '@gradido/service-core'
+import { CriticalError, Logger, type LogLine } from '@gradido/service-core'
 import { ErrorCode } from '@gradido/shared/errors'
 import type { AppContext } from '../AppContext'
 import { createBackendApp } from './app'
@@ -43,5 +43,56 @@ describe('a request the database has no place for', () => {
         message: 'service busy, retry after 1 seconds',
       },
     })
+  })
+})
+
+/**
+ * A critical error on the way through a request: every cause is logged as the fatal event the
+ * error carries, the process is sent SIGTERM, and the request is still answered -- as any
+ * other that failed, saying nothing about why.
+ */
+describe('a request that meets a critical error', () => {
+  afterEach(() => {
+    mock.restore()
+  })
+
+  test('is answered 500, logged fatal once per cause, and stops the process', async () => {
+    const kill = spyOn(process, 'kill').mockImplementation(() => true)
+    const line: LogLine = {
+      cat: 'db',
+      event: 'db.transaction.failed',
+      data: { db: 'sqlite', step: 'rollback' },
+    }
+    const critical = new CriticalError(line, 'the rollback failed', [
+      new Error('the work failed'),
+      new Error('disk I/O error'),
+    ])
+    const fatal = mock<(line: LogLine, msg: string) => void>(() => undefined)
+    const error = mock<(line: LogLine, msg: string) => void>(() => undefined)
+    const context = {
+      logger: { fatal, error, flush: () => undefined },
+      gate: { run: () => Promise.reject(critical) },
+    } as unknown as AppContext
+
+    const response = await createBackendApp(context).handle(
+      new Request('http://localhost/user/create', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          firstName: 'Einhorn',
+          lastName: 'Immond',
+          email: 'einhorn@gradido.net',
+          language: 'de',
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(500)
+    expect(fatal.mock.calls).toEqual([
+      [line, 'the rollback failed: the work failed'],
+      [line, 'the rollback failed: disk I/O error'],
+    ])
+    expect(error.mock.calls.map(([logged]) => logged.event)).toEqual(['http.request.failed'])
+    expect(kill).toHaveBeenCalledWith(process.pid, 'SIGTERM')
   })
 })

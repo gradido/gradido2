@@ -67,9 +67,9 @@ for (const kind of testDatabaseKinds()) {
     test('refuses a confirmation that names the head instead of the target', async () => {
       const head = MIGRATIONS.at(-1)
 
-      expect(migrateDown(database.connection, silent, { target: head?.name })).rejects.toThrow(
-        /Nothing was undone/u,
-      )
+      await expect(
+        migrateDown(database.connection, silent, { target: head?.name }),
+      ).rejects.toThrow(/Nothing was undone/u)
     })
 
     test('runs when the confirmation names one migration lower', async () => {
@@ -83,7 +83,7 @@ for (const kind of testDatabaseKinds()) {
     test('the same confirmation does not work twice', async () => {
       await migrateDown(database.connection, silent, { target: oneLower })
 
-      expect(migrateDown(database.connection, silent, { target: oneLower })).rejects.toThrow(
+      await expect(migrateDown(database.connection, silent, { target: oneLower })).rejects.toThrow(
         /Nothing was undone/u,
       )
     })
@@ -102,7 +102,7 @@ for (const kind of testDatabaseKinds()) {
         await migrateDown(database.connection, silent)
       }
 
-      expect(migrateDown(database.connection, silent)).rejects.toThrow(/nothing to undo/u)
+      await expect(migrateDown(database.connection, silent)).rejects.toThrow(/nothing to undo/u)
     })
 
     test('what it undid can be migrated up again', async () => {

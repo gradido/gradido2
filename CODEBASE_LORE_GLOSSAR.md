@@ -146,3 +146,39 @@ Map lore abstractions to their real code concepts.
 | The talkative herald, quieted | the reference node used to log `dht.call.refused` for those; it now drops them silently, as libp2p-ffi does inside the module |
 | The grammar belonged to the teachers | behavior that comes from the shared library, not from the city: the charter's "Sirodunon is right" settles manner, not grammar |
 | The second half of the field | the setup test, `packages/backend/e2e/setup.test.ts` — `setup` driven through a pseudo-terminal on both paths, checking the `.env` it leaves behind |
+| A runner hired for every errand | `new CommunityRepository(context.db)` inside each Interaction, as it used to be |
+| Runners engaged once, on opening morning | `createRepositories(db)` in `packages/backend-core/src/Repositories.ts`; reached as `context.repositories` |
+| The guild, and its list of errands | the abstract repository class — `CommunityRepository`: the public methods and the `v.parse`, no SQL |
+| The two schools of runner | one subclass per dialect — `CommunityRepositoryPostgresql`, `CommunityRepositorySqlite` |
+| The clerk never learns which school | an Interaction names the abstract class; `createRepositories` is the one place `db.kind` is read |
+| A runner keeps his forms | lazily prepared statements, kept by name — `PostgresqlStatements` / `SqliteStatements` in `database/prepared.ts` |
+| Filling in the whole satchel on the first morning | preparing every statement in the constructor; dropped, because bun:sqlite refuses a statement whose table is not migrated yet |
+| The cord | `DatabaseTransaction`, the optional `tx` parameter of every repository method, opened by `context.db.transaction` |
+| The cistern has many windows | bun's PostgreSQL pool: a transaction runs on one connection, and a prepared drizzle statement is tied to the client it was built on |
+| Writing the form out again at that window | inside a PostgreSQL transaction the statement is built again on `tx.drizzle` and not kept |
+| At the well the cord says nothing | SQLite has one connection; `{ kind: 'sqlite' }` carries nothing and `connect.ts` issues `BEGIN` / `COMMIT` / `ROLLBACK` itself |
+| The well's bench has a single seat | `new DatabaseGate(1)` for SQLite — what keeps other requests' statements out of an open transaction |
+| The stencil | a valibot schema applied to what a query returns — `…SelectSchema` in `<domain>.schema.ts` |
+| Pebbles and tallies | SQLite hands an id out as `number`, PostgreSQL as `bigint`; `rowIdSchema` yields `bigint` from either |
+| Cut to the cistern's shape | the schema's output follows the PostgreSQL types, the reference |
+| Two entries answering to this city's own | `atMostOneRowSchema` — a second row with `remote = false` is an error, not a choice |
+| Named for what falls out of it | `uint8Array32Schema`, `buffer32Schema`, `uuidv4Schema`, `dateSchema` in `database/base.schema.ts` |
+| A key in a cloth, in a box, spelled out | the input union: `Uint8Array`, `Buffer` or a hex string |
+| The stencil is the shopping list | `columnsFor(table, rowSchema)` in `database/columns.ts` — the selected columns are the schema's keys |
+| There is no hole for the great seal | `homeCommunitySchema` has no `privateKey`, so `private_key` is never selected with the home community |
+| It says *wrong* and no more | `parseSecret` — throws the message alone, because a `ValiError`'s issues carry the input |
+| Laid against the Archive's shelf plan | `community.schema.test.ts` against `createSelectSchema` / `createInsertSchema` from `drizzle-orm/valibot`, for both tables |
+| The old guild's stencil, kept in the workshop | the `uuid` package as a dev dependency, used only by the test that compares `uuidv4Schema` with it |
+| A cord that will not come off the rope | a failed `ROLLBACK` that leaves the one SQLite connection inside its transaction — `database/sqliteTransaction.ts` |
+| The one word the guild keeps for this | `CriticalError` in `packages/service-core/src/bootstrap/CriticalError.ts` |
+| Both things in his hands | it extends `AggregateError`: the error the work threw and the error the rollback threw, both kept |
+| The runner is not allowed to close the city | domain code throws and never calls `process.exit`; `server/app.ts` decides |
+| A line each, before anything is closed | `stopAfterCriticalError` writes one fatal `db.transaction.failed` per error and flushes before the shutdown starts |
+| The ordinary closing bell | `process.kill(process.pid, 'SIGTERM')` — the same graceful shutdown as for a signal from outside |
+| Covering the well cuts the cord | closing the SQLite connection discards the transaction it was stuck in |
+| The red lamp | exit code 1 after a critical error, 0 after a plain SIGTERM |
+| The watchman on the hill | the supervisor — systemd or Docker with restart on failure |
+| Eporedon rings the same bell | `roll_back` in `fast-servers/service-core/src/db_exec.c`: a failed SQLite `ROLLBACK` with `sqlite3_get_autocommit` still 0 logs `db.transaction.failed` and calls `sc_runtime_stop_critically` — `raise(SIGTERM)`, exit code 1 |
+| The window has shut, and the Archive has untied it | a failed PostgreSQL `ROLLBACK` is a dead connection; the server rolls back a session that ended |
+| The next errand finds another window | bun's pool replaces the connection on the reference path |
+| The cart rebuilt where he stands, the forms stamped again | `sc_db_postgres_redial`: `PQreset` on the worker's connection, prepared statements forgotten and prepared afresh |

@@ -561,3 +561,109 @@ the whole conversation the way a founder on a bench would — and then checks th
 the gate has a herald's name in it, the magistrate's letter under it, and a seal that matches the
 words the city was founded with. Everything above depends on that afternoon having gone
 correctly. It is the one part nobody would ever think to test, which is why it is tested at all.
+
+## XX. The runners of Sirodunon
+
+For a while, Sirodunon hired a runner for every errand.
+
+A clerk needed something from the Archive, so a runner was engaged on the spot, told where the
+Archive was, sent, thanked and dismissed. The next errand got a new man, who was told where the
+Archive was. Nobody thought of it as waste, because each of them was cheap. It was only odd, the
+way it is odd to buy a ladle every time there is soup.
+
+Now the runners are engaged once, on the morning the city opens, and stand in the office for
+good — one for each quarter's business. The clerk of chapter XI still decides when; he simply no
+longer has to find somebody first.
+
+There are two schools of runner, because there are two kinds of Archive. One school knows the
+cistern and one knows the well, and they have nothing in common except the guild they belong to
+and the list of errands that guild will take. On opening morning the city looks once at what it
+was founded on and engages one school or the other. After that the clerk says *fetch me this
+city's own entry* and never learns which school the man went to, which is exactly as much as a
+clerk should know about plumbing.
+
+**A runner keeps his forms.** The first time he is sent for a thing he fills in the request form,
+and then he puts it in his satchel instead of throwing it away. The second time, he has it. He
+does not fill in the whole satchel on his first morning in case of errands that may never come —
+the builders tried that, and it only meant a man could not be engaged before the shelves he had
+forms for were up.
+
+Then there are errands that belong together: *all of this, or none of it.* For those the clerk
+ties a cord, and hands the end of the cord to each runner along with the errand. A runner does
+not ask what the cord is for. At the cistern, which has many windows, the cord says which window
+— so there the runner writes the form out again at that window, because the one in his satchel
+would be served wherever a window happened to be free, which is to say outside the cord. At the
+well the cord says nothing at all. There is one rope. Whatever goes down while the cord is tied
+is tied. That is only safe because the well's bench has a single seat, and both facts are
+written on the same board so that nobody removes one without the other.
+
+What comes back from the Archive is not carried to the desk as it is. It goes through a
+**stencil**.
+
+The well counts in pebbles and the cistern in tallies, and neither is wrong, but a clerk who had
+to ask which he was holding would be a clerk doing the runner's job. So the stencil is cut to
+the cistern's shape, has a slot that also takes pebbles, and what drops out the other side is
+the same in both cities' hands. The stencil has other opinions. If two entries answer to *this
+city's own*, it does not pick the nicer one; it refuses, loudly, because a city that is two
+cities has a problem no clerk should paper over. And a stencil is named for what falls out of
+it — never for what goes in, since nearly anything goes in: a key in a cloth, a key in a box, a
+key somebody spelled out letter by letter. One reads the name and knows what one will be
+holding.
+
+The stencil is also the shopping list, which is the part the builders are quietly proud of. A
+runner fetches exactly what the stencil has a hole for. Nobody writes the list a second time for
+the well and a third for the cistern, and — this was the reason, the tidiness came free — the
+magistrate's great seal lies in the same drawer as the city's name and never comes along by
+accident, because there is no hole for it. It is fetched by the one errand that asks for it and
+by nothing else.
+
+That errand has its own manners. When the seal's stencil refuses, it says *wrong* and no more.
+An ordinary stencil that refuses holds up the thing it was shown, so that everybody can see what
+was wrong with it, and that is a fine habit right up until the thing is the seal.
+
+Every morning the stencils are laid against the Archive's own shelf plan, for the well and for
+the cistern both. A shelf that was moved and a stencil that was not find each other there, before
+opening, rather than in front of a traveller.
+
+The stencil for names was cut by hand. It was then held against the old guild's stencil a
+million times, and they agreed a million times, and the old guild's stencil stays in the
+workshop for the comparison and is not allowed in the office.
+
+## XXI. The bell
+
+Most things that go wrong in Sirodunon cost one traveller his errand. He is told so, the clerk
+writes a line, the next traveller steps up.
+
+A few things are of another kind, and the first of them was found at the well. A cord was tied,
+the errand went wrong, and the runner went to untie the cord — and could not. There is one rope.
+A cord that will not come off it is now tied around everything anybody lets down afterwards, and
+nothing let down that way is ever kept. The city would go on serving travellers all afternoon
+and remember none of it.
+
+The runner is not allowed to close the city. He is a runner. What he does is come back with
+both things in his hands — what went wrong with the errand, and what went wrong with the cord —
+and say the one word the guild keeps for this. He does not put one of them down to carry the
+other; a man who arrives with only the second trouble has thrown away the reason he was sent.
+
+The clerk at the front hears the word and does three things in an order that is not negotiable.
+He writes both troubles in the day-book, a line each, at once — before anything is closed,
+because closing can go wrong too and the book should not depend on it. He still gives the
+traveller in front of him an answer, the same plain *something failed* anybody would get. And
+then he rings the bell.
+
+The bell is the ordinary closing bell. The city has exactly one way of shutting its gates —
+the one it uses when the magistrate sends word from outside — and the builders declined to
+invent a second for emergencies, since a second way of closing is a second thing to get wrong
+on the worst day. So the clerk sends the magistrate's word to himself. The gates close in
+order, the well is covered, and covering the well is what finally cuts the cord.
+
+One thing differs, and it is the thing the watchman on the hill looks for: the lamp over the
+gate is left red. A city that closed because it was told to hangs a white one. The watchman
+re-opens a city with a red lamp and leaves a white one alone.
+
+Eporedon rings the same bell, for the same cord at the same well, and hangs the same red lamp.
+At the cistern neither city rings at all. A cord that will not come off there has not jammed:
+the window it was tied at has shut, and the Archive, which unties everything left at a window
+that shuts, has already untied it. In Sirodunon the next errand simply finds another window. In
+Eporedon the carter — who owns one cart for his whole life — has that cart rebuilt where he
+stands, has his forms stamped again, and takes the next slate.

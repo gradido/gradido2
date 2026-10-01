@@ -26,7 +26,9 @@ typedef enum sc_status {
     SC_ERR_MALFORMED = -7,
     /* a bounded queue is at its limit. Not an error the callee can resolve: only the caller
      * knows whether the work behind the entry may be dropped or has to stop. */
-    SC_ERR_QUEUE_FULL = -8
+    SC_ERR_QUEUE_FULL = -8,
+    /* a bounded wait ran out, and what it was waiting for was cut short rather than finished */
+    SC_ERR_TIMEOUT = -9
 } sc_status;
 
 /** Human-readable name of @p status, for a log line. Never NULL. */

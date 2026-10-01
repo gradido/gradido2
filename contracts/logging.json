@@ -209,7 +209,7 @@
             "description": "closed vocabulary: SIGINT, SIGTERM"
           }
         ],
-        "note": "The last line of a clean shutdown: connections stopped, database closed, log flushed."
+        "note": "The last line of a clean shutdown: connections stopped, database closed, log flushed. The process exits with 0 -- or with 1 when a fatal line such as db.transaction.failed is why it was stopped, where the signal is the SIGTERM the process sent itself."
       },
       {
         "event": "startup.shutdown.failed",
@@ -228,6 +228,41 @@
           }
         ],
         "note": "The process exits with 1 after this line. timeout means the shutdown outlived its deadline and was cut short, so what it was waiting for did not finish."
+      },
+      {
+        "event": "startup.config.failed",
+        "cat": "startup",
+        "level": "fatal",
+        "data": [
+          {
+            "name": "variable",
+            "type": "string",
+            "description": "The environment variable that cannot be used -- the first one found wrong. The name of the env file when the file itself could not be read to its end. Empty when the failure names no variable."
+          },
+          {
+            "name": "reason",
+            "type": "string",
+            "description": "closed vocabulary: invalid, unreadable, too-long"
+          }
+        ],
+        "note": "The configuration cannot be used, and the process exits with 1 after this line without having opened anything. invalid: the value is not what the variable takes, or a rule across several variables is not met -- it is reported on the variable the rule is about. unreadable: a secret's named source, a systemd credential or a _FILE, is there and cannot be read; see secrets.json. too-long: the value does not fit the fast path's fixed buffer, which the reference path has no counterpart for. msg may quote the value that was refused, and never does for a secret."
+      },
+      {
+        "event": "startup.server.failed",
+        "cat": "startup",
+        "level": "fatal",
+        "data": [
+          {
+            "name": "port",
+            "type": "uint32"
+          },
+          {
+            "name": "reason",
+            "type": "string",
+            "description": "closed vocabulary: address-in-use, address-invalid, other"
+          }
+        ],
+        "note": "The server could not take its port, so startup.server.started never follows. The process closes what it had opened and exits with 1. address-invalid is the fast path's alone so far: the reference path has no variable for the address it binds."
       },
       {
         "event": "startup.database.failed",
@@ -370,6 +405,24 @@
           }
         ],
         "note": "Carries err. Never the statement text and never the parameters."
+      },
+      {
+        "event": "db.transaction.failed",
+        "cat": "db",
+        "level": "fatal",
+        "data": [
+          {
+            "name": "db",
+            "type": "string",
+            "description": "postgresql | sqlite"
+          },
+          {
+            "name": "step",
+            "type": "string",
+            "description": "closed vocabulary: rollback"
+          }
+        ],
+        "note": "A transaction could not be ended and its connection is still inside it, so every later write on that connection would join a transaction nobody ends. SQLite only: on PostgreSQL a rollback that fails is a connection that is gone, which is replaced and reported by db.connection.failed if it does not come back. Written once per error that led here -- what the work failed with, then what the step failed with -- each with its text in msg; never the statement text and never the parameters. The process then sends itself SIGTERM, stops as it does for any SIGTERM, and exits with 1."
       },
       {
         "event": "db.migration.applied",
@@ -841,7 +894,8 @@
     "rules": [
       "Compare: level, cat, event, presence and value of every data key, and err.code when present.",
       "Ignore: msg, time, req, and field order.",
-      "A missing event on the fast path is a documented gap, the same as a skipped contract test \u2014 not a failure to hide by loosening the comparison."
+      "A missing event on the fast path is a documented gap, the same as a skipped contract test \u2014 not a failure to hide by loosening the comparison.",
+      "An event only one implementation can have a reason to write is not contracted and not compared: a worker thread that could not start, the log ring running full, a driver left out of the build. It must not reuse a contracted id, and what both implementations can meet is never one of these -- that belongs in events above, on both paths."
     ]
   }
 }

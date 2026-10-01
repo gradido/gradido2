@@ -39,6 +39,17 @@ export type SecretVariable = (typeof SECRET_VARIABLES)[number]
  */
 export type SecretSource = 'credential' | 'file' | 'environment'
 
+/** A secret's named source is there and cannot be read. Carries which secret, for the log. */
+export class SecretUnreadable extends Error {
+  public constructor(
+    public readonly variable: string,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'SecretUnreadable'
+  }
+}
+
 /** One trailing line ending and nothing else — see contracts/secrets.json, resolution.rules. */
 function stripOneLineEnding(content: string): string {
   if (content.endsWith('\r\n')) {
@@ -84,7 +95,8 @@ function resolveSecret(name: string, env: Record<string, string | undefined>): s
       /* Absent is ordinary — a unit loads the credentials it needs and no others. Present and
          unreadable is not, and the difference is the errno. */
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw new Error(
+        throw new SecretUnreadable(
+          name,
           `the systemd credential ${join(credentials, name)} could not be read: ${String(error)}`,
         )
       }
@@ -96,7 +108,8 @@ function resolveSecret(name: string, env: Record<string, string | undefined>): s
     try {
       return stripOneLineEnding(readFileSync(path, 'utf8'))
     } catch (error) {
-      throw new Error(
+      throw new SecretUnreadable(
+        name,
         `${name}_FILE names ${path}, which could not be read — refusing to fall back to ${name}: ${String(error)}`,
       )
     }

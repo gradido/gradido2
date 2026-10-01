@@ -539,6 +539,26 @@ chooses -- COMMIT, ROLLBACK, or AGAIN, which rolls back and runs the work once m
 values: a generated value that collided draws again that way. No repository writes BEGIN or
 COMMIT, which is what leaves SQLite's group commit to be added inside the executor alone.
 
+**A ROLLBACK that fails means two different things, and the executor answers them differently.**
+
+```text
+PostgreSQL   the connection is gone. The server abandons the transaction of a session that
+             ended, asked or not, so nothing is half done. The worker dials its connection
+             again on the spot and the process goes on
+SQLite       the rollback runs in this process, on its own file I/O, and can leave the
+             transaction open. sqlite3_get_autocommit says which: a transaction that ended
+             anyway -- a full disk does that -- is nothing to act on. One that is still open
+             holds the writer's only connection, and every later write would join it and be
+             lost. That is fatal: db.transaction.failed, once per error that led there, and
+             then sc_runtime_stop_critically
+```
+
+Stopping is a SIGTERM the process sends itself, so there is still one way down -- the flag,
+the run loops returning, main joining -- and closing the connection on that way is what discards
+the stuck transaction. The exit code is 1, which is what tells a supervisor to start the service
+again rather than leave it stopped. The reference path does the same in
+`packages/backend-core/src/database/sqliteTransaction.ts`.
+
 ```text
 DB_POOL_SIZE      workers on PostgreSQL, one connection each, all opened at startup:
                   a database that cannot hold them stops the start with its own refusal and

@@ -19,6 +19,7 @@
 #include "db_internal.h"
 #include "service_core/log/log.h"
 #include "service_core/log/logger.h"
+#include "service_core/runtime.h"
 
 typedef struct exec_group {
     uv_mutex_t lock;
@@ -84,9 +85,64 @@ static const char *begin_text(const sc_db *db)
     return db->kind == SC_DB_SQLITE ? "BEGIN IMMEDIATE" : "BEGIN";
 }
 
+/*
+ * ROLLBACK, and what a failed one means -- which is not the same thing on the two databases.
+ *
+ * PostgreSQL does not fail to roll back: the server abandons the transaction of a session that
+ * ended whether or not it was asked to. A ROLLBACK that fails is therefore a connection that is
+ * gone, and the worker dials its connection again; nothing is stuck and the process goes on. A
+ * connection that will not come back is met again by make_usable before the next unit, which
+ * is where that is reported.
+ *
+ * The unit is not failed for it, whether the redial worked or not. A unit that ends with
+ * ROLLBACK asked for nothing to be kept, and nothing was: its outcome stands -- a registration
+ * for a taken address is answered 204 either way. A unit that goes on, for AGAIN or a rerun,
+ * meets the dead connection at its next BEGIN and fails there, with the driver's own message.
+ *
+ * SQLite rolls back in this process, with its own file I/O, and that can fail and leave the
+ * transaction open. The writer has one connection: every later unit would then run inside a
+ * transaction nobody ends, and be lost. That is the one case this process does not survive --
+ * it says so, once per error that led here, and stops; closing the connection on the way down
+ * is what discards the transaction. `contracts/logging.json`, `db.transaction.failed`, and
+ * `packages/backend-core/src/database/sqliteTransaction.ts` for the same on the reference path.
+ *
+ * Answers non-zero when the unit must not go on.
+ */
+static int roll_back(sc_db *db, sc_db_unit *unit)
+{
+    static const char kStuck[] = "the rollback failed and the transaction is still open";
+    sc_log_value data[2] = {SC_LOG_STR("db", "sqlite"), SC_LOG_STR("step", "rollback")};
+    sc_log_context context = {0};
+    sc_sql_error failure;
+    sc_status status = sc_sql_simple(db, "ROLLBACK", &failure);
+
+    if (status == SC_OK)
+        return 0;
+    if (db->kind == SC_DB_POSTGRESQL) {
+        (void)sc_db_postgres_redial(db);
+        return 0;
+    }
+    /* A failure that ended the transaction itself -- a full disk does -- left nothing open. */
+    if (!sc_sql_sqlite_in_transaction(db))
+        return 0;
+
+    context.data = data;
+    context.data_count = 2;
+    /* Around the ring: these lines are why the process stops, and they are written before
+     * anything is closed rather than left to a shutdown that may not finish. */
+    if (unit->error.message[0] != '\0')
+        sc_log_direct(SC_LOG_FATAL, SC_CAT_DB, "db.transaction.failed", &context, "%s: %s", kStuck,
+                      unit->error.message);
+    sc_log_direct(SC_LOG_FATAL, SC_CAT_DB, "db.transaction.failed", &context, "%s: %s", kStuck,
+                  failure.message);
+    unit->error = failure;
+    unit->status = status;
+    sc_runtime_stop_critically();
+    return 1;
+}
+
 static void run_unit(sc_db *db, sc_db_unit *unit)
 {
-    sc_sql_error ignored;
     uint32_t reruns = 0;
 
     unit->status = SC_OK;
@@ -118,8 +174,8 @@ static void run_unit(sc_db *db, sc_db_unit *unit)
          * own, for a connection that loses statements faster than they can be prepared. */
         if (db->rerun_unit) {
             db->rerun_unit = 0;
-            if (unit->access == SC_DB_WRITE)
-                (void)sc_sql_simple(db, "ROLLBACK", &ignored);
+            if (unit->access == SC_DB_WRITE && roll_back(db, unit))
+                return;
             if (++reruns < SC_DB_RERUN_MAX)
                 continue;
             sc_sql_set_error(&unit->error, SC_SQL_ERROR_OTHER,
@@ -138,7 +194,8 @@ static void run_unit(sc_db *db, sc_db_unit *unit)
                     unit->status = status;
                 return;
             }
-            (void)sc_sql_simple(db, "ROLLBACK", &ignored);
+            if (roll_back(db, unit))
+                return;
         }
         if (end != SC_DB_AGAIN)
             return;

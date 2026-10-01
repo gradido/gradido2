@@ -11,6 +11,7 @@
 
 /* For SC_HTTP_THREADS_MAX. The ceiling belongs to the server rather than to the environment,
  * so it is read from there and not repeated here. */
+#include "config_failed.h"
 #include "service_core/http.h"
 #include "service_core/log/log.h"
 
@@ -35,8 +36,8 @@ static sc_status copy_env(char *dst, size_t dst_size, const char *name, const ch
         value = fallback;
     len = strlen(value);
     if (len >= dst_size) {
-        sc_log_fatal(SC_CAT_STARTUP, "config.value_too_long", "%s is %zu bytes, the limit is %zu",
-                     name, len, dst_size - 1);
+        SC_CONFIG_FAILED(name, "too-long", "%s is %zu bytes, the limit is %zu", name, len,
+                         dst_size - 1);
         return SC_ERR_TOO_LONG;
     }
     memcpy(dst, value, len + 1);
@@ -55,8 +56,8 @@ static sc_status read_port(uint16_t *out, const char *name, uint16_t fallback)
     }
     parsed = strtoul(value, &end, 10);
     if (*end != '\0' || parsed == 0 || parsed > 65535) {
-        sc_log_fatal(SC_CAT_STARTUP, "config.port_invalid",
-                     "%s is '%s', which is not a port between 1 and 65535", name, value);
+        SC_CONFIG_FAILED(name, "invalid", "%s is '%s', which is not a port between 1 and 65535",
+                         name, value);
         return SC_ERR_MALFORMED;
     }
     *out = (uint16_t)parsed;
@@ -74,8 +75,8 @@ static sc_status read_reachability(int *is_public)
         *is_public = 1;
         return SC_OK;
     }
-    sc_log_fatal(SC_CAT_STARTUP, "config.reachability_invalid",
-                 "DHT_REACHABILITY is '%s', which is neither public nor private", value);
+    SC_CONFIG_FAILED("DHT_REACHABILITY", "invalid",
+                     "DHT_REACHABILITY is '%s', which is neither public nor private", value);
     return SC_ERR_MALFORMED;
 }
 
@@ -93,9 +94,9 @@ static sc_status read_threads(uint16_t *out)
     }
     parsed = strtoul(value, &end, 10);
     if (*end != '\0' || parsed > SC_HTTP_THREADS_MAX) {
-        sc_log_fatal(SC_CAT_STARTUP, "config.threads_invalid",
-                     "SERVER_THREADS is '%s', which is not 0 (one per core) to %d", value,
-                     SC_HTTP_THREADS_MAX);
+        SC_CONFIG_FAILED("SERVER_THREADS", "invalid",
+                         "SERVER_THREADS is '%s', which is not 0 (one per core) to %d", value,
+                         SC_HTTP_THREADS_MAX);
         return SC_ERR_MALFORMED;
     }
     *out = (uint16_t)parsed;
@@ -119,8 +120,8 @@ sc_status sc_config_load(sc_config *out)
     status = copy_env(out->dht_topic, sizeof(out->dht_topic), "DHT_TOPIC", "");
     if (status != SC_OK)
         return status;
-    status = copy_env(out->dht_delegation_hex, sizeof(out->dht_delegation_hex),
-                      "DHT_DELEGATION", "");
+    status =
+        copy_env(out->dht_delegation_hex, sizeof(out->dht_delegation_hex), "DHT_DELEGATION", "");
     if (status != SC_OK)
         return status;
     status = copy_env(out->dht_bootstrap_url, sizeof(out->dht_bootstrap_url), "DHT_BOOTSTRAP_URL",
@@ -161,14 +162,13 @@ void sc_config_log(const sc_config *cfg)
     else
         snprintf(threads, sizeof(threads), "%u", (unsigned)cfg->server_threads);
 
-    sc_log_info(SC_CAT_STARTUP, "config.loaded",
-                "host %s, backend %u, federation %u, dht %u, threads %s, topic %s, delegation %s, "
-                "reachability %s, bootstrap %s, log level %d",
-                cfg->listen_host, (unsigned)cfg->backend_port, (unsigned)cfg->federation_port,
-                (unsigned)cfg->dht_port, threads,
-                cfg->dht_topic[0] != '\0' ? cfg->dht_topic : "(unset)",
-                cfg->dht_delegation_hex[0] != '\0' ? "set" : "(unset)",
-                cfg->dht_public ? "public" : "private",
-                cfg->dht_bootstrap_url[0] != '\0' ? cfg->dht_bootstrap_url : "(none)",
-                (int)cfg->log_level);
+    sc_log_info(
+        SC_CAT_STARTUP, "config.loaded",
+        "host %s, backend %u, federation %u, dht %u, threads %s, topic %s, delegation %s, "
+        "reachability %s, bootstrap %s, log level %d",
+        cfg->listen_host, (unsigned)cfg->backend_port, (unsigned)cfg->federation_port,
+        (unsigned)cfg->dht_port, threads, cfg->dht_topic[0] != '\0' ? cfg->dht_topic : "(unset)",
+        cfg->dht_delegation_hex[0] != '\0' ? "set" : "(unset)",
+        cfg->dht_public ? "public" : "private",
+        cfg->dht_bootstrap_url[0] != '\0' ? cfg->dht_bootstrap_url : "(none)", (int)cfg->log_level);
 }

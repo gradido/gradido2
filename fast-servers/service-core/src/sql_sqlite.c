@@ -194,6 +194,11 @@ sc_status sc_sql_sqlite_simple(sc_db *db, const char *text, sc_sql_error *error)
     return SC_OK;
 }
 
+int sc_sql_sqlite_in_transaction(sc_db *db)
+{
+    return sqlite3_get_autocommit((sqlite3 *)db->native) == 0;
+}
+
 int sc_sql_sqlite_is_null(const sc_sql_rows *rows, uint32_t column)
 {
     return sqlite3_column_type((sqlite3_stmt *)rows->handle, (int)column) == SQLITE_NULL;
@@ -280,6 +285,12 @@ sc_status sc_sql_sqlite_simple(sc_db *db, const char *text, sc_sql_error *error)
 {
     (void)db, (void)text;
     return absent(error);
+}
+
+int sc_sql_sqlite_in_transaction(sc_db *db)
+{
+    (void)db;
+    return 0;
 }
 
 int sc_sql_sqlite_is_null(const sc_sql_rows *rows, uint32_t column)

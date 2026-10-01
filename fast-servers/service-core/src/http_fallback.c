@@ -24,6 +24,7 @@
 
 #include "http_arena.h"
 #include "http_defer.h"
+#include "listen_failed.h"
 #include "picohttpparser.h"
 #include "service_core/log/log.h"
 
@@ -1001,21 +1002,26 @@ sc_status sc_http_before_route(sc_http_server *server, sc_http_handler_fn fn, vo
 sc_status sc_http_listen(sc_http_server *server)
 {
     struct sockaddr_in addr;
+    int cause;
 
     if (server == NULL)
         return SC_ERR_INVALID_ARGUMENT;
     if (uv_ip4_addr(server->host, (int)server->port, &addr) != 0) {
-        sc_log_error(SC_CAT_STARTUP, "server.listen.host_invalid",
-                     "%s cannot listen on %s: not an IPv4 address", server->role, server->host);
+        SC_LISTEN_FAILED(server->port, "address-invalid",
+                         "%s cannot listen on %s: not an IPv4 address", server->role, server->host);
         return SC_ERR_INVALID_ARGUMENT;
     }
     if (uv_tcp_init(&server->loop, &server->listener) != 0)
         return SC_ERR_NETWORK;
     server->listener.data = server;
-    if (uv_tcp_bind(&server->listener, (const struct sockaddr *)&addr, 0) != 0 ||
-        uv_listen((uv_stream_t *)&server->listener, 128, on_connection) != 0) {
-        sc_log_error(SC_CAT_STARTUP, "server.listen.failed", "%s cannot listen on %s:%u",
-                     server->role, server->host, (unsigned)server->port);
+    /* libuv reports a taken port from whichever of the two met it. */
+    cause = uv_tcp_bind(&server->listener, (const struct sockaddr *)&addr, 0);
+    if (cause == 0)
+        cause = uv_listen((uv_stream_t *)&server->listener, 128, on_connection);
+    if (cause != 0) {
+        SC_LISTEN_FAILED(server->port, cause == UV_EADDRINUSE ? "address-in-use" : "other",
+                         "%s cannot listen on %s:%u: %s", server->role, server->host,
+                         (unsigned)server->port, uv_strerror(cause));
         return SC_ERR_NETWORK;
     }
     server->listening = 1;

@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "config_failed.h"
 #include "db_internal.h"
 #include "service_core/log/log.h"
 #include "service_core/runtime.h"
@@ -45,8 +46,8 @@ static sc_status copy_env(char *dst, size_t dst_size, const char *name, const ch
         value = fallback;
     len = strlen(value);
     if (len >= dst_size) {
-        sc_log_fatal(SC_CAT_STARTUP, "config.value_too_long", "%s is %zu bytes, the limit is %zu",
-                     name, len, dst_size - 1);
+        SC_CONFIG_FAILED(name, "too-long", "%s is %zu bytes, the limit is %zu", name, len,
+                         dst_size - 1);
         return SC_ERR_TOO_LONG;
     }
     memcpy(dst, value, len + 1);
@@ -65,8 +66,8 @@ static sc_status read_port(uint16_t *out, const char *name, uint16_t fallback)
     }
     parsed = strtoul(value, &end, 10);
     if (*end != '\0' || parsed == 0 || parsed > 65535) {
-        sc_log_fatal(SC_CAT_STARTUP, "config.port_invalid",
-                     "%s is '%s', which is not a port between 1 and 65535", name, value);
+        SC_CONFIG_FAILED(name, "invalid", "%s is '%s', which is not a port between 1 and 65535",
+                         name, value);
         return SC_ERR_MALFORMED;
     }
     *out = (uint16_t)parsed;
@@ -88,9 +89,9 @@ static sc_status read_pool_size(uint16_t *out, const char *name, uint16_t fallba
     }
     parsed = strtoul(value, &end, 10);
     if (*end != '\0' || value[0] == '-' || parsed == 0 || parsed > 65535) {
-        sc_log_fatal(SC_CAT_STARTUP, "config.pool_size_invalid",
-                     "%s is '%s', which is not a number of connections between 1 and 65535", name,
-                     value);
+        SC_CONFIG_FAILED(name, "invalid",
+                         "%s is '%s', which is not a number of connections between 1 and 65535",
+                         name, value);
         return SC_ERR_MALFORMED;
     }
     *out = (uint16_t)parsed;
@@ -155,8 +156,8 @@ sc_status sc_db_config_load(sc_db_config *out)
     } else if (strcmp(type, "postgresql") == 0) {
         out->kind = SC_DB_POSTGRESQL;
     } else {
-        sc_log_fatal(SC_CAT_STARTUP, "config.database_type_invalid",
-                     "DB_TYPE is '%s', which is neither postgresql nor sqlite", type);
+        SC_CONFIG_FAILED("DB_TYPE", "invalid",
+                         "DB_TYPE is '%s', which is neither postgresql nor sqlite", type);
         return SC_ERR_MALFORMED;
     }
 
@@ -171,8 +172,8 @@ sc_status sc_db_config_load(sc_db_config *out)
      * else here is a value somebody may read over a shoulder; this one is not. */
     status = sc_secret_read("DB_PASSWORD", out->password, sizeof(out->password));
     if (status == SC_ERR_TOO_LONG)
-        sc_log_fatal(SC_CAT_STARTUP, "config.value_too_long", "DB_PASSWORD is longer than %zu",
-                     sizeof(out->password) - 1);
+        SC_CONFIG_FAILED("DB_PASSWORD", "too-long", "DB_PASSWORD is longer than %zu",
+                         sizeof(out->password) - 1);
     if (status != SC_OK)
         return status;
     status = copy_env(out->database, sizeof(out->database), "DB_DATABASE", DEFAULT_DATABASE);
@@ -205,10 +206,10 @@ sc_status sc_db_config_load(sc_db_config *out)
         out->password[0] == '\0') {
         const char *node_env = getenv("NODE_ENV");
         if (node_env != NULL && strcmp(node_env, "production") == 0) {
-            sc_log_fatal(SC_CAT_STARTUP, "config.database_password_empty",
-                         "DB_PASSWORD is empty, DB_HOST is the TCP host %s and NODE_ENV is "
-                         "production -- a Unix socket needs no password, a network host does",
-                         out->host);
+            SC_CONFIG_FAILED("DB_PASSWORD", "invalid",
+                             "DB_PASSWORD is empty, DB_HOST is the TCP host %s and NODE_ENV is "
+                             "production -- a Unix socket needs no password, a network host does",
+                             out->host);
             return SC_ERR_MALFORMED;
         }
     }

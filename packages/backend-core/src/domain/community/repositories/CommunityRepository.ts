@@ -1,138 +1,79 @@
-import { eq } from 'drizzle-orm'
-import { communitiesPg, communitiesSqlite, type DatabaseConnection } from '../../../database'
-import type { HomeCommunity, NewHomeCommunity } from '../community.data'
+import * as v from 'valibot'
+import {
+  type DatabaseTransaction,
+  parseSecret,
+  type RowIdInput,
+  rowIdSchema,
+} from '../../../database'
+import {
+  type HomeCommunityInsert,
+  type HomeCommunityInsertInput,
+  type HomeCommunitySelect,
+  type HomeCommunitySelectInput,
+  type HomeCommunitySigningKeySelect,
+  homeCommunityInsertSchema,
+  homeCommunitySelectSchema,
+  homeCommunitySigningKeySelectSchema,
+} from '../community.schema'
 
 /**
  * How the community rows are loaded and persisted.
  *
- * Only the home community so far: every other row arrives through federation, which does not
- * exist yet. Both methods are startup-only, which is why neither is on a hot path and why
- * neither caches anything — the caller holds the result for the life of the process.
+ * Abstract, with one subclass per dialect. The subclass holds the statements, each prepared
+ * the first time it runs; this class holds what an answer means -- how many rows are
+ * acceptable, and the valibot schema that turns a row of either database into the one value
+ * the domain works with. A subclass therefore returns its rows as the driver gave them.
  *
- * `findHomeCommunity` does not select `private_key`: that value is held for the life of the
- * process. The key is read by `findHomeCommunitySigningKey` alone, at the moment something signs
- * with it -- see `community.data.ts`.
+ * Every method takes an optional transaction. Without one the statement runs on its own; with
+ * one it is part of what `DatabaseConnection.transaction` commits or rolls back.
+ *
+ * Only the home community so far: every other row arrives through federation, which does not
+ * exist yet.
  */
-export class CommunityRepository {
-  public constructor(private readonly db: DatabaseConnection) {}
-
+export abstract class CommunityRepository {
   /**
    * This instance's own community, or nothing on a database that has never been set up.
-   *
-   * `remote = false` on exactly one row, by contract. If there were ever two this would
-   * quietly pick one, so it does not: a second home community is a broken database, not a
-   * situation to cope with, and it is reported rather than tolerated.
+   * Without `private_key` -- see `community.schema.ts`.
    */
-  public async findHomeCommunity(): Promise<HomeCommunity | undefined> {
-    /* Two branches rather than one shared column list: a select() built from a union of
-       PostgreSQL and SQLite columns is not a select() either driver will take. The same
-       reason the rest of this package does it, one dialect at a time. */
-    const rows =
-      this.db.kind === 'sqlite'
-        ? this.db.drizzle
-            .select({
-              id: communitiesSqlite.id,
-              communityUuid: communitiesSqlite.communityUuid,
-              url: communitiesSqlite.url,
-              name: communitiesSqlite.name,
-              description: communitiesSqlite.description,
-              publicKey: communitiesSqlite.publicKey,
-            })
-            .from(communitiesSqlite)
-            .where(eq(communitiesSqlite.remote, false))
-            .limit(2)
-            .all()
-        : await this.db.drizzle
-            .select({
-              id: communitiesPg.id,
-              communityUuid: communitiesPg.communityUuid,
-              url: communitiesPg.url,
-              name: communitiesPg.name,
-              description: communitiesPg.description,
-              publicKey: communitiesPg.publicKey,
-            })
-            .from(communitiesPg)
-            .where(eq(communitiesPg.remote, false))
-            .limit(2)
-
-    const row = rows[0]
-    if (row === undefined) {
-      return undefined
-    }
-    if (rows.length > 1) {
-      throw new Error('more than one home community: communities.remote = false on several rows')
-    }
-    return {
-      id: BigInt(row.id),
-      communityUuid: row.communityUuid,
-      url: row.url,
-      name: row.name ?? '',
-      description: row.description,
-      publicKey: new Uint8Array(row.publicKey),
-    }
+  public async findHomeCommunity(tx?: DatabaseTransaction): Promise<HomeCommunitySelect> {
+    return v.parse(homeCommunitySelectSchema, await this.selectHomeCommunity(tx))
   }
 
   /**
    * The home community's private key, 64 bytes, or nothing on a database that has never been set
    * up. For signing, by a caller that lets go of it afterwards.
    */
-  public async findHomeCommunitySigningKey(): Promise<Uint8Array | undefined> {
-    const rows =
-      this.db.kind === 'sqlite'
-        ? this.db.drizzle
-            .select({ privateKey: communitiesSqlite.privateKey })
-            .from(communitiesSqlite)
-            .where(eq(communitiesSqlite.remote, false))
-            .limit(2)
-            .all()
-        : await this.db.drizzle
-            .select({ privateKey: communitiesPg.privateKey })
-            .from(communitiesPg)
-            .where(eq(communitiesPg.remote, false))
-            .limit(2)
-
-    const row = rows[0]
-    if (row === undefined) {
-      return undefined
-    }
-    if (rows.length > 1) {
-      throw new Error('more than one home community: communities.remote = false on several rows')
-    }
-    if (row.privateKey === null || row.privateKey.length !== 64) {
-      throw new Error('the home community has no 64-byte private key')
-    }
-    return new Uint8Array(row.privateKey)
+  public async findHomeCommunitySigningKey(
+    tx?: DatabaseTransaction,
+  ): Promise<HomeCommunitySigningKeySelect> {
+    return parseSecret(
+      homeCommunitySigningKeySelectSchema,
+      await this.selectHomeCommunitySigningKey(tx),
+    )
   }
 
-  /** Writes the home community. Called once, at first start, and never again. */
-  public async createHomeCommunity(community: NewHomeCommunity): Promise<bigint> {
-    const row = {
-      remote: false,
-      url: community.url,
-      publicKey: Buffer.from(community.publicKey),
-      privateKey: Buffer.from(community.privateKey),
-      communityUuid: community.communityUuid,
-      name: community.name,
-      description: community.description,
-      /* When the community was founded, as far as this instance knows: now. Distinct from
-         created_at, which is when this row was written — the two coincide only here. */
-      creationDate: community.createdAt,
-      createdAt: community.createdAt,
-    }
-
-    if (this.db.kind === 'sqlite') {
-      const created = this.db.drizzle
-        .insert(communitiesSqlite)
-        .values(row)
-        .returning({ id: communitiesSqlite.id })
-        .get()
-      return BigInt(created.id)
-    }
-
-    const [created] = await this.db.drizzle
-      .insert(communitiesPg)
-      .values(row)
-      .returning({ id: communitiesPg.id })
-    return created.id
+  /** Writes the home community and answers its row id. Called once, at first start. */
+  public async createHomeCommunity(
+    community: HomeCommunityInsertInput,
+    tx?: DatabaseTransaction,
+  ): Promise<bigint> {
+    const row = parseSecret(homeCommunityInsertSchema, community)
+    return v.parse(rowIdSchema, await this.insertHomeCommunity(row, tx))
   }
+
+  /** The rows with `remote = false`, at most two: the second is only there to be noticed. */
+  protected abstract selectHomeCommunity(
+    tx?: DatabaseTransaction,
+  ): Promise<HomeCommunitySelectInput>
+
+  /** `private_key` of the rows with `remote = false`, at most two. Null as the column allows. */
+  protected abstract selectHomeCommunitySigningKey(
+    tx?: DatabaseTransaction,
+  ): Promise<{ privateKey: Uint8Array | null }[]>
+
+  /** Inserts @p row with `remote = false` and answers the id it was given. */
+  protected abstract insertHomeCommunity(
+    row: HomeCommunityInsert,
+    tx?: DatabaseTransaction,
+  ): Promise<RowIdInput>
 }

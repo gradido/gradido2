@@ -38,6 +38,30 @@ void sc_runtime_install_signal_handlers(sc_quit_flag *flag);
  *  come down with it. */
 void sc_runtime_request_quit(void);
 
+/**
+ * The signal that asked for the shutdown, by name: "SIGINT" or "SIGTERM" -- the closed
+ * vocabulary of `signal` in `contracts/logging.json`, `startup.server.stopped`. The first one
+ * that arrived; a second means "hurry up", not something else. NULL while none has arrived,
+ * which includes a shutdown asked for by sc_runtime_request_quit().
+ */
+const char *sc_runtime_quit_signal(void);
+
+/**
+ * Stops the process because it cannot go on, the way a SIGTERM stops it -- by raising one.
+ *
+ * There is one way down and this takes it: the flag is raised by the handler, every run loop
+ * returns, main joins. What differs is the exit code, which is 1, so that a supervisor starts
+ * the service again. The caller writes its fatal line first; see
+ * `contracts/logging.json`, `db.transaction.failed`, for the one that exists.
+ *
+ * `packages/service-core/src/bootstrap/shutdown.ts`, `stopAfterCriticalError`, is the same on
+ * the reference path.
+ */
+void sc_runtime_stop_critically(void);
+
+/** Non-zero once sc_runtime_stop_critically() was called. main reads it for the exit code. */
+int sc_runtime_stopped_critically(void);
+
 void sc_runtime_sleep_ms(unsigned int milliseconds);
 
 /* How long a run loop may block before it looks at the quit flag again. It is the shutdown

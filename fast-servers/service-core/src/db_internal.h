@@ -65,6 +65,10 @@ sc_status sc_db_postgres_probe(sc_db *db);
  * calls it before every unit. SC_OK for a connection that is fine or was brought back,
  * SC_ERR_NETWORK for one that stayed gone, with the reason in db->error. */
 sc_status sc_db_postgres_revive(sc_db *db, int *revived);
+/* Dials the connection again whatever state it is in, and forgets its prepared statements with
+ * the session. SC_ERR_NETWORK when the server did not take it back, with the reason in
+ * db->error. */
+sc_status sc_db_postgres_redial(sc_db *db);
 void sc_db_postgres_close(sc_db *db);
 int sc_db_postgres_available(void);
 
@@ -100,6 +104,9 @@ int64_t sc_sql_sqlite_int(const sc_sql_rows *rows, uint32_t column);
 const char *sc_sql_sqlite_text(const sc_sql_rows *rows, uint32_t column, uint32_t *size);
 int64_t sc_sql_sqlite_bytes(const sc_sql_rows *rows, uint32_t column, uint8_t *out,
                             size_t out_size);
+/* Non-zero while a transaction is open on the connection -- sqlite3_get_autocommit, which is
+ * how SQLite says whether a failed statement took the transaction with it. */
+int sc_sql_sqlite_in_transaction(sc_db *db);
 /* Finalizes every prepared statement; before the connection is closed. */
 void sc_sql_sqlite_forget(sc_db *db);
 

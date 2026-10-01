@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "config_failed.h"
 #include "service_core/log/log.h"
 
 /*
@@ -114,8 +115,8 @@ sc_status sc_secret_read(const char *name, char *out, size_t out_size)
              * others. Present and unreadable is not, and is the caller's problem to hear
              * about rather than to be quietly given something else. */
             if (!absent) {
-                sc_log_fatal(SC_CAT_STARTUP, "config.secret_unreadable",
-                             "the systemd credential %s could not be read", path);
+                SC_CONFIG_FAILED(name, "unreadable", "the systemd credential %s could not be read",
+                                 path);
                 return status == SC_ERR_TOO_LONG ? SC_ERR_TOO_LONG : SC_ERR_UNAVAILABLE;
             }
         }
@@ -131,9 +132,9 @@ sc_status sc_secret_read(const char *name, char *out, size_t out_size)
             status = read_whole_file(named, out, out_size, &absent);
             if (status == SC_OK)
                 return SC_OK;
-            sc_log_fatal(SC_CAT_STARTUP, "config.secret_unreadable",
-                         "%s names %s, which could not be read -- refusing to fall back to %s",
-                         file_variable, named, name);
+            SC_CONFIG_FAILED(name, "unreadable",
+                             "%s names %s, which could not be read -- refusing to fall back to %s",
+                             file_variable, named, name);
             return status == SC_ERR_TOO_LONG ? SC_ERR_TOO_LONG : SC_ERR_UNAVAILABLE;
         }
     }

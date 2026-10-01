@@ -1,8 +1,4 @@
-import {
-  CommunityRepository,
-  type DatabaseContext,
-  type HomeCommunity,
-} from '@gradido/backend-core'
+import type { DatabaseContext, HomeCommunity } from '@gradido/backend-core'
 
 /**
  * The instance cannot be set up, which is a different failure from the database being
@@ -39,7 +35,7 @@ export class SetupError extends Error {
  * nothing can register, so serving without it would only mean failing later and less clearly.
  */
 export async function requireHomeCommunity(context: DatabaseContext): Promise<HomeCommunity> {
-  const existing = await new CommunityRepository(context.db).findHomeCommunity()
+  const existing = await context.repositories.communities.findHomeCommunity()
   if (existing !== undefined) {
     return existing
   }

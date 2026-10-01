@@ -56,12 +56,13 @@ for (const kind of testDatabaseKinds()) {
       /* Registration writes users.community_id, so a member needs a community to belong to
          — the same one the running backend sets up on its first start. */
       const homeCommunity = await createHomeCommunity(
-        { db: database.connection, logger: silent },
+        { db: database.connection, logger: silent, repositories: database.repositories },
         { name: 'Gradido Test', description: null, url: 'https://gdd.example.org' },
       )
       context = {
         db: database.connection,
         logger: silent,
+        repositories: database.repositories,
         homeCommunity,
         gate: new DatabaseGate(1),
       }

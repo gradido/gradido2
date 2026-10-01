@@ -1,6 +1,5 @@
 import { deriveDhtNodeKeyPair, signDhtDelegation } from '@gradido/shared/crypto'
 import type { DatabaseContext } from '../../../BackendContext'
-import { CommunityRepository } from '../repositories'
 
 /**
  * The community vouches for this instance's dht node: its key, derived from @p masterSeed along
@@ -14,7 +13,7 @@ export async function signDhtDelegationFor(
   context: DatabaseContext,
   masterSeed: Uint8Array,
 ): Promise<Uint8Array> {
-  const signingKey = await new CommunityRepository(context.db).findHomeCommunitySigningKey()
+  const signingKey = await context.repositories.communities.findHomeCommunitySigningKey()
   if (signingKey === undefined) {
     throw new Error('there is no home community to sign a delegation with')
   }
