@@ -101,7 +101,9 @@ export async function runBackend(
        sites it changes nothing: every path takes the same road to ROUTE_NOT_IMPLEMENTED it
        took before. */
     .use(staticRoutes(options.frontend, options.admin))
-    .listen(CONFIG.BACKEND_PORT, () => {
+
+  try {
+    app.listen(CONFIG.BACKEND_PORT, () => {
       logger.info(
         {
           cat: 'startup',
@@ -119,6 +121,23 @@ export async function runBackend(
         await app.stop()
       })
     })
+  } catch (error) {
+    /* The port could not be taken. bun says EADDRINUSE; anything else is not a case this can
+       name. What was opened on the way here is closed again, which also flushes the log. */
+    logger.fatal(
+      {
+        cat: 'startup',
+        event: 'startup.server.failed',
+        data: {
+          port: CONFIG.BACKEND_PORT,
+          reason: (error as { code?: unknown }).code === 'EADDRINUSE' ? 'address-in-use' : 'other',
+        },
+      },
+      `backend cannot listen on port ${CONFIG.BACKEND_PORT}: ${error instanceof Error ? error.message : String(error)}`,
+    )
+    await appContext.close()
+    process.exit(1)
+  }
 }
 
 /**

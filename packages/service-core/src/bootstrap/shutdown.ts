@@ -1,5 +1,7 @@
 import { createInterface } from 'node:readline'
 import type { ServiceContext } from '..'
+import type { Logger } from '../logging'
+import type { CriticalError } from './CriticalError'
 
 /**
  * How long a shutdown may take before the process is killed anyway. A request that hangs
@@ -16,6 +18,8 @@ interface Role {
 /** Every role of this process that registered, in the order they did. */
 const roles: Role[] = []
 let shuttingDown = false
+/** A critical error is why this process stops, so it does not exit with 0. */
+let critical = false
 
 /**
  * Stops the service on SIGINT and SIGTERM: no new work accepted, what is running finished,
@@ -56,6 +60,28 @@ export function setupGracefulShutdown(
     rl.on('SIGINT', () => {
       process.emit('SIGINT', 'SIGINT')
     })
+  }
+}
+
+/**
+ * Reports @p error and stops the service the way a SIGTERM does -- by sending it one.
+ *
+ * One fatal line per error held, written before anything is closed: the shutdown that follows
+ * may itself hang and be cut short. The roles then stop in order, which is the point of not
+ * simply exiting: closing a SQLite connection is what discards a transaction it is stuck in.
+ * The exit code is 1, so a supervisor that restarts on failure starts the service again.
+ */
+export function stopAfterCriticalError(logger: Logger, error: CriticalError): void {
+  for (const reason of error.reasons()) {
+    logger.fatal(error.line, `${error.message}: ${reason}`)
+  }
+  logger.flush()
+  critical = true
+  if (process.platform === 'win32') {
+    /* Windows has no signals to send; the handler is reached the way Ctrl+C reaches it. */
+    process.emit('SIGTERM', 'SIGTERM')
+  } else {
+    process.kill(process.pid, 'SIGTERM')
   }
 }
 
@@ -102,5 +128,5 @@ async function gracefulShutdown(signal: NodeJS.Signals): Promise<void> {
   })
 
   clearTimeout(forcedExit)
-  process.exit(failed ? 1 : 0)
+  process.exit(failed || critical ? 1 : 0)
 }

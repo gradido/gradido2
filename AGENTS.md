@@ -564,6 +564,15 @@ CommunityRepositorySqlite      the statements in SQLite
   SQLite subclass leaves the parameter out: it has one connection, and a statement on it runs
   in whichever transaction is open — which is correct only because the `DatabaseGate` gives
   SQLite a single place. Do not issue SQLite statements for a request outside `gate.run`.
+- **Inside a transaction, a statement that fails ends the work: do not catch its error and go
+  on.** The two databases disagree about what happens next. PostgreSQL has aborted the
+  transaction, and the `COMMIT` at the end is quietly a `ROLLBACK` — the transaction reports
+  success and nothing was written. SQLite drops only the failed statement and commits the rest.
+  Where a conflict is expected, ask the database not to fail: `ON CONFLICT DO NOTHING` and read
+  what came back, as `UserRepository.createAccount` does.
+- **A write may be repeated by its caller, so it must be safe to repeat.** A `COMMIT` whose
+  answer is lost on the way back looks like a failure and is not one. A unique key that makes
+  the second attempt recognisable is what turns that into an answer instead of a second row.
 - **`select()` for a whole row; `select(columnsFor(table, rowSchema))` for a row that must
   leave something out.** The schema is then the column list, and a column added to it is
   selected in both dialects. Never write the column list out a third time.
@@ -578,6 +587,38 @@ CommunityRepositorySqlite      the statements in SQLite
 
 Run a repository's tests against both databases before calling it done — `testing/database.ts`
 says how PostgreSQL is switched on.
+
+### A failure the process cannot survive
+
+Most failures cost one request. A few leave the process unable to do its work for anybody —
+the SQLite connection stuck inside a transaction whose rollback failed is the first. Those are
+a `CriticalError` from `@gradido/service-core`:
+
+```ts
+throw new CriticalError(
+  { cat: 'db', event: 'db.transaction.failed', data: { db: 'sqlite', step: 'rollback' } },
+  'the rollback failed and the transaction is still open',
+  [error, rollbackError],
+)
+```
+
+- **Throw it where the damage is found; do not stop the process there.** Domain code never
+  calls `process.exit`. The HTTP error handler in `server/app.ts` is the one place that
+  decides, and it calls `stopAfterCriticalError`.
+- **It carries every error that led to it**, and the contracted fatal event it is reported as.
+  One fatal line is written per error, with the deepest cause's text in `msg` — never the
+  statement or its parameters.
+- **The process then sends itself `SIGTERM`.** The ordinary shutdown runs, so the log says
+  `startup.server.stopped` with the signal it really received, and the exit code is 1 so that a
+  supervisor restarts the service. No second way of stopping exists, and none is to be added.
+- **A new kind of critical failure is a new fatal event in `contracts/logging.json`**, in the
+  same change.
+
+This is SQLite's failure and not PostgreSQL's. A `ROLLBACK` that fails there is a connection
+that is gone — the server has abandoned the transaction on its own — so nothing is stuck: bun's
+pool replaces the connection on the reference path, and a `fast-servers` worker dials its own
+again (`roll_back` in `service-core/src/db_exec.c`). The fast path stops for the same SQLite
+case, the same way: `sc_runtime_stop_critically`.
 
 ---
 

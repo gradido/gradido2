@@ -18,6 +18,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
+#include <csignal>
 #include <cstdlib>
 #include <mutex>
 #include <string>
@@ -31,6 +32,7 @@ extern "C" {
 #include "service_core/db_exec.h"
 #include "service_core/log/log.h"
 #include "service_core/log/logger.h"
+#include "service_core/runtime.h"
 #include "service_core/sql.h"
 #include "service_core/topology.h"
 }
@@ -398,6 +400,108 @@ TEST(DbRun, RunsAUnitRightHereUnderTheSameRules)
         (void)std::remove((path + suffix).c_str());
 }
 
+/* --- a ROLLBACK that fails ----------------------------------------------------------------- */
+
+/* The work ends the transaction itself, so the executor's ROLLBACK has nothing to roll back
+ * and fails -- the nearest a test gets to a failed ROLLBACK on a real SQLite. */
+sc_db_end roll_back_first(sc_db *db, sc_db_unit *unit)
+{
+    sc_sql_error error{};
+
+    of(unit)->work_status = sc_sql_simple(db, "ROLLBACK", &error);
+    return SC_DB_ROLLBACK;
+}
+
+/*
+ * A failed ROLLBACK that left nothing open is not what stops the process: only a connection
+ * still inside its transaction is. SQLite ends a transaction itself on a full disk or an I/O
+ * error, and the ROLLBACK after it then fails for having nothing to do.
+ */
+TEST(DbRun, AFailedRollbackThatLeftNothingOpenIsNotCritical)
+{
+    static sc_quit_flag quit;
+    sc_db_config config{};
+    sc_db *db = nullptr;
+    sc_sql_error error{};
+    std::string path = "gradido_rollback_test_" + std::to_string(getpid()) + ".sqlite";
+
+    sc_runtime_install_signal_handlers(&quit);
+    config.kind = SC_DB_SQLITE;
+    (void)std::snprintf(config.file, sizeof(config.file), "%s", path.c_str());
+    ASSERT_EQ(sc_db_open(&config, &db), SC_OK);
+    ASSERT_EQ(sc_sql_simple(db, "CREATE TABLE t (v INTEGER UNIQUE)", &error), SC_OK);
+
+    TestUnit u;
+    u.unit.access = SC_DB_WRITE;
+    u.unit.work = roll_back_first;
+    EXPECT_EQ(sc_db_run(db, &u.unit), SC_OK);
+    EXPECT_EQ(u.work_status, SC_OK);
+    EXPECT_FALSE(sc_runtime_stopped_critically());
+    EXPECT_FALSE(sc_quit_requested(&quit));
+
+    /* ...and the connection is as usable as before. */
+    TestUnit w = write_unit(7);
+    EXPECT_EQ(sc_db_run(db, &w.unit), SC_OK) << w.unit.error.message;
+
+    sc_db_close(db);
+    for (const char *suffix : {"", "-wal", "-shm"})
+        (void)std::remove((path + suffix).c_str());
+    (void)std::signal(SIGINT, SIG_DFL);
+    (void)std::signal(SIGTERM, SIG_DFL);
+}
+
+/*
+ * What roll_back does once it has found the transaction stuck: the process is stopped the way a
+ * SIGTERM stops it, and remembers that it was not asked to. Installing the handlers again is a
+ * fresh start, which is what lets a test run after another.
+ */
+TEST(Runtime, StoppingCriticallyRaisesTheFlagThroughSigtermAndIsRemembered)
+{
+    static sc_quit_flag quit;
+
+    sc_runtime_install_signal_handlers(&quit);
+    EXPECT_FALSE(sc_runtime_stopped_critically());
+    EXPECT_FALSE(sc_quit_requested(&quit));
+
+    EXPECT_EQ(sc_runtime_quit_signal(), nullptr);
+
+    sc_runtime_stop_critically();
+    EXPECT_TRUE(sc_runtime_stopped_critically());
+    EXPECT_TRUE(sc_quit_requested(&quit));
+    EXPECT_STREQ(sc_runtime_quit_signal(), "SIGTERM");
+
+    static sc_quit_flag again;
+    sc_runtime_install_signal_handlers(&again);
+    EXPECT_FALSE(sc_runtime_stopped_critically());
+    EXPECT_FALSE(sc_quit_requested(&again));
+    EXPECT_EQ(sc_runtime_quit_signal(), nullptr);
+    (void)std::signal(SIGINT, SIG_DFL);
+    (void)std::signal(SIGTERM, SIG_DFL);
+}
+
+/*
+ * The name a role writes into startup.server.stopped: the signal that arrived first. A second
+ * one does not rename the shutdown, and a shutdown nobody signalled has no name.
+ */
+TEST(Runtime, TheFirstSignalNamesTheShutdown)
+{
+    static sc_quit_flag quit;
+
+    sc_runtime_install_signal_handlers(&quit);
+    sc_runtime_request_quit();
+    EXPECT_TRUE(sc_quit_requested(&quit));
+    EXPECT_EQ(sc_runtime_quit_signal(), nullptr);
+
+    (void)std::raise(SIGINT);
+    EXPECT_STREQ(sc_runtime_quit_signal(), "SIGINT");
+    (void)std::raise(SIGTERM);
+    EXPECT_STREQ(sc_runtime_quit_signal(), "SIGINT");
+    EXPECT_FALSE(sc_runtime_stopped_critically());
+
+    (void)std::signal(SIGINT, SIG_DFL);
+    (void)std::signal(SIGTERM, SIG_DFL);
+}
+
 bool real_postgres(sc_db_config *config, uint16_t pool_size)
 {
     const char *host = std::getenv("SC_DB_TEST_PG_HOST");
@@ -420,6 +524,84 @@ bool real_postgres(sc_db_config *config, uint16_t pool_size)
     (void)std::snprintf(config->database, sizeof(config->database), "%s",
                         database != nullptr ? database : "postgres");
     return true;
+}
+
+sc_sql_statement kEndOwnSession =
+    SC_SQL_STATEMENT("exec_test.end_own_session", "SELECT pg_terminate_backend(pg_backend_pid())",
+                     "SELECT 1");
+sc_sql_statement kRedialInsert =
+    SC_SQL_STATEMENT("exec_test.redial_insert", "INSERT INTO exec_redial_t (v) VALUES ($1)",
+                     "INSERT INTO exec_redial_t (v) VALUES (?1)");
+sc_sql_statement kRedialCount = SC_SQL_STATEMENT(
+    "exec_test.redial_count", "SELECT count(*) FROM exec_redial_t", "SELECT count(*) FROM exec_redial_t");
+
+/* Writes a row, then has the server end the session it is running in. */
+sc_db_end lose_the_session(sc_db *db, sc_db_unit *unit)
+{
+    sc_sql_param params[1] = {sc_sql_int(1)};
+    sc_sql_rows rows{};
+    sc_sql_error error{};
+
+    (void)sc_sql_exec(db, &kRedialInsert, params, 1, nullptr, &error);
+    of(unit)->work_status = sc_sql_query(db, &kEndOwnSession, nullptr, 0, &rows, &error);
+    (void)sc_sql_close(&rows);
+    return SC_DB_ROLLBACK;
+}
+
+sc_db_end redial_insert(sc_db *db, sc_db_unit *unit)
+{
+    sc_sql_param params[1] = {sc_sql_int(2)};
+
+    of(unit)->work_status = sc_sql_exec(db, &kRedialInsert, params, 1, nullptr, &unit->error);
+    return of(unit)->work_status == SC_OK ? SC_DB_COMMIT : SC_DB_ROLLBACK;
+}
+
+/*
+ * A ROLLBACK that fails on PostgreSQL is a connection that is gone, and the server has rolled
+ * the transaction back on its own. The connection is dialled again there and then, the process
+ * goes on, and the next unit runs on it -- through sc_db_run, which has no make_usable in front
+ * of it, so only the redial in roll_back can have brought the connection back.
+ */
+TEST(PostgresExec, AFailedRollbackRedialsTheConnectionAndStopsNothing)
+{
+    static sc_quit_flag quit;
+    sc_db_config config{};
+    sc_db *db = nullptr;
+    sc_sql_error error{};
+
+    if (!real_postgres(&config, 1))
+        GTEST_SKIP() << "set SC_DB_TEST_PG_HOST to a reachable PostgreSQL";
+    sc_runtime_install_signal_handlers(&quit);
+    ASSERT_EQ(sc_db_open(&config, &db), SC_OK);
+    /* Not TEMP: a temporary table goes with the session this test ends. */
+    (void)sc_sql_simple(db, "DROP TABLE IF EXISTS exec_redial_t", &error);
+    ASSERT_EQ(sc_sql_simple(db, "CREATE TABLE exec_redial_t (v bigint UNIQUE)", &error), SC_OK)
+        << error.message;
+
+    TestUnit lost;
+    lost.unit.access = SC_DB_WRITE;
+    lost.unit.work = lose_the_session;
+    (void)sc_db_run(db, &lost.unit);
+    EXPECT_NE(lost.work_status, SC_OK) << "the session was ended under the statement";
+    EXPECT_FALSE(sc_runtime_stopped_critically());
+    EXPECT_FALSE(sc_quit_requested(&quit));
+
+    TestUnit next;
+    next.unit.access = SC_DB_WRITE;
+    next.unit.work = redial_insert;
+    EXPECT_EQ(sc_db_run(db, &next.unit), SC_OK) << next.unit.error.message;
+
+    /* The row of the lost transaction is not there; the one written after the redial is. */
+    sc_sql_rows rows{};
+    ASSERT_EQ(sc_sql_query(db, &kRedialCount, nullptr, 0, &rows, &error), SC_OK) << error.message;
+    ASSERT_TRUE(sc_sql_next(&rows));
+    EXPECT_EQ(sc_sql_col_int(&rows, 0), 1);
+    EXPECT_EQ(sc_sql_close(&rows), SC_OK);
+
+    (void)sc_sql_simple(db, "DROP TABLE exec_redial_t", &error);
+    sc_db_close(db);
+    (void)std::signal(SIGINT, SIG_DFL);
+    (void)std::signal(SIGTERM, SIG_DFL);
 }
 
 /* Four workers, eight units that each hold a connection for 200 ms: two rounds, not eight. */

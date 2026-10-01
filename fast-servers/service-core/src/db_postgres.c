@@ -240,6 +240,20 @@ sc_status sc_db_postgres_revive(sc_db *db, int *revived)
     if (PQstatus(conn) == CONNECTION_OK)
         return SC_OK;
 
+    if (sc_db_postgres_redial(db) != SC_OK)
+        return SC_ERR_NETWORK;
+    *revived = 1;
+    return SC_OK;
+}
+
+sc_status sc_db_postgres_redial(sc_db *db)
+{
+    PGconn *conn = (PGconn *)db->native;
+
+    if (conn == NULL) {
+        sc_db_set_error(db, "no connection");
+        return SC_ERR_NETWORK;
+    }
     PQreset(conn);
     if (PQstatus(conn) != CONNECTION_OK) {
         sc_db_set_error(db, PQerrorMessage(conn));
@@ -249,7 +263,6 @@ sc_status sc_db_postgres_revive(sc_db *db, int *revived)
      * belongs to the object and survives; the prepared statements belonged to the session and
      * did not, so the table that remembers them is emptied with it. */
     sc_sql_postgres_forget(db);
-    *revived = 1;
     return SC_OK;
 }
 
@@ -291,6 +304,12 @@ sc_status sc_db_postgres_probe(sc_db *db)
 sc_status sc_db_postgres_revive(sc_db *db, int *revived)
 {
     *revived = 0;
+    sc_db_set_error(db, "this build has no PostgreSQL driver");
+    return SC_ERR_UNAVAILABLE;
+}
+
+sc_status sc_db_postgres_redial(sc_db *db)
+{
     sc_db_set_error(db, "this build has no PostgreSQL driver");
     return SC_ERR_UNAVAILABLE;
 }

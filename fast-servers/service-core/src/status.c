@@ -21,6 +21,8 @@ const char *sc_status_name(sc_status status)
         return "malformed";
     case SC_ERR_QUEUE_FULL:
         return "queue_full";
+    case SC_ERR_TIMEOUT:
+        return "timeout";
     }
     return "unknown";
 }

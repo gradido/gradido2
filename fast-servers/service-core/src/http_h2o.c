@@ -33,6 +33,7 @@
 
 #include "http_arena.h"
 #include "http_defer.h"
+#include "listen_failed.h"
 #include "service_core/log/log.h"
 #include "service_core/log/logger.h"
 #include "service_core/topology.h"
@@ -213,11 +214,22 @@ uint16_t sc_http_server_threads(const sc_http_server *server)
 void sc_http_server_destroy(sc_http_server *server)
 {
     uint16_t i;
+    int left_as_it_is = 0;
 
     if (server == NULL)
         return;
     for (i = 0; i != server->thread_count; ++i) {
         sc_http_loop *loop = &server->loops[i];
+
+        /* A loop whose drain ran out of time still has connections on it, and their timers on
+         * its wheel. h2o does not take a loop apart from under those -- h2o_evloop_destroy
+         * asserts the wheel is empty -- so this one is left as it stands. Nothing runs on it
+         * any more, and the process is on its way out with exit code 1; what it still holds
+         * goes with the process. */
+        if (loop->status == SC_ERR_TIMEOUT) {
+            left_as_it_is = 1;
+            continue;
+        }
         /* The queue owns a socket on this loop, so it goes before the context that owns the
          * loop. Nothing is running by now: sc_http_run joined every thread before returning. */
         if (loop->queue != NULL) {
@@ -235,6 +247,9 @@ void sc_http_server_destroy(sc_http_server *server)
         if (loop->listen_fd != -1)
             (void)close(loop->listen_fd);
     }
+    /* The loops left above still point into both of these. */
+    if (left_as_it_is)
+        return;
     free(server->loops);
     h2o_config_dispose(&server->config);
     free(server);
@@ -337,8 +352,11 @@ static sc_status bind_one(sc_http_server *server, sc_http_loop *loop,
         setsockopt(loop->listen_fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse)) != 0 ||
         bind(loop->listen_fd, (const struct sockaddr *)addr, sizeof(*addr)) != 0 ||
         listen(loop->listen_fd, SOMAXCONN) != 0) {
-        sc_log_error(SC_CAT_STARTUP, "server.listen.failed", "%s cannot listen on %s:%u: %s",
-                     server->role, server->host, (unsigned)server->port, strerror(errno));
+        const int cause = errno;
+
+        SC_LISTEN_FAILED(server->port, cause == EADDRINUSE ? "address-in-use" : "other",
+                         "%s cannot listen on %s:%u: %s", server->role, server->host,
+                         (unsigned)server->port, strerror(cause));
         return SC_ERR_NETWORK;
     }
     return SC_OK;
@@ -356,8 +374,8 @@ sc_status sc_http_listen(sc_http_server *server)
     addr.sin_family = AF_INET;
     addr.sin_port = htons(server->port);
     if (inet_pton(AF_INET, server->host, &addr.sin_addr) != 1) {
-        sc_log_error(SC_CAT_STARTUP, "server.listen.host_invalid",
-                     "%s cannot listen on %s: not an IPv4 address", server->role, server->host);
+        SC_LISTEN_FAILED(server->port, "address-invalid",
+                         "%s cannot listen on %s: not an IPv4 address", server->role, server->host);
         return SC_ERR_INVALID_ARGUMENT;
     }
 
@@ -421,7 +439,8 @@ static size_t connections_open(const h2o_context_t *context)
  * The wait has a bound: a client that never closes must not keep the process alive, and the
  * alternative to a bound is a shutdown that hangs. What the bound costs when it is reached is
  * the loop being destroyed with connections still on it -- exactly the state this exists to
- * avoid -- so it is said out loud rather than passed over.
+ * avoid -- so the loop ends with SC_ERR_TIMEOUT rather than passing it over. sc_http_run hands
+ * that to the role, and the process says startup.shutdown.failed and exits with 1: src/main.c.
  */
 static void drain_loop(sc_http_loop *loop)
 {
@@ -438,10 +457,7 @@ static void drain_loop(sc_http_loop *loop)
 
     while (connections_open(&loop->context) != 0) {
         if (sc_now_ms() >= deadline) {
-            sc_log_warn(SC_CAT_STARTUP, "server.drain.timeout",
-                        "%s gave up waiting for %zu connection%s to close after %d ms",
-                        loop->server->role, connections_open(&loop->context),
-                        connections_open(&loop->context) == 1 ? "" : "s", SC_HTTP_DRAIN_MS);
+            loop->status = SC_ERR_TIMEOUT;
             return;
         }
         if (h2o_evloop_run(loop->context.loop, SC_RUNTIME_TICK_MS) != 0) {

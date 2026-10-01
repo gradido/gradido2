@@ -628,3 +628,42 @@ opening, rather than in front of a traveller.
 The stencil for names was cut by hand. It was then held against the old guild's stencil a
 million times, and they agreed a million times, and the old guild's stencil stays in the
 workshop for the comparison and is not allowed in the office.
+
+## XXI. The bell
+
+Most things that go wrong in Sirodunon cost one traveller his errand. He is told so, the clerk
+writes a line, the next traveller steps up.
+
+A few things are of another kind, and the first of them was found at the well. A cord was tied,
+the errand went wrong, and the runner went to untie the cord — and could not. There is one rope.
+A cord that will not come off it is now tied around everything anybody lets down afterwards, and
+nothing let down that way is ever kept. The city would go on serving travellers all afternoon
+and remember none of it.
+
+The runner is not allowed to close the city. He is a runner. What he does is come back with
+both things in his hands — what went wrong with the errand, and what went wrong with the cord —
+and say the one word the guild keeps for this. He does not put one of them down to carry the
+other; a man who arrives with only the second trouble has thrown away the reason he was sent.
+
+The clerk at the front hears the word and does three things in an order that is not negotiable.
+He writes both troubles in the day-book, a line each, at once — before anything is closed,
+because closing can go wrong too and the book should not depend on it. He still gives the
+traveller in front of him an answer, the same plain *something failed* anybody would get. And
+then he rings the bell.
+
+The bell is the ordinary closing bell. The city has exactly one way of shutting its gates —
+the one it uses when the magistrate sends word from outside — and the builders declined to
+invent a second for emergencies, since a second way of closing is a second thing to get wrong
+on the worst day. So the clerk sends the magistrate's word to himself. The gates close in
+order, the well is covered, and covering the well is what finally cuts the cord.
+
+One thing differs, and it is the thing the watchman on the hill looks for: the lamp over the
+gate is left red. A city that closed because it was told to hangs a white one. The watchman
+re-opens a city with a red lamp and leaves a white one alone.
+
+Eporedon rings the same bell, for the same cord at the same well, and hangs the same red lamp.
+At the cistern neither city rings at all. A cord that will not come off there has not jammed:
+the window it was tied at has shut, and the Archive, which unties everything left at a window
+that shuts, has already untied it. In Sirodunon the next errand simply finds another window. In
+Eporedon the carter — who owns one cart for his whole life — has that cart rebuilt where he
+stands, has his forms stamped again, and takes the next slate.

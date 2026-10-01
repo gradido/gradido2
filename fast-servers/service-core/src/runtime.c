@@ -15,6 +15,12 @@
 /* The handler may touch nothing else. One pointer, written before any signal can arrive. */
 static sc_quit_flag *g_quit_flag;
 
+/* Why the process stops, for its exit code. Written by whichever thread found the damage. */
+static volatile int32_t g_critical;
+
+/* The first signal that arrived, 0 while none has. */
+static volatile int32_t g_signal;
+
 static void on_signal(int signal_number)
 {
     /* The handler interrupted something that may be about to read errno -- accept(2) in the
@@ -22,7 +28,7 @@ static void on_signal(int signal_number)
      * see it. */
     int saved_errno = errno;
 
-    (void)signal_number;
+    (void)sc_atomic_cas(&g_signal, 0, (int32_t)signal_number);
     if (g_quit_flag != NULL)
         sc_atomic_store(&g_quit_flag->raised, 1);
     errno = saved_errno;
@@ -31,6 +37,8 @@ static void on_signal(int signal_number)
 void sc_runtime_install_signal_handlers(sc_quit_flag *flag)
 {
     g_quit_flag = flag;
+    sc_atomic_store(&g_critical, 0);
+    sc_atomic_store(&g_signal, 0);
     (void)signal(SIGINT, on_signal);
     (void)signal(SIGTERM, on_signal);
 #if defined(SIGPIPE)
@@ -43,6 +51,32 @@ void sc_runtime_request_quit(void)
 {
     if (g_quit_flag != NULL)
         sc_atomic_store(&g_quit_flag->raised, 1);
+}
+
+void sc_runtime_stop_critically(void)
+{
+    sc_atomic_store(&g_critical, 1);
+    /* Without a handler installed SIGTERM's default action would end the process here, with
+     * nothing closed -- and nothing is waiting on a flag that was never handed over. */
+    if (g_quit_flag != NULL)
+        (void)raise(SIGTERM);
+}
+
+const char *sc_runtime_quit_signal(void)
+{
+    switch (sc_atomic_load(&g_signal)) {
+    case SIGINT:
+        return "SIGINT";
+    case SIGTERM:
+        return "SIGTERM";
+    default:
+        return NULL;
+    }
+}
+
+int sc_runtime_stopped_critically(void)
+{
+    return sc_atomic_load(&g_critical) != 0;
 }
 
 int sc_quit_requested(const sc_quit_flag *flag)

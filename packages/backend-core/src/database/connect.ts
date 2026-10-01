@@ -7,6 +7,7 @@ import {
 } from 'drizzle-orm/bun-sql/postgres'
 import { drizzle as drizzleSqlite, type SQLiteBunDatabase } from 'drizzle-orm/bun-sqlite'
 import { type DatabaseConfig, isUnixSocketHost } from './schema'
+import { sqliteTransaction } from './sqliteTransaction'
 
 /**
  * The database, plus which one it is.
@@ -90,22 +91,7 @@ export function connectDatabase(env: DatabaseConfig): DatabaseConnection {
       close: async () => {
         sqlite.close(false)
       },
-      /* Not drizzle's own transaction: bun:sqlite's takes a synchronous callback and commits
-         when it returns, which is before an asynchronous one has done anything. */
-      transaction: async (work) => {
-        sqlite.exec('BEGIN')
-        try {
-          const result = await work({ kind: 'sqlite' })
-          sqlite.exec('COMMIT')
-          return result
-        } catch (error) {
-          /* A failed COMMIT may have ended the transaction already. */
-          if (sqlite.inTransaction) {
-            sqlite.exec('ROLLBACK')
-          }
-          throw error
-        }
-      },
+      transaction: sqliteTransaction(sqlite),
     }
   }
 

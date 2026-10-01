@@ -542,6 +542,11 @@ h2o    h2o_start_response asserts the generator is NULL, and h2o_send_inline
        with h2o_send and H2O_SEND_STATE_FINAL instead; do_sendvec clears
        the generator before sending, which is also what keeps `stop` from
        firing on a request that WAS answered.
+h2o    a loop whose drain ran out of time is not destroyed. Its connections
+       still have timers on the wheel, and h2o_evloop_destroy asserts the
+       wheel is empty: a debug build aborted there, on the way out, before
+       the line that said why. sc_http_server_destroy leaves such a loop as
+       it is and the process takes it along -- it is exiting with 1 anyway
 h2o    it stops reading a connection while a response is pending, so a
        client that closes after its request is usually not noticed until
        the write fails. The fallback keeps reading and sees the EOF. Do
@@ -587,6 +592,15 @@ pg     libpq exposes no SQLSTATE for a *connection* failure, so PQping is
 sqlite WAL and foreign_keys are per *connection*, not per database. A
        connection that forgets them enforces no constraint the schema
        declares and serialises every reader against the writer
+sqlite a failed statement does not say whether the transaction survived it. A
+       full disk or an I/O error ends it, a constraint does not, and the
+       result code is not how to tell: sqlite3_get_autocommit is. A ROLLBACK
+       that failed with the transaction still open is the one database error
+       this process stops for -- db_exec.c, roll_back
+pg     a ROLLBACK that fails is a dead connection, never a half-done
+       transaction: the server rolls back a session that ended. Redial, do
+       not stop -- and do not wait for the next unit's make_usable to notice,
+       a caller of sc_db_run has none in front of it
 pg     Unix socket, not TCP loopback, when the database is on this host —
        83.4 to 48.1 µs for one connection string
 pg     one round trip per request: user row and roles in one statement.
