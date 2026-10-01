@@ -90,7 +90,7 @@ for (const kind of testDatabaseKinds()) {
       await createHomeCommunity(context, setup)
       await createHomeCommunity(context, { ...setup, url: 'https://other.example.org' })
 
-      expect(database.repositories.communities.findHomeCommunity()).rejects.toThrow(
+      await expect(database.repositories.communities.findHomeCommunity()).rejects.toThrow(
         /more than one home community/u,
       )
     })
