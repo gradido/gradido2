@@ -1,7 +1,7 @@
 import { cors } from '@elysiajs/cors'
 import {
-  CommunityRepository,
   connectDatabase,
+  createRepositories,
   DatabaseGate,
   databaseErrorMessage,
   runMigrations,
@@ -292,12 +292,13 @@ async function runSetup(logger: Logger): Promise<void> {
   try {
     await waitForDatabase(db, logger)
     await runMigrations(db, logger)
-    await setupCommand({ db, logger }, answers.community)
+    const context = { db, logger, repositories: createRepositories(db) }
+    await setupCommand(context, answers.community)
     /* Once the row exists, created now or found from an earlier run: the community key signs
        this instance's dht identity, and the row's URL decides whether the node starts public.
        The dht-node role, which reads no database, starts from what is written here. */
-    const delegation = await signDhtDelegationFor({ db, logger }, masterSeed.seed)
-    const home = await new CommunityRepository(db).findHomeCommunity()
+    const delegation = await signDhtDelegationFor(context, masterSeed.seed)
+    const home = await context.repositories.communities.findHomeCommunity()
     peerNetwork = {
       DHT_DELEGATION: Buffer.from(delegation).toString('hex'),
       DHT_REACHABILITY: home !== undefined && isPublicUrl(home.url) ? 'public' : 'private',
@@ -356,12 +357,13 @@ async function open(logger: Logger): Promise<AppContext> {
   try {
     await waitForDatabase(db, logger)
     await runMigrations(db, logger)
-    const homeCommunity = await requireHomeCommunity({ db, logger })
+    const repositories = createRepositories(db)
+    const homeCommunity = await requireHomeCommunity({ db, logger, repositories })
     /* As many places as bun's pool has connections, so that bun itself never queues: the wait,
        and its bound, are the gate's. SQLite has one writer and a synchronous driver, so one
        place -- the same single file the fast path's writer serialises on. */
     const gate = new DatabaseGate(CONFIG.DB_TYPE === 'sqlite' ? 1 : CONFIG.DB_POOL_SIZE)
-    return new AppContext(logger, db, homeCommunity, gate)
+    return new AppContext(logger, db, repositories, homeCommunity, gate)
   } catch (error) {
     /* Two failures with one outcome but not one cause: a database that will not answer is
        an operator's problem with a service, an instance that cannot be set up is a step

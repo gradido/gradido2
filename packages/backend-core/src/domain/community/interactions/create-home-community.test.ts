@@ -3,7 +3,6 @@ import { Logger } from '@gradido/service-core'
 import type { HomeCommunitySetup } from '@gradido/shared/schemas'
 import type { DatabaseContext } from '../../../BackendContext'
 import { openTestDatabase, type TestDatabase, testDatabaseKinds, testQuery } from '../../../testing'
-import { CommunityRepository } from '../repositories'
 import { createHomeCommunity } from './create-home-community'
 
 const silent = Logger.create({ LOG_LEVEL: 'fatal', LOG_FILE: '', NODE_ENV: 'test' })
@@ -21,7 +20,7 @@ for (const kind of testDatabaseKinds()) {
 
     beforeEach(async () => {
       database = await openTestDatabase(kind)
-      context = { db: database.connection, logger: silent }
+      context = { db: database.connection, logger: silent, repositories: database.repositories }
     })
 
     afterEach(async () => {
@@ -31,7 +30,7 @@ for (const kind of testDatabaseKinds()) {
     const communities = () => testQuery(database.connection, 'SELECT * FROM communities')
 
     test('a fresh database has no community, which is what makes the setup happen', async () => {
-      expect(await new CommunityRepository(database.connection).findHomeCommunity()).toBeUndefined()
+      expect(await database.repositories.communities.findHomeCommunity()).toBeUndefined()
     })
 
     test('writes what the admin said and generates the rest', async () => {
@@ -83,7 +82,7 @@ for (const kind of testDatabaseKinds()) {
     test('is found again by the repository, on a later start', async () => {
       const created = await createHomeCommunity(context, setup)
 
-      const found = await new CommunityRepository(database.connection).findHomeCommunity()
+      const found = await database.repositories.communities.findHomeCommunity()
       expect(found).toEqual(created)
     })
 
@@ -91,7 +90,7 @@ for (const kind of testDatabaseKinds()) {
       await createHomeCommunity(context, setup)
       await createHomeCommunity(context, { ...setup, url: 'https://other.example.org' })
 
-      expect(new CommunityRepository(database.connection).findHomeCommunity()).rejects.toThrow(
+      expect(database.repositories.communities.findHomeCommunity()).rejects.toThrow(
         /more than one home community/u,
       )
     })

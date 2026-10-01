@@ -146,3 +146,26 @@ Map lore abstractions to their real code concepts.
 | The talkative herald, quieted | the reference node used to log `dht.call.refused` for those; it now drops them silently, as libp2p-ffi does inside the module |
 | The grammar belonged to the teachers | behavior that comes from the shared library, not from the city: the charter's "Sirodunon is right" settles manner, not grammar |
 | The second half of the field | the setup test, `packages/backend/e2e/setup.test.ts` — `setup` driven through a pseudo-terminal on both paths, checking the `.env` it leaves behind |
+| A runner hired for every errand | `new CommunityRepository(context.db)` inside each Interaction, as it used to be |
+| Runners engaged once, on opening morning | `createRepositories(db)` in `packages/backend-core/src/Repositories.ts`; reached as `context.repositories` |
+| The guild, and its list of errands | the abstract repository class — `CommunityRepository`: the public methods and the `v.parse`, no SQL |
+| The two schools of runner | one subclass per dialect — `CommunityRepositoryPostgresql`, `CommunityRepositorySqlite` |
+| The clerk never learns which school | an Interaction names the abstract class; `createRepositories` is the one place `db.kind` is read |
+| A runner keeps his forms | lazily prepared statements, kept by name — `PostgresqlStatements` / `SqliteStatements` in `database/prepared.ts` |
+| Filling in the whole satchel on the first morning | preparing every statement in the constructor; dropped, because bun:sqlite refuses a statement whose table is not migrated yet |
+| The cord | `DatabaseTransaction`, the optional `tx` parameter of every repository method, opened by `context.db.transaction` |
+| The cistern has many windows | bun's PostgreSQL pool: a transaction runs on one connection, and a prepared drizzle statement is tied to the client it was built on |
+| Writing the form out again at that window | inside a PostgreSQL transaction the statement is built again on `tx.drizzle` and not kept |
+| At the well the cord says nothing | SQLite has one connection; `{ kind: 'sqlite' }` carries nothing and `connect.ts` issues `BEGIN` / `COMMIT` / `ROLLBACK` itself |
+| The well's bench has a single seat | `new DatabaseGate(1)` for SQLite — what keeps other requests' statements out of an open transaction |
+| The stencil | a valibot schema applied to what a query returns — `…SelectSchema` in `<domain>.schema.ts` |
+| Pebbles and tallies | SQLite hands an id out as `number`, PostgreSQL as `bigint`; `rowIdSchema` yields `bigint` from either |
+| Cut to the cistern's shape | the schema's output follows the PostgreSQL types, the reference |
+| Two entries answering to this city's own | `atMostOneRowSchema` — a second row with `remote = false` is an error, not a choice |
+| Named for what falls out of it | `uint8Array32Schema`, `buffer32Schema`, `uuidv4Schema`, `dateSchema` in `database/base.schema.ts` |
+| A key in a cloth, in a box, spelled out | the input union: `Uint8Array`, `Buffer` or a hex string |
+| The stencil is the shopping list | `columnsFor(table, rowSchema)` in `database/columns.ts` — the selected columns are the schema's keys |
+| There is no hole for the great seal | `homeCommunitySchema` has no `privateKey`, so `private_key` is never selected with the home community |
+| It says *wrong* and no more | `parseSecret` — throws the message alone, because a `ValiError`'s issues carry the input |
+| Laid against the Archive's shelf plan | `community.schema.test.ts` against `createSelectSchema` / `createInsertSchema` from `drizzle-orm/valibot`, for both tables |
+| The old guild's stencil, kept in the workshop | the `uuid` package as a dev dependency, used only by the test that compares `uuidv4Schema` with it |

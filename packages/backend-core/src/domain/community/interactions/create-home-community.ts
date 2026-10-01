@@ -1,8 +1,7 @@
 import type { HomeCommunitySetup } from '@gradido/shared/schemas'
 import type { DatabaseContext } from '../../../BackendContext'
-import type { HomeCommunity } from '../community.data'
+import type { HomeCommunity } from '../community.schema'
 import { newCommunityKeys } from '../communityKeyPair.logic'
-import { CommunityRepository } from '../repositories'
 
 /**
  * The instance becomes a community.
@@ -34,15 +33,13 @@ export async function createHomeCommunity(
   context: DatabaseContext,
   setup: HomeCommunitySetup,
 ): Promise<HomeCommunity> {
-  const communities = new CommunityRepository(context.db)
-
   /* Not a draw-and-check like users.gradido_id: communities_uuid_key is a plain unique index
      on one column, so the database is the check. Legacy loops here because its equivalent
      index is the same shape and it chose to look first anyway. */
   const communityUuid = crypto.randomUUID()
   const keys = newCommunityKeys()
 
-  const id = await communities.createHomeCommunity({
+  const id = await context.repositories.communities.createHomeCommunity({
     url: setup.url,
     name: setup.name,
     description: setup.description,

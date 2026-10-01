@@ -1,5 +1,6 @@
 import { Logger } from '@gradido/service-core'
 import { sql } from 'drizzle-orm'
+import { createRepositories, type Repositories } from '..'
 import { connectDatabase, type DatabaseConnection, runMigrations } from '../database'
 
 /**
@@ -18,6 +19,7 @@ import { connectDatabase, type DatabaseConnection, runMigrations } from '../data
  */
 export type TestDatabase = {
   readonly connection: DatabaseConnection
+  readonly repositories: Repositories
   readonly close: () => Promise<void>
 }
 
@@ -58,7 +60,7 @@ export async function openTestDatabase(kind: DatabaseConnection['kind']): Promis
       DB_FILE: ':memory:',
     })
     await runMigrations(connection, logger)
-    return { connection, close: connection.close }
+    return { connection, repositories: createRepositories(connection), close: connection.close }
   }
 
   const database = process.env.DB_DATABASE ?? ''
@@ -89,7 +91,7 @@ export async function openTestDatabase(kind: DatabaseConnection['kind']): Promis
     }
   }
   await runMigrations(connection, logger)
-  return { connection, close: connection.close }
+  return { connection, repositories: createRepositories(connection), close: connection.close }
 }
 
 /** The PostgreSQL half of the environment, unused when the answer is SQLite. */

@@ -1,12 +1,13 @@
 import type { Logger } from '@gradido/service-core'
 import type { DatabaseConnection, DatabaseGate } from './database'
 import type { HomeCommunity } from './domain'
+import type { Repositories } from './Repositories'
 
 /**
  * What exists before this instance knows which community it is.
  *
- * Startup happens in an order: the database is opened and migrated, and only then can the
- * home community be read — or, on an empty database, asked for and written. The code that
+ * Startup happens in an order: the database is opened and migrated, the repositories are
+ * constructed on it, and only then can the home community be read — or, on an empty database, asked for and written. The code that
  * does that cannot ask for a context that already contains the answer it is producing, so
  * the context is split rather than made optional. A `homeCommunity?: HomeCommunity` would
  * push the question into every request handler that can never actually see it missing.
@@ -14,6 +15,8 @@ import type { HomeCommunity } from './domain'
 export interface DatabaseContext {
   readonly logger: Logger
   readonly db: DatabaseConnection
+  /** How the rows are loaded and persisted, in the dialect of `db`. `Repositories.ts`. */
+  readonly repositories: Repositories
 }
 
 /**
@@ -28,7 +31,7 @@ export interface DatabaseContext {
  * static data (`AGENTS.md`, section 9): one row, written once at setup, changed only by an
  * admin renaming the community. It also cannot be missing — the process refuses to start
  * without it — so nothing downstream has to handle its absence. It carries no private key;
- * see `domain/community/community.data.ts` for why.
+ * see `domain/community/community.schema.ts` for why.
  *
  * It grows with the application: the session map, the global caches and the clients for
  * external services described in `Architecture.md` belong here as they are written, and an

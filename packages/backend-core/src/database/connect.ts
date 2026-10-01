@@ -1,6 +1,10 @@
 import { Database as SqliteDatabase } from 'bun:sqlite'
-import { sql } from 'drizzle-orm'
-import { type BunSQLDatabase, drizzle as drizzlePostgres } from 'drizzle-orm/bun-sql/postgres'
+import { type EmptyRelations, sql } from 'drizzle-orm'
+import {
+  type BunSQLDatabase,
+  type BunSQLTransaction,
+  drizzle as drizzlePostgres,
+} from 'drizzle-orm/bun-sql/postgres'
 import { drizzle as drizzleSqlite, type SQLiteBunDatabase } from 'drizzle-orm/bun-sqlite'
 import { type DatabaseConfig, isUnixSocketHost } from './schema'
 
@@ -20,13 +24,36 @@ export type DatabaseConnection =
       /** Asks the database whether it is there. Throws what the driver throws. */
       readonly probe: () => Promise<void>
       readonly close: () => Promise<void>
+      readonly transaction: RunTransaction
     }
   | {
       readonly kind: 'sqlite'
       readonly drizzle: SQLiteBunDatabase
       readonly probe: () => Promise<void>
       readonly close: () => Promise<void>
+      readonly transaction: RunTransaction
     }
+
+/**
+ * An open transaction, as an Interaction hands it from one repository call to the next.
+ *
+ * Opaque to the Interaction, which only passes it on. PostgreSQL carries the connection the
+ * transaction runs on, because the pool would otherwise pick another one. SQLite carries
+ * nothing: it has one connection, and every statement issued while a transaction is open on it
+ * belongs to that transaction.
+ */
+export type DatabaseTransaction =
+  | { readonly kind: 'postgresql'; readonly drizzle: BunSQLTransaction<EmptyRelations> }
+  | { readonly kind: 'sqlite' }
+
+/**
+ * Runs @p work in one transaction: committed when it returns, rolled back when it throws.
+ *
+ * The same asynchronous shape on both dialects, so an Interaction is written once. On SQLite
+ * that only holds while nothing else uses the connection between the first statement and the
+ * commit -- which is what the single place of the `DatabaseGate` guarantees for requests.
+ */
+export type RunTransaction = <T>(work: (tx: DatabaseTransaction) => Promise<T>) => Promise<T>
 
 /**
  * Opens the database named by the environment.
@@ -38,10 +65,10 @@ export type DatabaseConnection =
  *
  * **drizzle's `jit` stays off, on both.** It compiles a row mapper with `new Function` for
  * every query built, which pays back on a prepared statement or a large result and costs
- * on everything else — and everything else is what this package does: a few rows per
- * query, built where it runs. Measured on drizzle 1.0.0-rc.4, one joined row out of SQLite
- * took 64 µs without it and 80 µs with it; only a 1000-row select got faster. Turn it on
- * together with `.prepare()`, not instead of it.
+ * on everything else — and a statement inside a PostgreSQL transaction is still built where
+ * it runs, as is every query of a repository that prepares nothing. Measured on drizzle
+ * 1.0.0-rc.4, one joined row out of SQLite took 64 µs without it and 80 µs with it; only a
+ * 1000-row select got faster. Turn it on once the prepared statements are the rule.
  */
 export function connectDatabase(env: DatabaseConfig): DatabaseConnection {
   if (env.DB_TYPE === 'sqlite') {
@@ -62,6 +89,22 @@ export function connectDatabase(env: DatabaseConfig): DatabaseConnection {
       },
       close: async () => {
         sqlite.close(false)
+      },
+      /* Not drizzle's own transaction: bun:sqlite's takes a synchronous callback and commits
+         when it returns, which is before an asynchronous one has done anything. */
+      transaction: async (work) => {
+        sqlite.exec('BEGIN')
+        try {
+          const result = await work({ kind: 'sqlite' })
+          sqlite.exec('COMMIT')
+          return result
+        } catch (error) {
+          /* A failed COMMIT may have ended the transaction already. */
+          if (sqlite.inTransaction) {
+            sqlite.exec('ROLLBACK')
+          }
+          throw error
+        }
       },
     }
   }
@@ -97,5 +140,6 @@ export function connectDatabase(env: DatabaseConfig): DatabaseConnection {
     close: async () => {
       await postgres.$client.close()
     },
+    transaction: (work) => postgres.transaction((tx) => work({ kind: 'postgresql', drizzle: tx })),
   }
 }

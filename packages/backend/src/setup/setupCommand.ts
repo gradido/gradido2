@@ -1,8 +1,4 @@
-import {
-  CommunityRepository,
-  createHomeCommunity,
-  type DatabaseContext,
-} from '@gradido/backend-core'
+import { createHomeCommunity, type DatabaseContext } from '@gradido/backend-core'
 import type { HomeCommunitySetup } from '@gradido/shared/schemas'
 
 /**
@@ -27,7 +23,7 @@ export async function setupCommand(
   context: DatabaseContext,
   community: HomeCommunitySetup,
 ): Promise<void> {
-  const existing = await new CommunityRepository(context.db).findHomeCommunity()
+  const existing = await context.repositories.communities.findHomeCommunity()
   if (existing !== undefined) {
     /* Not a log line: it reports what this invocation found, not something that happened to
        the instance, and the contracted stream has nothing to say about a command that wrote

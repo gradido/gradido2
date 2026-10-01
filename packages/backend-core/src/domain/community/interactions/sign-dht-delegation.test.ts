@@ -17,7 +17,7 @@ for (const kind of testDatabaseKinds()) {
 
     beforeEach(async () => {
       database = await openTestDatabase(kind)
-      context = { db: database.connection, logger: silent }
+      context = { db: database.connection, logger: silent, repositories: database.repositories }
     })
 
     afterEach(async () => {

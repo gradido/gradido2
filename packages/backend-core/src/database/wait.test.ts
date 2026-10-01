@@ -20,6 +20,7 @@ const connectionThatArrivesAfter = (failures: number, error: unknown) => {
     close: async () => {
       /* Nothing was opened. */
     },
+    transaction: () => Promise.reject(new Error('nothing was opened')),
   } as DatabaseConnection
   return { connection, probes: () => probes }
 }

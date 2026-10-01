@@ -246,6 +246,24 @@ would be a second copy of a rule in a place nobody updates when the first one ch
 What stays behind is only what a schema cannot know. `claims.slot >= this.slots.length` in the
 session store is such a case: how far the store has grown is not a property of the claim.
 
+**A schema is named after what it hands out, and takes the value in every form a caller may
+hold.** The name says the output format, so a reader sees from the name alone which form goes
+where; the input is a union:
+
+```text
+uint8Array32Schema    hex | Uint8Array | Buffer   ->  Uint8Array   what the code works with
+buffer32Schema        hex | Uint8Array | Buffer   ->  Buffer       what a bytea / BLOB column takes
+uuidv4Schema          string | 16 bytes           ->  string
+dateSchema            Date | number | string      ->  Date
+```
+
+These value schemas are bundled in one file, `packages/backend-core/src/database/base.schema.ts`.
+Add to it rather than writing a second schema for a type it already has. It is not in
+`@gradido/shared` because it uses `Buffer`, which a browser does not have.
+
+A database row is outside too. What a query returns is parsed by a `…SelectSchema`, what a
+statement is given by an `…InsertSchema` — section 10 has the whole shape.
+
 ---
 
 ## 3. Domain structure
@@ -518,6 +536,48 @@ The Interaction decides **when** data is needed.
 The Repository handles **how** it is loaded/persisted.
 
 Do not move domain-specific consistency decisions into generic infrastructure.
+
+### The shape of a repository
+
+`packages/backend-core/src/domain/community/repositories/` is the model. Write every
+repository this way.
+
+```text
+CommunityRepository            abstract. The public methods, and v.parse on what the
+                               subclass returns. No SQL.
+CommunityRepositoryPostgresql  the statements in PostgreSQL, the reference dialect
+CommunityRepositorySqlite      the statements in SQLite
+```
+
+- **One instance of each, in the context.** `createRepositories(db)` in `Repositories.ts` is
+  the one place the dialect is chosen; an Interaction reaches `context.repositories.communities`
+  and never learns which database it is. Do not write `new XRepository(...)` in an Interaction.
+- **The subclass returns rows as the driver gave them.** Levelling the dialects is the schema's
+  work: the valibot schema follows the PostgreSQL types and its input admits what SQLite hands
+  out instead — a `number` where PostgreSQL has a `bigint`.
+- **A query lives in the method that runs it**, prepared the first time it runs:
+  `this.statements.prepared('name', tx, (executor) => …)` on PostgreSQL,
+  `this.statements.prepared('name', (db) => …)` on SQLite. The name is the key the statement
+  is kept under and must be unique within the class.
+- **Every method takes an optional `tx?: DatabaseTransaction`** as its last parameter. The
+  Interaction opens it with `context.db.transaction(async (tx) => …)` and passes it on. The
+  SQLite subclass leaves the parameter out: it has one connection, and a statement on it runs
+  in whichever transaction is open — which is correct only because the `DatabaseGate` gives
+  SQLite a single place. Do not issue SQLite statements for a request outside `gate.run`.
+- **`select()` for a whole row; `select(columnsFor(table, rowSchema))` for a row that must
+  leave something out.** The schema is then the column list, and a column added to it is
+  selected in both dialects. Never write the column list out a third time.
+- **Results go through a `…SelectSchema`, values to write through an `…InsertSchema`**, both in
+  `<domain>.schema.ts`. A row that is unique by contract and not by an index is
+  `atMostOneRowSchema`, and its statement asks for two rows so that a second is noticed.
+- **A value that holds a secret is parsed with `parseSecret`, not `v.parse`.** A `ValiError`
+  carries the input that failed, and that would be the key.
+- **`<domain>.schema.test.ts` holds the schemas against `createSelectSchema` and
+  `createInsertSchema` from `drizzle-orm/valibot`**, for both dialect tables: the same keys,
+  and values the other side takes.
+
+Run a repository's tests against both databases before calling it done — `testing/database.ts`
+says how PostgreSQL is switched on.
 
 ---
 
