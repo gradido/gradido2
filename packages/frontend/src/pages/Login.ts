@@ -2,7 +2,7 @@ import { Form, FormField, InputEmail, InputPassword, t, toaster } from '@gradido
 import { emailPrevalidateSchema, emailSchema, loginPasswordSchema } from '@gradido/shared/schemas'
 import m from 'mithril'
 import { LoginError, LoginErrorCode, login } from '../client'
-import { Message, RouterLink } from '../components'
+import { AuthTriads, Message, RouterLink } from '../components'
 import { CONFIG } from '../config'
 import { ROUTES } from '../routes'
 
@@ -51,18 +51,22 @@ export class Login implements m.ClassComponent {
       case LoginErrorCode.EmailNotValidated:
         this.pageMessage = {
           subtitle: t.__(
-            'Your account has not been activated yet. Please check your email and click the activation link, or request a new one on the password reset page.',
+            'Your account has not been activated yet. Please check your emails and click the activation link or order a new activation link over the password reset page.',
           ),
           linkTo: ROUTES.forgotPassword,
         }
-        toaster.error(t.__('We could not find an activated account with this data.'))
+        toaster.error(
+          t.__('Unfortunately we could not find an (activated) account to the given data.'),
+        )
         break
       case LoginErrorCode.NoPasswordSet:
         this.pageMessage = {
-          subtitle: t.__('No password has been set for this account yet.'),
+          subtitle: t.__('Your password has not been set yet. Please set it again.'),
           linkTo: ROUTES.forgotPassword,
         }
-        toaster.error(t.__('We could not find an activated account with this data.'))
+        toaster.error(
+          t.__('Unfortunately we could not find an (activated) account to the given data.'),
+        )
         break
       case LoginErrorCode.InvalidCredentials:
         toaster.error(t.__('No user with these credentials.'))
@@ -84,7 +88,7 @@ export class Login implements m.ClassComponent {
 
     const valid = this.form.valid
     return m('.login-form.container', [
-      m('.pb-5.text-center', t.__('Community-based – Decentralized – Open Source')),
+      m(AuthTriads),
 
       m('form', { onsubmit: (event: Event) => this.submit(event) }, [
         m('.row', [
@@ -126,7 +130,7 @@ export class Login implements m.ClassComponent {
           ),
         ),
 
-        m('.row', m('.col.mt-3', t.__('Don’t have a %1 account yet?', CONFIG.COMMUNITY_NAME))),
+        m('.row', m('.col.mt-3', t.__("Don't have a %1 account yet?", CONFIG.COMMUNITY_NAME))),
         m(
           '.row',
           m('.col.mt-1.auth-navbar', m(RouterLink, { href: ROUTES.register }, t.__('Sign up'))),

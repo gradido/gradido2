@@ -14,3 +14,25 @@
   font-display: swap;
   src: url('./fonts/WorkSans-variable.woff2') format('woff2');
 }
+
+// Open Sans, self-hosted, for the header of the auth pages and nothing else.
+//
+// TODO: check whether this is needed at all. It is here only because legacy sets its auth
+// header in Open Sans, which makes two links — "Sign up" and "Sign in" — the only text on
+// the page in a second typeface. If that was never a design decision, drop this rule, the
+// file and the `font-header` token, and the links take the page's font.
+//
+// The Latin subset of the variable file Google Fonts serves, so it covers the languages
+// the frontend has today; a Cyrillic or Greek one falls back to `sans-serif` until its
+// subset is added.
+@font-face {
+  font-family: 'Open Sans';
+  font-style: normal;
+  font-weight: 300 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('./fonts/OpenSans-variable-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}

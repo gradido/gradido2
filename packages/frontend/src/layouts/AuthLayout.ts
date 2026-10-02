@@ -2,7 +2,7 @@ import { currentLocale, t, toaster } from '@gradido/frontend-core'
 import m from 'mithril'
 import { AuthCarousel } from '../components/auth/AuthCarousel'
 import { AuthFooter } from '../components/auth/AuthFooter'
-import { AuthNavbar, AuthNavbarSmall } from '../components/auth/AuthNavbar'
+import { AuthNavbar } from '../components/auth/AuthNavbar'
 import { LanguageSwitch } from '../components/auth/LanguageSwitch'
 import { TextSizeSwitch } from '../components/auth/TextSizeSwitch'
 import { CONFIG } from '../config'
@@ -36,15 +36,16 @@ export class AuthLayout implements m.ClassComponent {
       m(
         '.row.justify-content-md-center.justify-content-lg-end',
         m('.col-12.col-md-8.col-lg-6.auth-column', [
-          m('.ms-3.ms-sm-4.me-3.me-sm-4', [
-            // Between md and lg the header blob is hidden, so the links move here.
-            m('.row.d-none.d-md-block.d-lg-none', m('.col.auth-navbar', m(AuthNavbarSmall))),
-
-            m('.row.mt-0.mt-md-5.ps-2.ps-md-0', [
+          // No margin of its own below md: the card stands on the page edge there, and
+          // its own padding keeps the fields off it.
+          m('.mx-0.mx-md-4', [
+            // `ps-4` below md: the greeting stands on the page, not in the card, so it
+            // takes the card's padding itself and lines up with the text inside it.
+            m('.row.auth-greeting.mt-3.mt-md-5.ps-4.ps-md-0', [
               m('.col-12.col-md-9', [
                 m('.mb-n2', t.__('Welcome to the community')),
                 m('.h1.mb-0', CONFIG.COMMUNITY_NAME),
-                m('div', t.__('1000 thanks for being with us!')),
+                m('.mb-0', t.__('1000 thanks for being with us!')),
               ]),
               m(
                 '.col-3.text-end.d-none.d-md-block',
@@ -58,7 +59,7 @@ export class AuthLayout implements m.ClassComponent {
             ]),
 
             m(
-              '.card.border-0.mt-4.gradido-custom-background.page-font-size',
+              '.card.auth-card.border-0.gradido-custom-background.page-font-size',
               { style: { fontSize: `${this.fontSize}rem` } },
               [
                 m('.row.p-4', [
@@ -72,20 +73,6 @@ export class AuthLayout implements m.ClassComponent {
                     }),
                   ),
                 ]),
-
-                // Below md the coin and the links sit inside the card instead.
-                m(
-                  '.row.d-md-none.mb-3',
-                  m('.col.text-center', [
-                    m('img.auth-coin.rounded-circle', {
-                      src: asset('img/brand/gradido_coin_128x128.png'),
-                      alt: '',
-                      loading: 'lazy',
-                      decoding: 'async',
-                    }),
-                    m('.d-flex.justify-content-center.auth-navbar.mt-2', m(AuthNavbarSmall)),
-                  ]),
-                ),
 
                 m('.card-body', children),
               ],

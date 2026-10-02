@@ -4,6 +4,11 @@
 // Bootstrap-specific beyond the class names it attaches to, which is what keeps the
 // brand independent of the CSS framework underneath it.
 
+#app {
+  font-size: 1rem;
+  font-family: WorkSans,sans-serif !important;
+}
+
 .pointer {
   cursor: pointer;
 }
@@ -78,7 +83,6 @@
   &:active,
   &:disabled {
     color: var(--gdd-white);
-    opacity: 1;
   }
 }
 
@@ -89,7 +93,7 @@
 
 /* App shell */
 
-@media screen and (width <= 1024px) {
+@media screen and (width <= 1024.98px) {
   #app {
     padding-right: var(--gdd-page-inset);
     padding-left: var(--gdd-page-inset);
@@ -129,9 +133,43 @@
   border-radius: var(--gdd-radius-input);
 }
 
-.input-group .rounded-end {
-  border-top-right-radius: var(--gdd-radius-input) !important;
-  border-bottom-right-radius: var(--gdd-radius-input) !important;
+/* A field with an eye inside its right end: one input, one frame, and the eye stands
+   over the input's right end rather than beside it as a box of its own. */
+
+.reveal-field {
+  position: relative;
+
+  // The typed text stops before the eye.
+  > .form-control {
+    padding-right: var(--gdd-reveal-eye-width);
+  }
+
+  // Bootstrap draws the warning and the check sign where the eye stands; they move in by
+  // its width, and the text stops before both.
+  > .form-control.is-valid,
+  > .form-control.is-invalid {
+    padding-right: calc(1.5em + 0.75rem + var(--gdd-reveal-eye-width));
+    background-position: right calc(0.375em + 0.1875rem + var(--gdd-reveal-eye-width)) center;
+  }
+}
+
+.reveal-eye {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--gdd-reveal-eye-width);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0 var(--gdd-radius-input) var(--gdd-radius-input) 0;
+  box-shadow: none;
+
+  // Stays inside the field, whose frame it shares.
+  &:focus-visible {
+    outline: 2px solid var(--gdd-green);
+    outline-offset: -6px;
+  }
 }
 
 // The invalid-state animation makes the field jump while the user is still typing.
@@ -159,18 +197,6 @@ a.auth-navbar {
 .separator-start {
   // Tied to the text it separates, so the rule stays legible on any background.
   border-left: 1px solid color-mix(in srgb, currentcolor 40%, transparent);
-}
-
-// The show/hide toggle sits in an outline-light button, whose ink would be almost
-// invisible. It reads as part of the field, so it takes the body color.
-.password-toggle {
-  color: var(--gdd-body-color);
-
-  &:hover,
-  &:focus,
-  &:active {
-    color: var(--gdd-body-color);
-  }
 }
 
 /* Toaster */

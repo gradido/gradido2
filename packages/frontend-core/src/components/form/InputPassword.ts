@@ -20,7 +20,7 @@ export class InputPassword implements m.ClassComponent<InputPasswordAttrs> {
 
   view({ attrs }: m.Vnode<InputPasswordAttrs>) {
     const toggle = m(
-      'button.btn.btn-outline-light.border-start-0.rounded-end.password-toggle',
+      'button.btn.reveal-eye',
       {
         type: 'button',
         tabindex: -1,

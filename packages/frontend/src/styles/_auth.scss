@@ -10,6 +10,7 @@
 .auth-header {
   z-index: 1;
   height: var(--gdd-auth-header-height);
+  font-family: var(--gdd-font-header);
 
   > nav,
   > nav > .navbar-brand {
@@ -26,10 +27,60 @@
   padding: 0.5rem;
 }
 
-.auth-header-leaves {
-  top: -11px;
-  right: 7%;
-  max-width: 64%;
+.auth-header-collapse {
+  justify-content: flex-end;
+}
+
+.auth-links .nav-link.is-active {
+  color: var(--gdd-nav-active);
+}
+
+/* Below lg: the logo on the line the greeting and the card's text start on, the links
+   ending on the line the card's text ends on. From md up they stand beside the logo; on
+   a phone they take the row below it, so the top of the page is the same on every phone
+   and in every language. */
+
+@media screen and (width <= 1024.98px) {
+  .auth-header {
+    height: auto;
+    padding: 10px var(--gdd-page-text-inset);
+
+    > nav {
+      flex-wrap: wrap;
+      gap: 4px 12px;
+    }
+  }
+
+  .auth-logo-small {
+    width: 200px;
+    height: auto;
+  }
+
+  .auth-header .auth-links {
+    .nav-link {
+      padding: 12px;
+    }
+
+    > :first-child .nav-link {
+      padding-left: 0;
+    }
+
+    > :last-child .nav-link {
+      padding-right: 0;
+    }
+  }
+}
+
+@media screen and (width <= 767.98px) {
+  .auth-logo-small {
+    width: auto;
+    height: 45px;
+  }
+
+  // Two classes, to outweigh `.navbar-expand .navbar-collapse`.
+  .auth-header .auth-header-collapse {
+    flex-basis: 100%;
+  }
 }
 
 /* Left column — fixed, so scrolling the form does not move the photo */
@@ -54,14 +105,14 @@
 /* Carousel — cross-faded rather than slid, because the blob mask makes a horizontal
    slide read as a glitch at the curved edge. */
 
-.auth-carousel {
+.auth-carousel,
+.auth-carousel-inner {
   position: relative;
   top: -16px;
   height: 110%;
 }
 
 .auth-carousel-inner {
-  height: 100%;
   overflow: hidden;
   border-radius: var(--gdd-radius-blob);
   backface-visibility: hidden;
@@ -71,8 +122,11 @@
 .auth-carousel-slide {
   position: absolute;
   inset: 0;
-  background-position: center;
-  background-size: cover;
+  // The photo as wide as the column and hung from its top edge: what the blob cuts off
+  // is the bottom of it, whatever the height of the window.
+  background-repeat: no-repeat;
+  background-position: center top;
+  background-size: 100% auto;
   opacity: 0;
   transition: opacity 1.2s ease-in-out;
 
@@ -106,6 +160,104 @@
 
 .auth-column {
   z-index: 1000;
+}
+
+// The greeting is the page's message and keeps its size where `#app` shrinks the text.
+.auth-greeting {
+  font-size: 1rem;
+}
+
+.auth-card {
+  margin-top: 1.5rem;
+}
+
+@media (width <= 767.98px) {
+  // The greeting needs more air on a phone, where it stands between the header and the card.
+  .auth-card {
+    margin-top: 2.5rem;
+  }
+
+  // The card body already keeps the fields off the card's edge; the container's own
+  // padding on top of that is width a phone does not have.
+  .auth-card .card-body .container {
+    padding-right: 0;
+    padding-left: 0;
+  }
+}
+
+/* Triads — the three words above the form */
+
+.auth-triads {
+  padding-bottom: 3rem;
+}
+
+@media (width <= 767.98px) {
+  // The language row above already ends in the card's padding.
+  .auth-triads {
+    padding-bottom: 1.5rem;
+    margin-top: calc(-1 * var(--bs-card-spacer-y));
+  }
+}
+
+// Reaches into the container's padding before it clips, so a word longer than the column
+// may stick out a little instead of being cut.
+.triad-stage {
+  display: grid;
+  padding-inline: 0.75rem;
+  margin-inline: -0.75rem;
+  overflow: hidden;
+
+  > * {
+    grid-area: 1 / 1;
+  }
+}
+
+// One line wherever it fits; where it does not, it breaks between two parts.
+.triad {
+  display: flex;
+  flex-flow: row wrap;
+  place-content: center;
+  align-items: center;
+  column-gap: 0.3em;
+  text-align: center;
+
+  &.is-entering {
+    animation: triad-in 0.6s ease-in-out;
+  }
+
+  &.is-leaving {
+    animation: triad-out 0.6s ease-in-out forwards;
+  }
+}
+
+.triad-sizer {
+  visibility: hidden;
+}
+
+@keyframes triad-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes triad-out {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes triad-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes triad-out {
+    to {
+      opacity: 0;
+    }
+  }
 }
 
 .page-font-size {
@@ -216,29 +368,15 @@
   color: var(--gdd-ink) !important;
 }
 
+// A size of its own, which does not follow the text as the other three icons do.
+.auth-footer-telegram {
+  width: 16px;
+  height: 16px;
+}
+
 /* Hovering anywhere in the auth pages underlines, which is how legacy reads */
 
 .auth-template a:hover,
 .auth-template .btn:hover {
   text-decoration: underline;
-}
-
-@media screen and (width <= 1024px) {
-  .auth-header {
-    height: var(--gdd-auth-header-height-md);
-  }
-}
-
-@media screen and (width <= 768px) {
-  .auth-header {
-    height: var(--gdd-auth-header-height-sm);
-  }
-}
-
-@media screen and (width <= 450px) {
-  .auth-header-leaves {
-    top: -15px;
-    right: 0;
-    max-width: 61%;
-  }
 }

@@ -4,30 +4,19 @@ import { ROUTES } from '../../routes'
 import { asset } from '../../utils/asset'
 import { RouterLink } from '../RouterLink'
 
-/** Sign-up / sign-in links. Shared with the small navbar shown on narrow screens. */
-export const authLinks = (): m.Children => [
-  m(RouterLink, { href: ROUTES.register, class: 'nav-link' }, t.__('Sign up')),
-  m(
-    RouterLink,
-    { href: ROUTES.login, class: 'nav-link separator-start ps-3 ms-3' },
-    t.__('Sign in'),
-  ),
-]
+const LOGO = 'img/brand/gradido-logo.png'
 
 export const AuthNavbar: m.Component = {
   view: () =>
     m('.auth-header.position-sticky', [
-      m('nav.navbar.d-flex', [
+      m('nav.navbar.navbar-expand.d-flex', [
         // The logo sits on a white blob that overlaps the photo behind it. Both are
-        // hidden below lg, where the leaves take over, so each breakpoint fetches only
-        // its own header art.
+        // hidden below lg, where no photo stands beside the form.
         m('.navbar-brand.auth-header-brand.d-none.d-lg-block', [
           m('img.auth-header-logo', {
-            src: asset('img/brand/gradido-logo_200x59.png'),
+            src: asset(LOGO),
             width: 200,
             alt: 'Gradido',
-            loading: 'lazy',
-            decoding: 'async',
           }),
           m('img', {
             src: asset('img/template/gradido_background_header.png'),
@@ -37,20 +26,21 @@ export const AuthNavbar: m.Component = {
             decoding: 'async',
           }),
         ]),
-        // Hidden from lg up, but still in the markup: `lazy` is what keeps the browser
-        // from fetching it on a desktop that will never show it.
-        m('img.auth-header-leaves.position-absolute.d-block.d-lg-none', {
-          src: asset('img/template/Blaetter.png'),
-          alt: '',
-          loading: 'lazy',
-          decoding: 'async',
-        }),
-        m('.navbar-nav.auth-navbar.ms-auto.me-4.d-none.d-lg-flex.flex-row', authLinks()),
+        // Below lg the logo stands on the page itself, top left.
+        m('img.auth-logo-small.d-lg-none', { src: asset(LOGO), alt: 'Gradido' }),
+        m(
+          '.navbar-collapse.auth-header-collapse',
+          m('.navbar-nav.auth-links.auth-navbar.ms-auto.me-lg-4', [
+            m(
+              '.nav-item',
+              m(RouterLink, { href: ROUTES.register, class: 'nav-link' }, t.__('Sign up')),
+            ),
+            m(
+              '.nav-item.separator-start',
+              m(RouterLink, { href: ROUTES.login, class: 'nav-link' }, t.__('Sign in')),
+            ),
+          ]),
+        ),
       ]),
     ]),
-}
-
-/** The same links, for the breakpoints where the header blob is hidden. */
-export const AuthNavbarSmall: m.Component = {
-  view: () => m('nav.navbar.navi.p-0', m('.navbar-nav.auth-navbar.flex-row', authLinks())),
 }

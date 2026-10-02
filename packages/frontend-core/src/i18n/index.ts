@@ -82,23 +82,26 @@ export async function setLocale(locale: Locale, basePath = '/'): Promise<void> {
  * The schemas live in `shared` and carry English messages, which `gettext-extract`
  * cannot see because they are not `t.__` call sites. Listing them here once makes them
  * extractable and keeps the schemas free of any dependency on the frontend.
+ *
+ * A schema does not know which field it checks, so its message cannot name one; the
+ * sentence shown does, by the field's label, as the label above the field reads.
  */
-export function translateIssue(message: string): string {
+export function translateIssue(message: string, fieldName: string): string {
   switch (message) {
     case 'This field is required':
-      return t.__('This field is required')
+      return t.__('The %1 field is required', fieldName)
     case 'Please enter a valid email address':
-      return t.__('Please enter a valid email address')
+      return t.__('The %1 field must be a valid email', fieldName)
+    case 'Please enter at least three characters':
+      return t.__('The %1 field must be at least %2 characters', fieldName, '3')
+    case 'Please enter at least two characters':
+      return t.__('The %1 field must be at least %2 characters', fieldName, '2')
     case 'This email address is too long':
       return t.__('This email address is too long')
     case 'An email address cannot contain spaces':
       return t.__('An email address cannot contain spaces')
     case 'This name is too long':
       return t.__('This name is too long')
-    case 'Please enter at least three characters':
-      return t.__('Please enter at least three characters')
-    case 'Please enter at least two characters':
-      return t.__('Please enter at least two characters')
     case 'Please agree to the privacy policy':
       return t.__('Please agree to the privacy policy')
     default:

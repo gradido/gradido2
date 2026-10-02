@@ -42,7 +42,11 @@ export const ValidatedCheckbox: m.Component<ValidatedCheckboxAttrs> = {
         onblur: () => field.touch(),
       }),
       m('label.form-check-label', { for: id }, label),
-      m('.invalid-feedback', { id: feedbackId }, invalid ? translateIssue(field.issue ?? '') : ''),
+      m(
+        '.invalid-feedback',
+        { id: feedbackId },
+        invalid ? translateIssue(field.issue ?? '', name) : '',
+      ),
     ])
   },
 }

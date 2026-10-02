@@ -10,20 +10,20 @@ msgstr ""
 msgid "Success"
 msgstr "Erfolg"
 
-msgid "Error"
-msgstr "Fehler"
+msgid "Attention!"
+msgstr "Achtung!"
 
-msgid "Info"
-msgstr "Info"
+msgid "Information"
+msgstr "Information"
 
 msgid "Close"
 msgstr "Schließen"
 
-msgid "This field is required"
-msgstr "Dieses Feld ist erforderlich"
+msgid "The %1 field is required"
+msgstr "%1 ist ein Pflichtfeld"
 
-msgid "Please enter a valid email address"
-msgstr "Bitte gib eine gültige E-Mail-Adresse ein"
+msgid "The %1 field must be a valid email"
+msgstr "%1 muss eine gültige E-Mail-Adresse sein"
 
 msgid "Email"
 msgstr "E-Mail"
@@ -59,13 +59,37 @@ msgid "Welcome to the community"
 msgstr "Willkommen in der Gemeinschaft"
 
 msgid "1000 thanks for being with us!"
-msgstr "1000 Dank, weil du bei uns bist!"
+msgstr "1000 Dank, weil Du bei uns bist!"
 
-msgid "Don’t have a %1 account yet?"
+msgid "Don't have a %1 account yet?"
 msgstr "Noch kein %1 Konto?"
 
-msgid "Community-based – Decentralized – Open Source"
-msgstr "Gemeinschaftsbasiert – Dezentral – Open Source"
+msgid "Help."
+msgstr "Helfen."
+
+msgid "Give."
+msgstr "Schenken."
+
+msgid "Thank."
+msgstr "Danken."
+
+msgid "Community-based."
+msgstr "Gemeinschaftsbasiert."
+
+msgid "Decentralized."
+msgstr "Dezentral."
+
+msgid "Open Source."
+msgstr "Open Source."
+
+msgid "For you and me."
+msgstr "Für Dich und mich."
+
+msgid "For the community."
+msgstr "Für die Gemeinschaft."
+
+msgid "For nature."
+msgstr "Für die Natur."
 
 msgid "Learn more …"
 msgstr "Erfahre mehr …"
@@ -98,18 +122,15 @@ msgid "Donation"
 msgstr "Gabe"
 
 msgid "You are a gift for the community. 1000 thanks because you are with us."
-msgstr "Du bist ein Geschenk für die Gemeinschaft. 1000 Dank, weil du bei uns bist."
+msgstr "Du bist ein Geschenk für die Gemeinschaft. 1000 Dank, weil Du bei uns bist."
 
-msgid "Attention!"
-msgstr "Achtung!"
+msgid "Your account has not been activated yet. Please check your emails and click the activation link or order a new activation link over the password reset page."
+msgstr "Dein Konto wurde noch nicht aktiviert. Bitte überprüfe Deine E-Mail und klicke den Aktivierungslink oder fordere über „Passwort vergessen“ einen neuen Aktivierungslink an."
 
-msgid "Your account has not been activated yet. Please check your email and click the activation link, or request a new one on the password reset page."
-msgstr "Dein Konto wurde noch nicht aktiviert. Bitte überprüfe deine E-Mail und klicke den Aktivierungslink oder fordere einen neuen Aktivierungslink über die Passwort-Reset-Seite an."
+msgid "Your password has not been set yet. Please set it again."
+msgstr "Dein Passwort wurde noch nicht gesetzt. Bitte setze es neu."
 
-msgid "No password has been set for this account yet."
-msgstr "Für dieses Konto wurde noch kein Passwort festgelegt."
-
-msgid "We could not find an activated account with this data."
+msgid "Unfortunately we could not find an (activated) account to the given data."
 msgstr "Leider konnten wir keinen (aktivierten) Account mit diesen Daten finden."
 
 msgid "No user with these credentials."
@@ -119,7 +140,7 @@ msgid "This server does not offer registration yet."
 msgstr "Dieser Server bietet die Registrierung noch nicht an."
 
 msgid "Please check your entries."
-msgstr "Bitte überprüfe deine Eingaben."
+msgstr "Bitte überprüfe Deine Eingaben."
 
 msgid "Unknown error: "
 msgstr "Unbekannter Fehler: "
@@ -152,16 +173,13 @@ msgid "Thank you!"
 msgstr "Danke!"
 
 msgid "You are registered now, please check your emails and click the activation link."
-msgstr "Du bist jetzt registriert, bitte überprüfe deine E-Mails und klicke auf den Aktivierungslink."
+msgstr "Du bist jetzt registriert, bitte überprüfe Deine E-Mails und klicke auf den Aktivierungslink."
 
 msgid "This name is too long"
 msgstr "Dieser Name ist zu lang"
 
-msgid "Please enter at least three characters"
-msgstr "Bitte gib mindestens drei Zeichen ein"
-
-msgid "Please enter at least two characters"
-msgstr "Bitte gib mindestens zwei Zeichen ein"
+msgid "The %1 field must be at least %2 characters"
+msgstr "%1 muss mindestens %2 Zeichen lang sein"
 
 msgid "Please agree to the privacy policy"
 msgstr "Bitte stimme der Datenschutzerklärung zu"
