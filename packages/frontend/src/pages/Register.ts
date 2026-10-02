@@ -20,7 +20,7 @@ import {
 } from '@gradido/shared/schemas'
 import m from 'mithril'
 import { RegisterError, register } from '../client'
-import { Message, RouterLink } from '../components'
+import { AuthTriads, Message, RouterLink } from '../components'
 import { CONFIG } from '../config'
 import { ROUTES } from '../routes'
 
@@ -118,7 +118,7 @@ export class Register implements m.ClassComponent {
 
     const valid = this.form.valid
     return m('.register-form.container', [
-      m('.pb-5.text-center', t.__('Community-based – Decentralized – Open Source')),
+      m(AuthTriads),
 
       m('form', { onsubmit: (event: Event) => this.submit(event) }, [
         m('.row', [

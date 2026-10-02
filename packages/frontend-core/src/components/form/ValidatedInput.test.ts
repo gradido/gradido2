@@ -29,7 +29,7 @@ describe('validation state reaches the markup', () => {
     const field = new FormField(schema)
     field.touch()
     expect(classesOf(input(draw(field)))).toContain('is-invalid')
-    expect(textOf(feedback(draw(field)))).toBe('This field is required')
+    expect(textOf(feedback(draw(field)))).toBe('The Email field is required')
   })
 
   test('a neutral field keeps its message box empty', () => {
@@ -61,8 +61,17 @@ describe('wiring', () => {
     expect(attrsOf(find(tree, byTag('label'))).for).toBe('email-input-field')
   })
 
-  test('an appended control moves the field into an input group', () => {
+  test('an appended control moves the field into a reveal field', () => {
     const tree = draw(new FormField(schema), { append: m('button', { type: 'button' }) })
-    expect(find(tree, (vnode) => classesOf(vnode).includes('input-group'))).toBeDefined()
+    expect(find(tree, (vnode) => classesOf(vnode).includes('reveal-field'))).toBeDefined()
+  })
+
+  // The message stands outside the reveal field, where Bootstrap's sibling rule cannot
+  // show it.
+  test('the message is shown by its own class once there is one', () => {
+    const field = new FormField(schema)
+    expect(classesOf(feedback(draw(field)))).not.toContain('d-block')
+    field.touch()
+    expect(classesOf(feedback(draw(field)))).toContain('d-block')
   })
 })

@@ -19,6 +19,8 @@ $tokens: (
   'gold-border': #f5b805,
   'green': #047006,
   'blue': #0e79bc,
+  // The link of the page one is on, in the header.
+  'nav-active': rgba(0, 0, 0, 90%),
 
   // ink & surfaces
   'ink': #383838,
@@ -31,6 +33,15 @@ $tokens: (
   'white': #fff,
   'disabled': #b4b4b4,
 
+  // form fields: lighter ink than the page, so a typed value does not outweigh its label
+  'input-color': #8898aa,
+  'input-border': #cad1d7,
+  'input-border-focus': rgba(50, 151, 211, 25%),
+  'input-placeholder': #adb5bd,
+  // A field's own verdict is quieter than the alert colours under `state`.
+  'input-valid': #198754,
+  'input-invalid': #dc3545,
+
   // state
   'danger': #f5365c,
   'success': #2dce89,
@@ -40,6 +51,8 @@ $tokens: (
   // typography — the heading scale is Gradido's, not Bootstrap's: it tops out at
   // 1.625rem, because the community name is a name and not a banner.
   'font-sans': ('Work Sans', sans-serif),
+  // The auth header only — see the note in `_fonts.scss` before using it anywhere else.
+  'font-header': ('Open Sans', sans-serif),
   'font-size-base': 1rem,
   'font-size-sm': 14px,
   'font-size-h1': 1.625rem,
@@ -61,6 +74,9 @@ $tokens: (
   'card-padding-x': 1.5rem,
   'nav-link-padding-y': 0.25rem,
   'nav-link-padding-x': 0.75rem,
+  'navbar-link-padding-x': 1rem,
+  // Room the show/hide eye takes at the right end of a field: a finger wide.
+  'reveal-eye-width': 3rem,
 
   // carousel caption, relative to its own box
   'caption-size': xx-large,
@@ -98,14 +114,24 @@ $tokens: (
 
   // layout
   'gold-bar-height': 13px,
-  // Horizontal breathing room below the desktop layout. Legacy arrives at this by
-  // applying its 15px twice through two nested elements that both carry `id="app"`;
-  // stated here once, as the value it is meant to be.
-  'page-inset': 30px,
+  // The page edge below the desktop layout. Boxes reach that far; text that stands on
+  // the page rather than in a box takes `page-text-inset`, which is a card's own
+  // padding, so that it lines up with the text inside the cards.
+  'page-inset': 6px,
+  'page-text-inset': 24px,
   'auth-aside-width': 40%,
-  'auth-header-height': 150px,
-  'auth-header-height-md': 100px,
-  'auth-header-height-sm': 70px
+  'auth-header-height': 150px
+);
+
+// The desktop layout starts one pixel past a tablet held sideways, not at Bootstrap's
+// 992px: at 1024px the photo column would leave the form half the room it needs.
+$grid-breakpoints: (
+  xs: 0,
+  sm: 576px,
+  md: 768px,
+  lg: 1025px,
+  xl: 1200px,
+  xxl: 1400px,
 );
 
 // Bootstrap's default spacer scale stops at 5 (3rem). Gradido's layouts use 6 and 7 for

@@ -13,7 +13,7 @@ export interface ValidatedInputAttrs {
   disabled?: boolean
   /** Added to the field's wrapper — spacing is the arranging form's business. */
   class?: string
-  /** Rendered after the input inside an input group, e.g. a show-password toggle. */
+  /** Rendered over the right end of the input, e.g. a show-password toggle. */
   append?: m.Children
   /** Called after every accepted keystroke, so a form can re-evaluate its submit button. */
   oninput?: (value: string) => void
@@ -54,11 +54,18 @@ export const ValidatedInput: m.Component<ValidatedInputAttrs> = {
       onblur: () => field.touch(),
     })
 
-    const feedback = m('.invalid-feedback', { id: feedbackId }, issue ? translateIssue(issue) : '')
+    // `d-block` rather than Bootstrap's sibling rule: inside a reveal field the input is no
+    // longer the message's sibling.
+    const feedback = m(
+      '.invalid-feedback',
+      { id: feedbackId, class: issue ? 'd-block' : undefined },
+      issue ? translateIssue(issue, label) : '',
+    )
 
     return m(`.input-${name}`, { class: attrs.class }, [
-      m('label.form-label', { for: id }, label),
-      append ? m('.input-group.has-validation', [input, append, feedback]) : [input, feedback],
+      m('label.form-label.d-block', { for: id }, label),
+      append ? m('.reveal-field', [input, append]) : input,
+      feedback,
     ])
   },
 }

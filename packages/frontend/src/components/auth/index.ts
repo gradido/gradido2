@@ -1,5 +1,6 @@
 export * from './AuthCarousel'
 export * from './AuthFooter'
 export * from './AuthNavbar'
+export * from './AuthTriads'
 export * from './LanguageSwitch'
 export * from './TextSizeSwitch'

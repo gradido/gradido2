@@ -23,6 +23,7 @@
 
   $spacer: tokens.$spacer,
   $spacers: tokens.$spacers,
+  $grid-breakpoints: tokens.$grid-breakpoints,
 
   $body-bg: tokens.get('page-bg'),
   $body-color: tokens.get('body-color'),
@@ -50,6 +51,22 @@
 
   // Switching shadows on gives inputs an inset one by default. Gradido's fields are flat.
   $input-box-shadow: none,
+  // White on the grey card, where Bootstrap would give a field the page's own colour.
+  $input-bg: tokens.get('white'),
+  $input-color: tokens.get('input-color'),
+  $input-border-color: tokens.get('input-border'),
+  $input-placeholder-color: tokens.get('input-placeholder'),
+  // Focus shows in the frame alone, without a ring around it.
+  $input-focus-border-color: tokens.get('input-border-focus'),
+  $input-focus-width: 0,
+  $input-focus-box-shadow: none,
+  $form-feedback-valid-color: tokens.get('input-valid'),
+  $form-feedback-invalid-color: tokens.get('input-invalid'),
+  // The check and warning signs keep the size they have in a field of Bootstrap's own
+  // height; derived from Gradido's taller padding they would grow with it.
+  $input-height-inner: calc(1.5em + 0.75rem),
+  $input-height-inner-half: calc(0.75em + 0.375rem),
+  $input-height-inner-quarter: calc(0.375em + 0.1875rem),
 
   $input-btn-padding-y: tokens.get('control-padding-y'),
   $input-btn-padding-x: tokens.get('control-padding-x'),
@@ -59,6 +76,7 @@
   $card-spacer-x: tokens.get('card-padding-x'),
   $nav-link-padding-y: tokens.get('nav-link-padding-y'),
   $nav-link-padding-x: tokens.get('nav-link-padding-x'),
+  $navbar-nav-link-padding-x: tokens.get('navbar-link-padding-x'),
 
   // Used to pull a caption up against the heading it introduces.
   $enable-negative-margins: true,

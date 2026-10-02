@@ -40,12 +40,12 @@ export class Toaster implements m.ClassComponent {
   }
 
   error(message: string, timeout?: number): void {
-    this.toast({ title: t.__('Error'), message, variant: '.text-bg-danger', timeout })
+    this.toast({ title: t.__('Attention!'), message, variant: '.text-bg-danger', timeout })
   }
 
   warning(message: string, timeout?: number): void {
     this.toast({
-      title: t.__('Info'),
+      title: t.__('Information'),
       message,
       variant: '.text-bg-warning',
       bodyClass: '.gdd-toaster-body-darken',

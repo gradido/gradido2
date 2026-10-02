@@ -1,4 +1,4 @@
-import { currentLocale, t } from '@gradido/frontend-core'
+import { currentLocale, icon, t } from '@gradido/frontend-core'
 import m from 'mithril'
 import facebookIcon from '~icons/bi/facebook'
 import telegramIcon from '~icons/bi/telegram'
@@ -10,7 +10,11 @@ const SOCIAL = [
   { href: 'https://www.facebook.com/groups/Gradido/', icon: facebookIcon, name: 'Facebook' },
   { href: 'https://twitter.com/gradido', icon: twitterIcon, name: 'X' },
   { href: 'https://www.youtube.com/c/GradidoNet', icon: youtubeIcon, name: 'YouTube' },
-  { href: 'https://t.me/Gradido', icon: telegramIcon, name: 'Telegram' },
+  {
+    href: 'https://t.me/Gradido',
+    icon: icon(telegramIcon, 'auth-footer-telegram'),
+    name: 'Telegram',
+  },
 ]
 
 const external = (href: string, children: m.Children, attrs: Record<string, unknown> = {}) =>
@@ -36,7 +40,7 @@ export const AuthFooter: m.Component = {
         ),
         m(
           '.col-12.col-lg-6.mt-4.mb-4.mt-lg-0.mb-lg-0',
-          m('.d-flex.align-items-center.ms-3.ms-lg-0.text-lg-end.pt-1', [
+          m('.d-flex.align-items-center.ms-4.ms-md-3.ms-lg-0.text-lg-end.pt-1', [
             t.__('follow us:'),
             // No keys: this array also holds the label text node, and mithril refuses a
             // fragment where only some children are keyed.
